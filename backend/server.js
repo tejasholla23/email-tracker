@@ -4,6 +4,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const Application = require("./models/Application");
 const applicationRoutes = require("./routes/applicationRoutes");
+const { parseEmail } = require("./utils/emailParser");
 
 dotenv.config();
 
@@ -68,6 +69,34 @@ mongoose
 
 app.get("/", (req, res) => {
   res.send("API running");
+});
+
+app.post("/parse-email", async (req, res) => {
+  const { rawText } = req.body;
+
+  if (!rawText) {
+    return res.status(400).json({ error: "rawText is required" });
+  }
+
+  try {
+    const parsedData = parseEmail(rawText);
+    const existing = await Application.findOne({
+      company: parsedData.company,
+      role: parsedData.role,
+      link: parsedData.link,
+    });
+
+    if (existing) {
+      return res.json(existing);
+    }
+
+    const newApplication = new Application(parsedData);
+    await newApplication.save();
+
+    res.json(newApplication);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to parse and save email" });
+  }
 });
 
 app.listen(PORT, () => {
