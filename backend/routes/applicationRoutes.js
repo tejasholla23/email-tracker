@@ -44,4 +44,14 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+// DELETE /applications/clear - delete all applications
+router.delete("/clear", async (req, res) => {
+  try {
+    await Application.deleteMany({});
+    res.json({ message: "All applications cleared" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to clear applications" });
+  }
+});
+
 module.exports = router;

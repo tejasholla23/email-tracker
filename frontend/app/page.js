@@ -7,6 +7,7 @@ export default function JobTrackerDashboard() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   // Add Application Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -44,6 +45,28 @@ export default function JobTrackerDashboard() {
       console.error("Sync failed:", error);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleClearAll = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete all applications? This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setClearing(true);
+    try {
+      const response = await fetch(`${BASE_URL}/applications/clear`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Clear failed");
+      alert("All applications cleared.");
+      await fetchApplications();
+    } catch (error) {
+      console.error("Clear all failed:", error);
+      alert("Failed to clear applications. Please try again.");
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -235,6 +258,9 @@ export default function JobTrackerDashboard() {
         
         .btn-primary { padding: 8px 16px; background: #00685f; color: #fff; border: none; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
         .btn-primary:hover { background: #005049; }
+        .btn-danger { padding: 8px 16px; background: transparent; color: #ba1a1a; border: 1px solid #f5c2c7; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+        .btn-danger:hover:not(:disabled) { background: #ffdad6; border-color: #ba1a1a; }
+        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
       `}} />
 
       <div className="layout">
@@ -273,6 +299,9 @@ export default function JobTrackerDashboard() {
               </button>
               <button className="outline-btn" onClick={handleSync} disabled={syncing}>
                 {syncing ? "Syncing..." : "Sync Emails"}
+              </button>
+              <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
+                {clearing ? "Clearing..." : "Clear All"}
               </button>
               <div style={{ width: 36, height: 36, background: '#00685f', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 14 }}>
                 U
