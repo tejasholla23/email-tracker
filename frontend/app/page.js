@@ -1,5 +1,5 @@
 "use client";
-const BASE_URL = "https://email-tracker-m54o.onrender.com";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 import React, { useEffect, useState } from "react";
 
