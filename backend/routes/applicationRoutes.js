@@ -54,4 +54,18 @@ router.delete("/clear", async (req, res) => {
   }
 });
 
+// DELETE /applications/:id - delete a single application
+router.delete("/:id", async (req, res) => {
+  try {
+    const deleted = await Application.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Application not found" });
+    }
+    res.json({ message: "Application deleted" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete application" });
+  }
+});
+
 module.exports = router;
+

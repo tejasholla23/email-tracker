@@ -70,6 +70,36 @@ export default function JobTrackerDashboard() {
     }
   };
 
+  const handleMarkDone = async (id) => {
+    try {
+      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+      if (!response.ok) throw new Error("Failed to mark as done");
+      setApplications((prev) =>
+        prev.map((app) => app._id === id ? { ...app, status: "done" } : app)
+      );
+    } catch (error) {
+      console.error("Mark done failed:", error);
+      alert("Could not mark as done. Please try again.");
+    }
+  };
+
+  const handleDeleteOne = async (id) => {
+    try {
+      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete");
+      setApplications((prev) => prev.filter((app) => app._id !== id));
+    } catch (error) {
+      console.error("Delete failed:", error);
+      alert("Could not delete application. Please try again.");
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await fetch(`${BASE_URL}/logout`);
@@ -222,6 +252,17 @@ export default function JobTrackerDashboard() {
         .btn-danger:hover:not(:disabled) { background: #ffdad6; border-color: #ba1a1a; }
         .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
         .new-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; background: #d1fae5; color: #065f46; margin-left: 6px; vertical-align: middle; }
+        /* Card action buttons */
+        .card-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eaefed; }
+        .card-btn { flex: 1; padding: 7px 0; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s; }
+        .card-btn-done { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .card-btn-done:hover:not(:disabled) { background: #dcfce7; border-color: #86efac; }
+        .card-btn-done:disabled { opacity: 0.55; cursor: default; }
+        .card-btn-remove { background: #fff5f5; color: #b91c1c; border: 1px solid #fecaca; }
+        .card-btn-remove:hover { background: #fee2e2; border-color: #fca5a5; }
+        /* Done card dimming */
+        .app-card.is-done { opacity: 0.55; }
+        .app-card.is-done .role-title { text-decoration: line-through; color: #6d7a77; }
       `}} />
 
       <div className="layout">
@@ -335,8 +376,10 @@ export default function JobTrackerDashboard() {
                     const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
                     const isNew = isAddedToday(app);
 
+                    const isDone = (app.status || "").toLowerCase() === "done";
+
                     return (
-                      <div key={app._id} className="app-card">
+                      <div key={app._id} className={`app-card${isDone ? " is-done" : ""}`}>
                         <div className="app-header">
                           <div className="app-info">
                             <div className="company-logo">{companyInitials}</div>
@@ -353,6 +396,21 @@ export default function JobTrackerDashboard() {
                             <span>{app.email || "user@gmail.com"}</span>
                           </div>
                           <span>{formattedDate}</span>
+                        </div>
+                        <div className="card-actions">
+                          <button
+                            className="card-btn card-btn-done"
+                            onClick={() => handleMarkDone(app._id)}
+                            disabled={isDone}
+                          >
+                            {isDone ? "✓ Done" : "✓ Mark Done"}
+                          </button>
+                          <button
+                            className="card-btn card-btn-remove"
+                            onClick={() => handleDeleteOne(app._id)}
+                          >
+                            🗑 Remove
+                          </button>
                         </div>
                       </div>
                     );
