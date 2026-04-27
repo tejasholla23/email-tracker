@@ -148,6 +148,9 @@ export default function JobTrackerDashboard() {
 
   // Stats calculation
   const total = applications.length;
+  const pending = applications.filter(
+    (a) => (a.status || "").toLowerCase() !== "done"
+  ).length;
 
   const isAddedToday = (app) => {
     const raw = app.date || app.createdAt;
@@ -323,6 +326,10 @@ export default function JobTrackerDashboard() {
               <div className="stat-card total">
                 <span className="stat-title">Total Applications</span>
                 <span className="stat-value">{total}</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-title">Pending</span>
+                <span className="stat-value">{pending}</span>
               </div>
             </div>
 
