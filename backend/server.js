@@ -207,6 +207,20 @@ app.get("/sync", async (req, res) => {
 });
 
 // ==========================
+// 🧪 MANUAL CRON TRIGGER
+// ==========================
+app.get("/run-cron", async (req, res) => {
+  console.log("Cron triggered");
+  try {
+    await fetchAndProcessEmails();
+    res.json({ message: "Cron executed successfully" });
+  } catch (error) {
+    console.error("Manual cron trigger error:", error);
+    res.status(500).json({ message: "Cron failed" });
+  }
+});
+
+// ==========================
 // ⏱ CRON (AUTO SYNC)
 // ==========================
 cron.schedule("0 */2 * * *", async () => {
