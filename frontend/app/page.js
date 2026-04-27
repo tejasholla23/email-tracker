@@ -153,6 +153,15 @@ export default function JobTrackerDashboard() {
     return "Applied";
   };
 
+  const isAddedToday = (app) => {
+    const raw = app.date || app.createdAt;
+    if (!raw) return false;
+    const appDate = new Date(raw);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return appDate >= todayStart;
+  };
+
   return (
     <>
       <style dangerouslySetInnerHTML={{
@@ -261,6 +270,8 @@ export default function JobTrackerDashboard() {
         .btn-danger { padding: 8px 16px; background: transparent; color: #ba1a1a; border: 1px solid #f5c2c7; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
         .btn-danger:hover:not(:disabled) { background: #ffdad6; border-color: #ba1a1a; }
         .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+        .new-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; background: #d1fae5; color: #065f46; margin-left: 6px; vertical-align: middle; }
+        .new-tag.offer { background: #fef08a; color: #854d0e; }
       `}} />
 
       <div className="layout">
@@ -367,6 +378,8 @@ export default function JobTrackerDashboard() {
                     const dateToShow = app.date || app.testDate || app.deadline || app.createdAt;
                     const formattedDate = dateToShow ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "N/A";
                     const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
+                    const isNew = isAddedToday(app);
+                    const isOffer = ["offer", "accepted"].includes((app.status || "").toLowerCase());
 
                     return (
                       <div key={app._id} className="app-card">
@@ -378,7 +391,10 @@ export default function JobTrackerDashboard() {
                               <div className="company-name">{app.company || "Unknown Company"}</div>
                             </div>
                           </div>
-                          <span className={`status-badge ${statusClass}`}>{statusLabel}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
+                            <span className={`status-badge ${statusClass}`}>{statusLabel}</span>
+                            {isNew && <span className={`new-tag${isOffer ? ' offer' : ''}`}>New</span>}
+                          </div>
                         </div>
                         <div className="app-footer">
                           <div className="email-info">

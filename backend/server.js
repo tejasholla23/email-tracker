@@ -169,7 +169,7 @@ async function fetchAndProcessEmails() {
         const exists = await Application.findOne({ rawText });
         if (exists) continue;
 
-        const parsed = await parseEmailWithLLM(rawText);
+        const parsed = await parseEmailWithLLM(rawText, fromHeader);
 
         // ✅ ONLY save real relevant emails
         if (!parsed || parsed.isRelevant !== true) continue;
