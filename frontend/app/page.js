@@ -16,7 +16,6 @@ export default function JobTrackerDashboard() {
   const [formData, setFormData] = useState({
     company: "",
     role: "",
-    status: "applied",
     email: "",
     date: ""
   });
@@ -102,7 +101,7 @@ export default function JobTrackerDashboard() {
       }
 
       setShowAddModal(false);
-      setFormData({ company: "", role: "", status: "applied", email: "", date: "" });
+      setFormData({ company: "", role: "", email: "", date: "" });
       await fetchApplications();
     } catch (error) {
       console.error(error);
@@ -118,40 +117,6 @@ export default function JobTrackerDashboard() {
 
   // Stats calculation
   const total = applications.length;
-
-  const interviews = applications.filter((a) => {
-    const s = (a.status || "").toLowerCase();
-    const t = (a.type || "").toLowerCase();
-    return s === "interview" || t === "test" || s === "test";
-  }).length;
-
-  const rejections = applications.filter((a) => {
-    const s = (a.status || "").toLowerCase();
-    return s === "rejected" || s === "done";
-  }).length;
-
-  const offers = applications.filter((a) => {
-    const s = (a.status || "").toLowerCase();
-    return s === "offer" || s === "accepted";
-  }).length;
-
-  const getStatusClass = (app) => {
-    const s = (app.status || "").toLowerCase();
-    const t = (app.type || "").toLowerCase();
-    if (s === "offer" || s === "accepted") return "status-offer";
-    if (s === "rejected" || s === "done") return "status-rejected";
-    if (s === "interview" || t === "test" || s === "test") return "status-interview";
-    return "status-applied";
-  };
-
-  const getStatusLabel = (app) => {
-    const s = (app.status || "").toLowerCase();
-    const t = (app.type || "").toLowerCase();
-    if (s === "offer" || s === "accepted") return "Offer";
-    if (s === "rejected" || s === "done") return "Rejected";
-    if (s === "interview" || t === "test" || s === "test") return "Interview";
-    return "Applied";
-  };
 
   const isAddedToday = (app) => {
     const raw = app.date || app.createdAt;
@@ -211,12 +176,6 @@ export default function JobTrackerDashboard() {
         .stat-value { font-size: 42px; font-family: 'Manrope', sans-serif; font-weight: 700; color: #171d1c; line-height: 1; z-index: 1; }
         .stat-card.total .stat-value { color: #00685f; }
         
-        /* Filters */
-        .filters { display: flex; gap: 8px; background: #f0f5f2; padding: 8px; border-radius: 12px; border: 1px solid #dee4e1; margin-bottom: 24px; overflow-x: auto; align-items: center; }
-        .filter-btn { padding: 8px 16px; border-radius: 999px; border: none; background: transparent; color: #3d4947; font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
-        .filter-btn.active { background: #00685f; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .filter-btn:hover:not(.active) { background: #e4e9e7; }
-        
         /* App Grid */
         .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
         .app-card { background: #fff; border: 1px solid #dee4e1; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 24px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
@@ -227,21 +186,6 @@ export default function JobTrackerDashboard() {
         .company-logo { width: 48px; height: 48px; border-radius: 12px; background: #f5faf8; border: 1px solid #dee4e1; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #00685f; font-size: 20px; flex-shrink: 0; }
         .role-title { font-family: 'Manrope', sans-serif; font-size: 18px; font-weight: 700; color: #171d1c; margin-bottom: 4px; line-height: 1.2; }
         .company-name { font-size: 14px; color: #3d4947; }
-        
-        .status-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .status-badge::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
-        
-        .status-interview { background: #e0f2f1; color: #00695c; }
-        .status-interview::before { background: #00695c; }
-        
-        .status-rejected { background: #ffdad6; color: #93000a; }
-        .status-rejected::before { background: #93000a; }
-        
-        .status-offer { background: #fef08a; color: #854d0e; }
-        .status-offer::before { background: #854d0e; }
-        
-        .status-applied { background: #e4e9e7; color: #3d4947; }
-        .status-applied::before { background: #3d4947; }
         
         .app-footer { border-top: 1px solid #eaefed; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #6d7a77; }
         .email-info { display: flex; align-items: center; gap: 6px; }
@@ -271,7 +215,6 @@ export default function JobTrackerDashboard() {
         .btn-danger:hover:not(:disabled) { background: #ffdad6; border-color: #ba1a1a; }
         .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
         .new-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; background: #d1fae5; color: #065f46; margin-left: 6px; vertical-align: middle; }
-        .new-tag.offer { background: #fef08a; color: #854d0e; }
       `}} />
 
       <div className="layout">
@@ -333,26 +276,6 @@ export default function JobTrackerDashboard() {
                 <span className="stat-title">Total Applications</span>
                 <span className="stat-value">{total}</span>
               </div>
-              <div className="stat-card">
-                <span className="stat-title">Interviews</span>
-                <span className="stat-value">{interviews}</span>
-              </div>
-              <div className="stat-card">
-                <span className="stat-title">Rejections</span>
-                <span className="stat-value">{rejections}</span>
-              </div>
-              <div className="stat-card" style={{ borderColor: '#fef08a' }}>
-                <span className="stat-title">Offers</span>
-                <span className="stat-value" style={{ color: '#854d0e' }}>{offers}</span>
-              </div>
-            </div>
-
-            <div className="filters">
-              <button className="filter-btn active">All Status</button>
-              <button className="filter-btn">Applied</button>
-              <button className="filter-btn">Interview</button>
-              <button className="filter-btn">Offer</button>
-              <button className="filter-btn">Rejected</button>
             </div>
 
             {loading && applications.length === 0 ? (
@@ -373,13 +296,10 @@ export default function JobTrackerDashboard() {
                     return dateB - dateA;
                   })
                   .map((app) => {
-                    const statusClass = getStatusClass(app);
-                    const statusLabel = getStatusLabel(app);
                     const dateToShow = app.date || app.testDate || app.deadline || app.createdAt;
                     const formattedDate = dateToShow ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "N/A";
                     const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
                     const isNew = isAddedToday(app);
-                    const isOffer = ["offer", "accepted"].includes((app.status || "").toLowerCase());
 
                     return (
                       <div key={app._id} className="app-card">
@@ -391,10 +311,7 @@ export default function JobTrackerDashboard() {
                               <div className="company-name">{app.company || "Unknown Company"}</div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
-                            <span className={`status-badge ${statusClass}`}>{statusLabel}</span>
-                            {isNew && <span className={`new-tag${isOffer ? ' offer' : ''}`}>New</span>}
-                          </div>
+                          {isNew && <span className="new-tag">New</span>}
                         </div>
                         <div className="app-footer">
                           <div className="email-info">
@@ -450,19 +367,6 @@ export default function JobTrackerDashboard() {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Status</label>
-                <select
-                  className="form-select"
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                >
-                  <option value="applied">Applied</option>
-                  <option value="interview">Interview</option>
-                  <option value="offer">Offer</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </div>
 
               <div className="form-group">
                 <label className="form-label">Email (Optional)</label>
