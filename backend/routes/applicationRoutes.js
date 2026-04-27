@@ -23,14 +23,17 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PATCH /applications/:id - update application status
+// PATCH /applications/:id - update application status and/or note
 router.patch("/:id", async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, note } = req.body;
+    const update = {};
+    if (status !== undefined) update.status = status;
+    if (note  !== undefined) update.note   = note;
 
     const updatedApplication = await Application.findByIdAndUpdate(
       req.params.id,
-      { status },
+      update,
       { new: true, runValidators: true }
     );
 
@@ -40,7 +43,7 @@ router.patch("/:id", async (req, res) => {
 
     res.json(updatedApplication);
   } catch (error) {
-    res.status(400).json({ message: "Failed to update application status" });
+    res.status(400).json({ message: "Failed to update application" });
   }
 });
 

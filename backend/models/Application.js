@@ -16,6 +16,7 @@ const applicationSchema = new mongoose.Schema(
       default: "pending",
     },
     rawText: { type: String },
+    note: { type: String, default: "" },
   },
   { timestamps: true }
 );

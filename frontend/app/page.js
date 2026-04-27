@@ -100,6 +100,27 @@ export default function JobTrackerDashboard() {
     }
   };
 
+  const handleUpdateNote = (id, newNote) => {
+    setApplications((prev) =>
+      prev.map((app) => app._id === id ? { ...app, note: newNote } : app)
+    );
+  };
+
+  const handleSaveNote = async (id, note) => {
+    try {
+      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note }),
+      });
+      if (!response.ok) throw new Error("Failed to save note");
+    } catch (error) {
+      console.error("Save note failed:", error);
+      alert("Could not save note. Please try again.");
+    }
+  };
+
+
   const handleLogout = async () => {
     try {
       await fetch(`${BASE_URL}/logout`);
@@ -255,6 +276,13 @@ export default function JobTrackerDashboard() {
         .btn-danger:hover:not(:disabled) { background: #ffdad6; border-color: #ba1a1a; }
         .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
         .new-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; background: #d1fae5; color: #065f46; margin-left: 6px; vertical-align: middle; }
+        
+        .note-container { margin-top: 4px; display: flex; flex-direction: column; gap: 8px; }
+        .note-input { width: 100%; padding: 10px; border: 1px solid #dee4e1; border-radius: 8px; font-family: inherit; font-size: 13px; color: #3d4947; outline: none; transition: border-color 0.2s; background: #f9fafb; resize: none; min-height: 60px; }
+        .note-input:focus { border-color: #0d9488; background: #fff; }
+        .note-save-hint { font-size: 11px; color: #9ca3af; text-align: right; margin-top: -4px; }
+        
+        /* Card action buttons */
         /* Card action buttons */
         .card-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eaefed; }
         .card-btn { flex: 1; padding: 7px 0; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s; }
@@ -335,11 +363,8 @@ export default function JobTrackerDashboard() {
 
             <div className="filters">
               {[
-                { label: "All",       value: "all"      },
-                { label: "Applied",   value: "applied"  },
-                { label: "Interview", value: "interview"},
-                { label: "Offer",     value: "offer"    },
-                { label: "Rejected",  value: "rejected" },
+                { label: "All",      value: "all"      },
+                { label: "Unmarked", value: "unmarked" },
               ].map(({ label, value }) => (
                 <button
                   key={value}
@@ -365,10 +390,7 @@ export default function JobTrackerDashboard() {
                     const s = (app.status || "").toLowerCase();
                     const matchesFilter =
                       activeFilter === "all" ||
-                      (activeFilter === "offer"     && (s === "offer" || s === "accepted")) ||
-                      (activeFilter === "interview" && (s === "interview" || s === "test" || s === "shortlisted")) ||
-                      (activeFilter === "rejected"  && (s === "rejected" || s === "done")) ||
-                      (activeFilter === "applied"   && !["offer","accepted","interview","test","shortlisted","rejected","done"].includes(s));
+                      (activeFilter === "unmarked" && s !== "done");
 
                     return matchesSearch && matchesFilter;
                   })
@@ -404,6 +426,18 @@ export default function JobTrackerDashboard() {
                           </div>
                           <span>{formattedDate}</span>
                         </div>
+
+                        <div className="note-container">
+                          <textarea
+                            className="note-input"
+                            placeholder="Add a personal note..."
+                            value={app.note || ""}
+                            onChange={(e) => handleUpdateNote(app._id, e.target.value)}
+                            onBlur={(e) => handleSaveNote(app._id, e.target.value)}
+                          />
+                          <div className="note-save-hint">Auto-saves on blur</div>
+                        </div>
+
                         <div className="card-actions">
                           <button
                             className="card-btn card-btn-done"
