@@ -21,6 +21,7 @@ export default function JobTrackerDashboard() {
   });
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
 
   const fetchApplications = async () => {
     setLoading(true);
@@ -176,6 +177,12 @@ export default function JobTrackerDashboard() {
         .stat-value { font-size: 42px; font-family: 'Manrope', sans-serif; font-weight: 700; color: #171d1c; line-height: 1; z-index: 1; }
         .stat-card.total .stat-value { color: #00685f; }
         
+        /* Filters */
+        .filters { display: flex; gap: 8px; background: #f0f5f2; padding: 8px; border-radius: 12px; border: 1px solid #dee4e1; margin-bottom: 24px; overflow-x: auto; align-items: center; }
+        .filter-btn { padding: 8px 16px; border-radius: 999px; border: none; background: transparent; color: #3d4947; font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
+        .filter-btn.active { background: #00685f; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .filter-btn:hover:not(.active) { background: #e4e9e7; }
+        
         /* App Grid */
         .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
         .app-card { background: #fff; border: 1px solid #dee4e1; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 24px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
@@ -278,6 +285,24 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
 
+            <div className="filters">
+              {[
+                { label: "All",       value: "all"      },
+                { label: "Applied",   value: "applied"  },
+                { label: "Interview", value: "interview"},
+                { label: "Offer",     value: "offer"    },
+                { label: "Rejected",  value: "rejected" },
+              ].map(({ label, value }) => (
+                <button
+                  key={value}
+                  className={`filter-btn${activeFilter === value ? " active" : ""}`}
+                  onClick={() => setActiveFilter(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {loading && applications.length === 0 ? (
               <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
             ) : (
@@ -285,10 +310,19 @@ export default function JobTrackerDashboard() {
                 {applications
                   .filter((app) => {
                     const query = searchQuery.toLowerCase();
-                    return (
+                    const matchesSearch =
                       (app.company || "").toLowerCase().includes(query) ||
-                      (app.role || "").toLowerCase().includes(query)
-                    );
+                      (app.role || "").toLowerCase().includes(query);
+
+                    const s = (app.status || "").toLowerCase();
+                    const matchesFilter =
+                      activeFilter === "all" ||
+                      (activeFilter === "offer"     && (s === "offer" || s === "accepted")) ||
+                      (activeFilter === "interview" && (s === "interview" || s === "test" || s === "shortlisted")) ||
+                      (activeFilter === "rejected"  && (s === "rejected" || s === "done")) ||
+                      (activeFilter === "applied"   && !["offer","accepted","interview","test","shortlisted","rejected","done"].includes(s));
+
+                    return matchesSearch && matchesFilter;
                   })
                   .sort((a, b) => {
                     const dateA = new Date(a.date || a.createdAt || 0);
