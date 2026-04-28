@@ -187,197 +187,225 @@ export default function JobTrackerDashboard() {
     <>
       <style dangerouslySetInnerHTML={{
         __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
         
+        :root {
+          --primary: #0d9488;
+          --primary-dark: #0f766e;
+          --primary-light: #ccfbf1;
+          --bg: #f8fafc;
+          --sidebar-bg: #ffffff;
+          --text-main: #1e293b;
+          --text-muted: #64748b;
+          --border: #e2e8f0;
+          --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+          --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; background-color: #f5faf8; color: #171d1c; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); line-height: 1.5; }
         
         .layout { display: flex; min-height: 100vh; }
         
         /* Sidebar */
-        .sidebar { width: 280px; background-color: #f9fafb; border-right: 1px solid #e5e7eb; padding: 24px 16px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 50; }
-        .sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; padding: 0 8px; }
-        .logo-box { width: 40px; height: 40px; background: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 700; font-size: 16px; }
-        .logo-text { font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 700; color: #0d9488; line-height: 1.2; }
-        .logo-sub { font-size: 12px; color: #6b7280; }
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border); padding: 32px 20px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 50; }
+        .sidebar-header { display: flex; align-items: center; gap: 14px; margin-bottom: 40px; }
+        .logo-box { width: 42px; height: 42px; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; border-radius: 12px; font-weight: 800; font-size: 18px; box-shadow: 0 2px 4px rgba(13, 148, 136, 0.1); }
+        .logo-text { font-family: 'Manrope', sans-serif; font-size: 22px; font-weight: 800; color: var(--primary); line-height: 1; letter-spacing: -0.02em; }
+        .logo-sub { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
         
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: #6b7280; text-decoration: none; font-weight: 500; margin-bottom: 8px; cursor: pointer; transition: background 0.2s; font-size: 15px; }
-        .nav-item:hover { background: #f3f4f6; color: #0d9488; }
-        .nav-item.active { background: #fff; border-left: 4px solid #0d9488; color: #0d9488; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; color: var(--text-muted); text-decoration: none; font-weight: 600; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+        .nav-item:hover { background: #f1f5f9; color: var(--primary); }
+        .nav-item.active { background: #f0fdfa; color: var(--primary); }
         
-        .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
-        .sync-btn { width: 100%; padding: 12px; background: #0d9488; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-size: 14px; }
-        .sync-btn:hover { background: #0f766e; }
+        .sidebar-bottom { margin-top: auto; padding-top: 24px; border-top: 1px solid var(--border); }
+        .sync-btn { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: all 0.2s; font-size: 14px; box-shadow: 0 4px 6px rgba(13, 148, 136, 0.2); }
+        .sync-btn:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 6px 12px rgba(13, 148, 136, 0.25); }
         
         /* Main Area */
-        .main-wrapper { margin-left: 280px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .main-wrapper { margin-left: 260px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
         
-        .topbar { height: 64px; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; position: sticky; top: 0; z-index: 40; }
-        .search-container input { padding: 10px 16px 10px 40px; border-radius: 999px; border: 1px solid #e5e7eb; background: #f9fafb url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 320px; outline: none; font-size: 14px; transition: all 0.2s; }
-        .search-container input:focus { border-color: #0d9488; box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1); background-color: #fff; }
-        .topbar-actions { display: flex; align-items: center; gap: 16px; }
-        .outline-btn { padding: 8px 16px; border: 1px solid #ccfbf1; background: #f0fdfa; color: #0f766e; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-        .outline-btn:hover { background: #ccfbf1; }
+        .topbar { height: 72px; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 40px; position: sticky; top: 0; z-index: 40; }
+        .search-container { position: relative; }
+        .search-container input { padding: 10px 16px 10px 44px; border-radius: 12px; border: 1px solid var(--border); background: #f1f5f9; width: 340px; outline: none; font-size: 14px; transition: all 0.2s; font-weight: 500; }
+        .search-container::before { content: ''; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat center; opacity: 0.7; }
+        .search-container input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.1); background-color: #fff; width: 400px; }
+        
+        .topbar-actions { display: flex; align-items: center; gap: 12px; }
+        .btn-circle { width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--border); background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-muted); }
+        .btn-circle:hover { border-color: var(--primary); color: var(--primary); background: #f0fdfa; }
         
         /* Content */
-        .content { padding: 32px; max-width: 1400px; margin: 0 auto; width: 100%; }
-        .page-header { margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end; }
-        .page-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: #171d1c; margin-bottom: 4px; }
-        .page-subtitle { color: #3d4947; font-size: 15px; }
+        .content { padding: 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        .page-header { margin-bottom: 32px; }
+        .page-title { font-family: 'Manrope', sans-serif; font-size: 32px; font-weight: 800; color: var(--text-main); letter-spacing: -0.03em; }
+        .page-subtitle { color: var(--text-muted); font-size: 16px; font-weight: 500; }
         
         /* Stats */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; margin-bottom: 32px; }
-        .stat-card { background: #fff; border: 1px solid #dee4e1; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px rgba(13, 148, 136, 0.02); display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; }
-        .stat-title { font-size: 12px; font-weight: 600; color: #3d4947; text-transform: uppercase; letter-spacing: 0.05em; z-index: 1; }
-        .stat-value { font-size: 42px; font-family: 'Manrope', sans-serif; font-weight: 700; color: #171d1c; line-height: 1; z-index: 1; }
-        .stat-card.total .stat-value { color: #00685f; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 40px; }
+        .stat-card { background: #fff; border: 1px solid var(--border); border-radius: 20px; padding: 24px; box-shadow: var(--card-shadow); display: flex; flex-direction: column; gap: 4px; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-title { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 36px; font-family: 'Manrope', sans-serif; font-weight: 800; color: var(--text-main); line-height: 1.2; }
+        .stat-card.total .stat-value { color: var(--primary); }
         
         /* Filters */
-        .filters { display: flex; gap: 8px; background: #f0f5f2; padding: 8px; border-radius: 12px; border: 1px solid #dee4e1; margin-bottom: 24px; overflow-x: auto; align-items: center; }
-        .filter-btn { padding: 8px 16px; border-radius: 999px; border: none; background: transparent; color: #3d4947; font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
-        .filter-btn.active { background: #00685f; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .filter-btn:hover:not(.active) { background: #e4e9e7; }
+        .filters { display: flex; gap: 8px; margin-bottom: 32px; border-bottom: 2px solid var(--border); padding-bottom: 12px; }
+        .filter-btn { padding: 8px 20px; border-radius: 10px; border: none; background: transparent; color: var(--text-muted); font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; position: relative; }
+        .filter-btn.active { color: var(--primary); background: #f0fdfa; }
+        .filter-btn.active::after { content: ''; position: absolute; bottom: -14px; left: 0; right: 0; height: 2px; background: var(--primary); border-radius: 2px; }
+        .filter-btn:hover:not(.active) { color: var(--text-main); background: #f1f5f9; }
         
         /* App Grid */
         .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
-        .app-card { background: #fff; border: 1px solid #dee4e1; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 24px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
-        .app-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(13, 148, 136, 0.08); border-color: #bcc9c6; }
+        .app-card { background: #fff; border: 1px solid var(--border); border-radius: 24px; padding: 28px; display: flex; flex-direction: column; gap: 24px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: var(--card-shadow); border-top: 4px solid var(--primary-light); }
+        .app-card:hover { transform: translateY(-6px); box-shadow: var(--card-shadow-hover); border-top-color: var(--primary); }
         
         .app-header { display: flex; justify-content: space-between; align-items: flex-start; }
         .app-info { display: flex; gap: 16px; }
-        .company-logo { width: 48px; height: 48px; border-radius: 12px; background: #f5faf8; border: 1px solid #dee4e1; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #00685f; font-size: 20px; flex-shrink: 0; }
-        .role-title { font-family: 'Manrope', sans-serif; font-size: 18px; font-weight: 700; color: #171d1c; margin-bottom: 4px; line-height: 1.2; }
-        .company-name { font-size: 14px; color: #3d4947; }
+        .company-logo { width: 52px; height: 52px; border-radius: 16px; background: #f8fafc; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--primary); font-size: 22px; flex-shrink: 0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+        .role-title { font-family: 'Manrope', sans-serif; font-size: 19px; font-weight: 800; color: var(--text-main); margin-bottom: 2px; line-height: 1.2; }
+        .company-name { font-size: 14px; color: var(--text-muted); font-weight: 600; }
         
-        .app-footer { border-top: 1px solid #eaefed; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #6d7a77; }
-        .email-info { display: flex; align-items: center; gap: 6px; }
+        .app-footer { border-top: 1px solid var(--border); padding-top: 20px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+        .email-info { display: flex; align-items: center; gap: 8px; }
+        .email-dot { width: 8px; height: 8px; background: #cbd5e1; border-radius: 50%; }
         
         /* Modal Styles */
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; }
-        .modal-content { background: #fff; width: 100%; max-width: 480px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); padding: 32px; position: relative; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .modal-title { font-family: 'Manrope', sans-serif; font-size: 24px; font-weight: 700; color: #171d1c; }
-        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #6d7a77; padding: 4px; line-height: 1; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-        .modal-close:hover { background: #f0f5f2; color: #171d1c; }
-        .form-group { margin-bottom: 16px; }
-        .form-label { display: block; font-size: 14px; font-weight: 600; color: #3d4947; margin-bottom: 6px; }
-        .form-input, .form-select { width: 100%; padding: 10px 12px; border: 1px solid #dee4e1; border-radius: 8px; font-family: inherit; font-size: 15px; color: #171d1c; outline: none; transition: border-color 0.2s; background: #fff; }
-        .form-input:focus, .form-select:focus { border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1); }
-        .form-error { color: #ba1a1a; font-size: 14px; margin-bottom: 16px; background: #ffdad6; padding: 8px 12px; border-radius: 8px; }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 32px; }
-        .btn-cancel { padding: 10px 20px; background: #f0f5f2; color: #3d4947; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 14px; }
-        .btn-cancel:hover { background: #dee4e1; }
-        .btn-submit { padding: 10px 20px; background: #00685f; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 14px; }
-        .btn-submit:hover { background: #005049; }
-        .btn-submit:disabled { opacity: 0.7; cursor: not-allowed; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-content { background: #fff; width: 100%; max-width: 460px; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); padding: 32px; position: relative; animation: modalIn 0.3s ease-out; }
+        @keyframes modalIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         
-        .btn-primary { padding: 8px 16px; background: #00685f; color: #fff; border: none; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-        .btn-primary:hover { background: #005049; }
-        .btn-danger { padding: 8px 16px; background: transparent; color: #ba1a1a; border: 1px solid #f5c2c7; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-        .btn-danger:hover:not(:disabled) { background: #ffdad6; border-color: #ba1a1a; }
-        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
-        .new-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; background: #d1fae5; color: #065f46; margin-left: 6px; vertical-align: middle; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+        .modal-title { font-family: 'Manrope', sans-serif; font-size: 24px; font-weight: 800; color: var(--text-main); letter-spacing: -0.02em; }
+        .modal-close { background: #f1f5f9; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 12px; transition: all 0.2s; }
+        .modal-close:hover { background: #e2e8f0; color: var(--text-main); }
         
-        .note-container { margin-top: 4px; display: flex; flex-direction: column; gap: 8px; }
-        .note-input { width: 100%; padding: 10px; border: 1px solid #dee4e1; border-radius: 8px; font-family: inherit; font-size: 13px; color: #3d4947; outline: none; transition: border-color 0.2s; background: #f9fafb; resize: none; min-height: 60px; }
-        .note-input:focus { border-color: #0d9488; background: #fff; }
-        .note-save-hint { font-size: 11px; color: #9ca3af; text-align: right; margin-top: -4px; }
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-input { width: 100%; padding: 12px 16px; border: 1.5px solid var(--border); border-radius: 12px; font-family: inherit; font-size: 15px; color: var(--text-main); outline: none; transition: all 0.2s; background: #f8fafc; }
+        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.1); background-color: #fff; }
         
-        /* Card action buttons */
-        /* Card action buttons */
-        .card-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eaefed; }
-        .card-btn { flex: 1; padding: 7px 0; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s; }
-        .card-btn-done { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .modal-actions { display: flex; gap: 12px; margin-top: 32px; }
+        .btn { flex: 1; padding: 12px; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 14px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: #fff; border: none; box-shadow: 0 4px 6px rgba(13, 148, 136, 0.2); }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 6px 12px rgba(13, 148, 136, 0.25); }
+        .btn-secondary { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-danger { background: #fff; color: #ef4444; border: 1.5px solid #fee2e2; }
+        .btn-danger:hover:not(:disabled) { background: #fef2f2; border-color: #ef4444; }
+        
+        .new-tag { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; background: #d1fae5; color: #065f46; text-transform: uppercase; }
+        
+        .note-container { margin-top: 4px; }
+        .note-input { width: 100%; padding: 14px; border: 1.5px solid var(--border); border-radius: 16px; font-family: inherit; font-size: 13px; color: var(--text-main); outline: none; transition: all 0.2s; background: #f8fafc; resize: none; min-height: 80px; font-weight: 500; }
+        .note-input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .note-save-hint { font-size: 11px; color: var(--text-muted); text-align: right; margin-top: 6px; font-weight: 600; }
+        
+        .card-actions { display: flex; gap: 10px; padding-top: 12px; }
+        .card-btn { flex: 1; padding: 9px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px solid transparent; }
+        .card-btn-done { background: #f0fdf4; color: #15803d; border-color: #dcfce7; }
         .card-btn-done:hover:not(:disabled) { background: #dcfce7; border-color: #86efac; }
-        .card-btn-done:disabled { opacity: 0.55; cursor: default; }
-        .card-btn-remove { background: #fff5f5; color: #b91c1c; border: 1px solid #fecaca; }
-        .card-btn-remove:hover { background: #fee2e2; border-color: #fca5a5; }
-        /* Done card dimming */
-        .app-card.is-done { opacity: 0.55; }
-        .app-card.is-done .role-title { text-decoration: line-through; color: #6d7a77; }
+        .card-btn-remove { background: #fff; color: var(--text-muted); border-color: var(--border); }
+        .card-btn-remove:hover { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+        
+        .app-card.is-done { border-top-color: #cbd5e1; opacity: 0.7; }
+        .app-card.is-done .role-title { text-decoration: line-through; color: var(--text-muted); }
+        .app-card.is-done .company-logo { grayscale: 1; opacity: 0.5; }
 
-        /* Responsive Styles */
-        .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #0d9488; }
-        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 45; backdrop-filter: blur(2px); }
+        /* Empty State */
+        .empty-state { text-align: center; padding: 80px 20px; background: #fff; border-radius: 24px; border: 2px dashed var(--border); }
+        .empty-icon { font-size: 48px; margin-bottom: 16px; display: block; }
+        .empty-title { font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; }
+        .empty-desc { color: var(--text-muted); font-size: 15px; max-width: 320px; margin: 0 auto 24px; }
+
+        /* Responsive */
+        .hamburger { display: none; background: #fff; border: 1px solid var(--border); cursor: pointer; padding: 10px; border-radius: 12px; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); z-index: 45; backdrop-filter: blur(4px); }
+
+        @media (max-width: 1024px) {
+          .sidebar { width: 80px; padding: 32px 14px; align-items: center; }
+          .logo-text, .logo-sub, .nav-item span { display: none; }
+          .main-wrapper { margin-left: 80px; }
+          .content { padding: 32px; }
+        }
 
         @media (max-width: 768px) {
-          .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
+          .sidebar { width: 260px; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); align-items: flex-start; }
           .sidebar.open { transform: translateX(0); }
+          .logo-text, .logo-sub, .nav-item span { display: block; }
           .sidebar-overlay.show { display: block; }
           .main-wrapper { margin-left: 0; }
           .hamburger { display: block; }
-          .topbar { padding: 0 16px; }
-          .search-container input { width: 180px; }
-          .topbar-actions { gap: 8px; }
-          .topbar-actions .btn-primary, .topbar-actions .outline-btn, .topbar-actions .btn-danger { padding: 6px 12px; font-size: 12px; }
-          .content { padding: 20px 16px; }
-          .page-title { font-size: 24px; }
-          .stats-grid { grid-template-columns: 1fr; }
-          .app-grid { grid-template-columns: 1fr; }
-          .modal-content { padding: 20px; width: 95%; margin: 0 10px; }
+          .topbar { padding: 0 20px; }
+          .search-container input { width: 200px; }
+          .content { padding: 24px 20px; }
+          .page-title { font-size: 28px; }
         }
 
         @media (max-width: 480px) {
-          .topbar { height: auto; padding: 12px 16px; flex-direction: column; gap: 12px; align-items: stretch; }
+          .topbar { height: auto; padding: 16px 20px; flex-direction: column; gap: 16px; align-items: stretch; }
           .search-container { width: 100%; }
-          .search-container input { width: 100%; }
-          .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
-          .topbar-actions > button { flex: 1; min-width: 100px; text-align: center; justify-content: center; display: flex; align-items: center; }
-          .stat-value { font-size: 32px; }
-          .logo-text { font-size: 18px; }
+          .search-container input { width: 100% !important; }
+          .topbar-actions { width: 100%; justify-content: space-between; }
         }
       `}} />
 
 
       <div className="layout">
-        {/* Mobile Sidebar Overlay */}
         <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
 
         <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <div className="sidebar-header">
             <div className="logo-box">ET</div>
             <div>
-              <div className="logo-text">Email Tracker</div>
-              <div className="logo-sub">Dashboard</div>
+              <div className="logo-text">EmailTracker</div>
+              <div className="logo-sub">Pro Dashboard</div>
             </div>
           </div>
 
+          <nav style={{ flex: 1 }}>
+            <div className="nav-item active">
+              <span>🏠</span>
+              <span>Dashboard</span>
+            </div>
+            <div className="nav-item" onClick={() => setShowAddModal(true)}>
+              <span>➕</span>
+              <span>Add Entry</span>
+            </div>
+          </nav>
+
           <div className="sidebar-bottom">
             <button className="sync-btn" onClick={handleSync} disabled={syncing}>
-              {syncing ? "Syncing..." : "Sync Emails"}
+              {syncing ? "Syncing..." : "Sync Gmail"}
             </button>
-            <nav>
-              <a className="nav-item" onClick={() => { handleLogout(); setIsSidebarOpen(false); }} style={{ cursor: "pointer" }}>Logout</a>
-            </nav>
+            <div className="nav-item" onClick={handleLogout} style={{ marginTop: 0 }}>
+              <span>🚪</span>
+              <span>Sign Out</span>
+            </div>
           </div>
         </aside>
 
         <div className="main-wrapper">
           <header className="topbar">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
               <div className="search-container">
                 <input
                   type="text"
-                  placeholder="Search applications..."
+                  placeholder="Search your applications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
             </div>
             <div className="topbar-actions">
-              <button className="btn-primary" onClick={() => setShowAddModal(true)}>
-                + Add Application
+              <button className="btn-circle" title="Clear All" onClick={handleClearAll} disabled={clearing}>
+                🗑️
               </button>
-              <button className="outline-btn" onClick={handleSync} disabled={syncing}>
-                {syncing ? "Syncing..." : "Sync Emails"}
-              </button>
-              <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
-                {clearing ? "Clearing..." : "Clear All"}
-              </button>
-              <div style={{ width: 36, height: 36, background: '#00685f', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 14 }}>
+              <div style={{ width: 38, height: 38, background: '#f1f5f9', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justify-content: 'center', fontWeight: '800', fontSize: 15 }}>
                 U
               </div>
             </div>
@@ -385,26 +413,24 @@ export default function JobTrackerDashboard() {
 
           <main className="content">
             <div className="page-header">
-              <div>
-                <h2 className="page-title">Applications Overview</h2>
-                <p className="page-subtitle">Track and manage your active job pursuits.</p>
-              </div>
+              <h2 className="page-title">Applications</h2>
+              <p className="page-subtitle">Manage and track your active job hunt journey.</p>
             </div>
 
             <div className="stats-grid">
               <div className="stat-card total">
-                <span className="stat-title">Total Applications</span>
+                <span className="stat-title">Total tracked</span>
                 <span className="stat-value">{total}</span>
               </div>
               <div className="stat-card">
-                <span className="stat-title">Pending</span>
+                <span className="stat-title">Pending action</span>
                 <span className="stat-value">{pending}</span>
               </div>
             </div>
 
             <div className="filters">
               {[
-                { label: "All",      value: "all"      },
+                { label: "All Items",      value: "all"      },
                 { label: "Unmarked", value: "unmarked" },
               ].map(({ label, value }) => (
                 <button
@@ -418,90 +444,102 @@ export default function JobTrackerDashboard() {
             </div>
 
             {loading && applications.length === 0 ? (
-              <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
+              <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ marginBottom: 16 }}>🌀</div>
+                <p>Loading your applications...</p>
+              </div>
             ) : (
-              <div className="app-grid">
-                {applications
-                  .filter((app) => {
-                    const query = searchQuery.toLowerCase();
-                    const matchesSearch =
-                      (app.company || "").toLowerCase().includes(query) ||
-                      (app.role || "").toLowerCase().includes(query);
+              <>
+                {applications.length === 0 ? (
+                  <div className="empty-state">
+                    <span className="empty-icon">📂</span>
+                    <h3 className="empty-title">No applications yet</h3>
+                    <p className="empty-desc">Your synchronized job applications will appear here once you sync with Gmail.</p>
+                    <button className="btn btn-primary" onClick={handleSync} style={{ width: 'auto', padding: '12px 24px', margin: '0 auto' }}>
+                      Sync Gmail Now
+                    </button>
+                  </div>
+                ) : (
+                  <div className="app-grid">
+                    {applications
+                      .filter((app) => {
+                        const query = searchQuery.toLowerCase();
+                        const matchesSearch =
+                          (app.company || "").toLowerCase().includes(query) ||
+                          (app.role || "").toLowerCase().includes(query);
 
-                    const s = (app.status || "").toLowerCase();
-                    const matchesFilter =
-                      activeFilter === "all" ||
-                      (activeFilter === "unmarked" && s !== "done");
+                        const s = (app.status || "").toLowerCase();
+                        const matchesFilter =
+                          activeFilter === "all" ||
+                          (activeFilter === "unmarked" && s !== "done");
 
-                    return matchesSearch && matchesFilter;
-                  })
-                  .sort((a, b) => {
-                    const dateA = new Date(a.date || a.createdAt || 0);
-                    const dateB = new Date(b.date || b.createdAt || 0);
-                    return dateB - dateA;
-                  })
-                  .map((app) => {
-                    const dateToShow = app.date || app.testDate || app.deadline || app.createdAt;
-                    const formattedDate = dateToShow ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "N/A";
-                    const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                    const isNew = isAddedToday(app);
+                        return matchesSearch && matchesFilter;
+                      })
+                      .sort((a, b) => {
+                        const dateA = new Date(a.date || a.createdAt || 0);
+                        const dateB = new Date(b.date || b.createdAt || 0);
+                        return dateB - dateA;
+                      })
+                      .map((app) => {
+                        const dateToShow = app.date || app.testDate || app.deadline || app.createdAt;
+                        const formattedDate = dateToShow ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "N/A";
+                        const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
+                        const isNew = isAddedToday(app);
+                        const isDone = (app.status || "").toLowerCase() === "done";
 
-                    const isDone = (app.status || "").toLowerCase() === "done";
+                        return (
+                          <div key={app._id} className={`app-card${isDone ? " is-done" : ""}`}>
+                            <div className="app-header">
+                              <div className="app-info">
+                                <div className="company-logo">{companyInitials}</div>
+                                <div>
+                                  <div className="role-title">{app.role || "Job Opportunity"}</div>
+                                  <div className="company-name">{app.company || "Unknown Company"}</div>
+                                </div>
+                              </div>
+                              {isNew && <span className="new-tag">New</span>}
+                            </div>
+                            
+                            <div className="note-container">
+                              <textarea
+                                className="note-input"
+                                placeholder="Add a personal note about this role..."
+                                value={app.note || ""}
+                                onChange={(e) => handleUpdateNote(app._id, e.target.value)}
+                                onBlur={(e) => handleSaveNote(app._id, e.target.value)}
+                              />
+                              <div className="note-save-hint">Auto-saves on blur</div>
+                            </div>
 
-                    return (
-                      <div key={app._id} className={`app-card${isDone ? " is-done" : ""}`}>
-                        <div className="app-header">
-                          <div className="app-info">
-                            <div className="company-logo">{companyInitials}</div>
-                            <div>
-                              <div className="role-title">{app.role || "Unknown Role"}</div>
-                              <div className="company-name">{app.company || "Unknown Company"}</div>
+                            <div className="app-footer">
+                              <div className="email-info">
+                                <div className="email-dot"></div>
+                                <span>{formattedDate}</span>
+                              </div>
+                              <div className="card-actions">
+                                <button
+                                  className="card-btn card-btn-done"
+                                  onClick={() => handleMarkDone(app._id)}
+                                  disabled={isDone}
+                                  title="Mark as Done"
+                                >
+                                  {isDone ? "✓" : "Done"}
+                                </button>
+                                <button
+                                  className="card-btn card-btn-remove"
+                                  onClick={() => handleDeleteOne(app._id)}
+                                  title="Remove"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
                             </div>
                           </div>
-                          {isNew && <span className="new-tag">New</span>}
-                        </div>
-                        <div className="app-footer">
-                          <div className="email-info">
-                            <span style={{ fontSize: 16 }}>✉️</span>
-                            <span>{app.email || "user@gmail.com"}</span>
-                          </div>
-                          <span>{formattedDate}</span>
-                        </div>
-
-                        <div className="note-container">
-                          <textarea
-                            className="note-input"
-                            placeholder="Add a personal note..."
-                            value={app.note || ""}
-                            onChange={(e) => handleUpdateNote(app._id, e.target.value)}
-                            onBlur={(e) => handleSaveNote(app._id, e.target.value)}
-                          />
-                          <div className="note-save-hint">Auto-saves on blur</div>
-                        </div>
-
-                        <div className="card-actions">
-                          <button
-                            className="card-btn card-btn-done"
-                            onClick={() => handleMarkDone(app._id)}
-                            disabled={isDone}
-                          >
-                            {isDone ? "✓ Done" : "✓ Mark Done"}
-                          </button>
-                          <button
-                            className="card-btn card-btn-remove"
-                            onClick={() => handleDeleteOne(app._id)}
-                          >
-                            🗑 Remove
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-
-            {!loading && applications.length === 0 && (
-              <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>No applications found. Try syncing emails.</p>
+                        );
+                      })}
+                  </div>
+                )}
+              </>
             )}
           </main>
         </div>
@@ -512,7 +550,7 @@ export default function JobTrackerDashboard() {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3 className="modal-title">Add Application</h3>
+              <h3 className="modal-title">Manual Entry</h3>
               <button className="modal-close" onClick={() => setShowAddModal(false)}>&times;</button>
             </div>
 
@@ -520,7 +558,7 @@ export default function JobTrackerDashboard() {
               {formError && <div className="form-error">{formError}</div>}
 
               <div className="form-group">
-                <label className="form-label">Company *</label>
+                <label className="form-label">Company Name</label>
                 <input
                   type="text"
                   className="form-input"
@@ -531,7 +569,7 @@ export default function JobTrackerDashboard() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Role *</label>
+                <label className="form-label">Job Role</label>
                 <input
                   type="text"
                   className="form-input"
@@ -541,20 +579,19 @@ export default function JobTrackerDashboard() {
                 />
               </div>
 
-
               <div className="form-group">
-                <label className="form-label">Email (Optional)</label>
+                <label className="form-label">Contact Email</label>
                 <input
                   type="email"
                   className="form-input"
-                  placeholder="e.g. user@gmail.com"
+                  placeholder="e.g. recruiter@company.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Date (Optional)</label>
+                <label className="form-label">Application Date</label>
                 <input
                   type="date"
                   className="form-input"
@@ -564,11 +601,11 @@ export default function JobTrackerDashboard() {
               </div>
 
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setShowAddModal(false)}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-submit" disabled={submitting}>
-                  {submitting ? "Saving..." : "Save Application"}
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? "Saving..." : "Save Opportunity"}
                 </button>
               </div>
             </form>
