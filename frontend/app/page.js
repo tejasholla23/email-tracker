@@ -22,6 +22,7 @@ export default function JobTrackerDashboard() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const fetchApplications = async () => {
     setLoading(true);
@@ -294,10 +295,45 @@ export default function JobTrackerDashboard() {
         /* Done card dimming */
         .app-card.is-done { opacity: 0.55; }
         .app-card.is-done .role-title { text-decoration: line-through; color: #6d7a77; }
+
+        /* Responsive Styles */
+        .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #0d9488; }
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 45; backdrop-filter: blur(2px); }
+
+        @media (max-width: 768px) {
+          .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
+          .sidebar.open { transform: translateX(0); }
+          .sidebar-overlay.show { display: block; }
+          .main-wrapper { margin-left: 0; }
+          .hamburger { display: block; }
+          .topbar { padding: 0 16px; }
+          .search-container input { width: 180px; }
+          .topbar-actions { gap: 8px; }
+          .topbar-actions .btn-primary, .topbar-actions .outline-btn, .topbar-actions .btn-danger { padding: 6px 12px; font-size: 12px; }
+          .content { padding: 20px 16px; }
+          .page-title { font-size: 24px; }
+          .stats-grid { grid-template-columns: 1fr; }
+          .app-grid { grid-template-columns: 1fr; }
+          .modal-content { padding: 20px; width: 95%; margin: 0 10px; }
+        }
+
+        @media (max-width: 480px) {
+          .topbar { height: auto; padding: 12px 16px; flex-direction: column; gap: 12px; align-items: stretch; }
+          .search-container { width: 100%; }
+          .search-container input { width: 100%; }
+          .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
+          .topbar-actions > button { flex: 1; min-width: 100px; text-align: center; justify-content: center; display: flex; align-items: center; }
+          .stat-value { font-size: 32px; }
+          .logo-text { font-size: 18px; }
+        }
       `}} />
 
+
       <div className="layout">
-        <aside className="sidebar">
+        {/* Mobile Sidebar Overlay */}
+        <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
+
+        <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <div className="sidebar-header">
             <div className="logo-box">ET</div>
             <div>
@@ -311,20 +347,25 @@ export default function JobTrackerDashboard() {
               {syncing ? "Syncing..." : "Sync Emails"}
             </button>
             <nav>
-              <a className="nav-item" onClick={handleLogout} style={{ cursor: "pointer" }}>Logout</a>
+              <a className="nav-item" onClick={() => { handleLogout(); setIsSidebarOpen(false); }} style={{ cursor: "pointer" }}>Logout</a>
             </nav>
           </div>
         </aside>
 
         <div className="main-wrapper">
           <header className="topbar">
-            <div className="search-container">
-              <input
-                type="text"
-                placeholder="Search applications, roles..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+              </button>
+              <div className="search-container">
+                <input
+                  type="text"
+                  placeholder="Search applications..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
             <div className="topbar-actions">
               <button className="btn-primary" onClick={() => setShowAddModal(true)}>
