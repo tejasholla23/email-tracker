@@ -9,6 +9,8 @@ const { google } = require("googleapis");
 const Application = require("./models/Application");
 const Account = require("./models/Account");
 const applicationRoutes = require("./routes/applicationRoutes");
+const authRoutes = require("./routes/auth");
+const auth = require("./middleware/authMiddleware");
 const { parseEmailWithLLM } = require("./utils/parseEmailWithLLM");
 
 const app = express();
@@ -27,6 +29,7 @@ const oauth2Client = new google.auth.OAuth2(
 app.use(cors());
 app.use(express.json());
 app.use("/applications", applicationRoutes);
+app.use("/auth", authRoutes);
 
 // ==========================
 // 🟢 DB CONNECT
@@ -58,7 +61,10 @@ app.get("/clear-applications", async (req, res) => {
 // ==========================
 // 🔐 GOOGLE AUTH
 // ==========================
-app.get("/auth/google", (req, res) => {
+app.get("/auth/google", auth, (req, res) => {
+  // Pass the userId in the state parameter to retrieve it in the callback
+  const state = JSON.stringify({ userId: req.user.id });
+
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: [
@@ -66,15 +72,22 @@ app.get("/auth/google", (req, res) => {
       "https://www.googleapis.com/auth/userinfo.email",
     ],
     prompt: "consent",
+    state: Buffer.from(state).toString("base64"), // encode to base64
   });
 
   res.redirect(url);
 });
 
 app.get("/auth/google/callback", async (req, res) => {
-  const { code } = req.query;
+  const { code, state: stateParam } = req.query;
 
   try {
+    // Decode userId from state
+    const decodedState = JSON.parse(Buffer.from(stateParam, "base64").toString());
+    const userId = decodedState.userId;
+
+    if (!userId) throw new Error("No userId found in state");
+
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
@@ -86,16 +99,22 @@ app.get("/auth/google/callback", async (req, res) => {
     const userInfo = await oauth2.userinfo.get();
     const email = userInfo.data.email;
 
+    // Check if this email is already linked to ANOTHER user
+    const existingAccount = await Account.findOne({ email });
+    if (existingAccount && existingAccount.userId.toString() !== userId) {
+      return res.status(400).send("This Gmail account is already linked to another user.");
+    }
+
     await Account.findOneAndUpdate(
       { email },
-      { tokens },
+      { tokens, userId },
       { upsert: true }
     );
 
     res.send("Gmail connected successfully");
   } catch (err) {
     console.error(err);
-    res.status(500).send("Auth failed");
+    res.status(500).send("Auth failed: " + err.message);
   }
 });
 
@@ -168,8 +187,8 @@ async function fetchAndProcessEmails() {
         const snippet = email.data.snippet || "";
         const rawText = `${subject} ${snippet}`.trim();
 
-        // ❌ skip duplicates
-        const exists = await Application.findOne({ rawText });
+        // ❌ skip duplicates (per user)
+        const exists = await Application.findOne({ rawText, userId: acc.userId });
         if (exists) continue;
 
         const parsed = await parseEmailWithLLM(rawText, fromHeader);
@@ -190,6 +209,7 @@ async function fetchAndProcessEmails() {
           source: "Gmail",
           email: acc.email,
           date: emailDate,
+          userId: acc.userId,
         });
 
         await newApp.save();

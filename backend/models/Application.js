@@ -17,6 +17,11 @@ const applicationSchema = new mongoose.Schema(
     },
     rawText: { type: String },
     note: { type: String, default: "" },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
   },
   { timestamps: true }
 );
