@@ -125,6 +125,9 @@ async function fetchAndProcessEmails() {
     }
 
     for (let acc of accounts) {
+      // ONLY process the specific college account
+      if (acc.email !== "1ms23ci126@msrit.edu") continue;
+
       console.log("Processing account:", acc.email);
       oauth2Client.setCredentials(acc.tokens);
 
