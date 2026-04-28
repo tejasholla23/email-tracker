@@ -405,7 +405,7 @@ export default function JobTrackerDashboard() {
               <button className="btn-circle" title="Clear All" onClick={handleClearAll} disabled={clearing}>
                 🗑️
               </button>
-              <div style={{ width: 38, height: 38, background: '#f1f5f9', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justify-content: 'center', fontWeight: '800', fontSize: 15 }}>
+              <div style={{ width: 38, height: 38, background: '#f1f5f9', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: 15 }}>
                 U
               </div>
             </div>
