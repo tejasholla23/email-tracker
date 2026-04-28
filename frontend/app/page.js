@@ -121,17 +121,6 @@ export default function JobTrackerDashboard() {
     }
   };
 
-
-  const handleLogout = async () => {
-    try {
-      await fetch(`${BASE_URL}/logout`);
-      setApplications([]);
-      alert("Successfully logged out and disconnected Gmail accounts.");
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  };
-
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
@@ -284,7 +273,6 @@ export default function JobTrackerDashboard() {
         .note-save-hint { font-size: 11px; color: #9ca3af; text-align: right; margin-top: -4px; }
         
         /* Card action buttons */
-        /* Card action buttons */
         .card-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eaefed; }
         .card-btn { flex: 1; padding: 7px 0; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s; }
         .card-btn-done { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
@@ -295,7 +283,7 @@ export default function JobTrackerDashboard() {
         /* Done card dimming */
         .app-card.is-done { opacity: 0.55; }
         .app-card.is-done .role-title { text-decoration: line-through; color: #6d7a77; }
-
+        
         /* Responsive Styles */
         .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #0d9488; }
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 45; backdrop-filter: blur(2px); }
@@ -309,7 +297,6 @@ export default function JobTrackerDashboard() {
           .topbar { padding: 0 16px; }
           .search-container input { width: 180px; }
           .topbar-actions { gap: 8px; }
-          .topbar-actions .btn-primary, .topbar-actions .outline-btn, .topbar-actions .btn-danger { padding: 6px 12px; font-size: 12px; }
           .content { padding: 20px 16px; }
           .page-title { font-size: 24px; }
           .stats-grid { grid-template-columns: 1fr; }
@@ -323,8 +310,6 @@ export default function JobTrackerDashboard() {
           .search-container input { width: 100%; }
           .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
           .topbar-actions > button { flex: 1; min-width: 100px; text-align: center; justify-content: center; display: flex; align-items: center; }
-          .stat-value { font-size: 32px; }
-          .logo-text { font-size: 18px; }
         }
       `}} />
 
@@ -342,13 +327,16 @@ export default function JobTrackerDashboard() {
             </div>
           </div>
 
+          <nav>
+            <div className={`nav-item active`} onClick={() => setActiveFilter("all")}>
+              Dashboard
+            </div>
+          </nav>
+
           <div className="sidebar-bottom">
             <button className="sync-btn" onClick={handleSync} disabled={syncing}>
               {syncing ? "Syncing..." : "Sync Emails"}
             </button>
-            <nav>
-              <a className="nav-item" onClick={() => { handleLogout(); setIsSidebarOpen(false); }} style={{ cursor: "pointer" }}>Logout</a>
-            </nav>
           </div>
         </aside>
 
@@ -377,9 +365,6 @@ export default function JobTrackerDashboard() {
               <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
                 {clearing ? "Clearing..." : "Clear All"}
               </button>
-              <div style={{ width: 36, height: 36, background: '#00685f', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 14 }}>
-                U
-              </div>
             </div>
           </header>
 
@@ -445,7 +430,6 @@ export default function JobTrackerDashboard() {
                     const formattedDate = dateToShow ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "N/A";
                     const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
                     const isNew = isAddedToday(app);
-
                     const isDone = (app.status || "").toLowerCase() === "done";
 
                     return (
@@ -507,7 +491,6 @@ export default function JobTrackerDashboard() {
         </div>
       </div>
 
-      {/* Add Application Modal */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -540,7 +523,6 @@ export default function JobTrackerDashboard() {
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 />
               </div>
-
 
               <div className="form-group">
                 <label className="form-label">Email (Optional)</label>
