@@ -4,6 +4,13 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 import React, { useEffect, useState } from "react";
 
 export default function JobTrackerDashboard() {
+  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isLoginView, setIsLoginView] = useState(true);
+  const [authForm, setAuthForm] = useState({ email: "", password: "" });
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -24,12 +31,97 @@ export default function JobTrackerDashboard() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const fetchApplications = async () => {
+  // ── AUTHENTICATION ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem("token");
+    if (savedToken) {
+      setToken(savedToken);
+      fetchUserProfile(savedToken);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchUserProfile = async (authToken) => {
+    try {
+      const response = await fetch(`${BASE_URL}/auth/me`, {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        fetchApplications(authToken);
+      } else {
+        handleLogout();
+      }
+    } catch (error) {
+      console.error("Profile fetch failed:", error);
+      handleLogout();
+    }
+  };
+
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+
+    const endpoint = isLoginView ? "/auth/login" : "/auth/signup";
+    
+    try {
+      const response = await fetch(`${BASE_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(authForm)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Authentication failed");
+      }
+
+      if (isLoginView) {
+        localStorage.setItem("token", data.token);
+        setToken(data.token);
+        setUser(data.user);
+        fetchApplications(data.token);
+      } else {
+        setIsLoginView(true);
+        setAuthError("Account created! Please log in.");
+      }
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setUser(null);
+    setApplications([]);
+    setLoading(false);
+  };
+
+  // ── DATA FETCHING ─────────────────────────────────────────────────────────
+
+  const fetchApplications = async (authToken = token) => {
+    if (!authToken) return;
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/applications`);
+      const response = await fetch(`${BASE_URL}/applications`, {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) handleLogout();
+        throw new Error("Failed to fetch");
+      }
+
       const data = await response.json();
-      setApplications(data);
+      setApplications(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch applications:", error);
     } finally {
@@ -38,34 +130,36 @@ export default function JobTrackerDashboard() {
   };
 
   const handleSync = async () => {
+    if (!token) return;
     setSyncing(true);
     try {
-      await fetch(`${BASE_URL}/sync`);
+      const response = await fetch(`${BASE_URL}/run-cron`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error("Sync failed");
       await fetchApplications();
     } catch (error) {
       console.error("Sync failed:", error);
+      alert("Sync failed. Check if you have connected your Gmail.");
     } finally {
       setSyncing(false);
     }
   };
 
   const handleClearAll = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete all applications? This cannot be undone."
-    );
-    if (!confirmed) return;
+    const confirmed = window.confirm("Are you sure you want to delete all applications?");
+    if (!confirmed || !token) return;
 
     setClearing(true);
     try {
       const response = await fetch(`${BASE_URL}/applications/clear`, {
         method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!response.ok) throw new Error("Clear failed");
-      alert("All applications cleared.");
       await fetchApplications();
     } catch (error) {
       console.error("Clear all failed:", error);
-      alert("Failed to clear applications. Please try again.");
     } finally {
       setClearing(false);
     }
@@ -75,7 +169,10 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ status: "done" }),
       });
       if (!response.ok) throw new Error("Failed to mark as done");
@@ -84,7 +181,6 @@ export default function JobTrackerDashboard() {
       );
     } catch (error) {
       console.error("Mark done failed:", error);
-      alert("Could not mark as done. Please try again.");
     }
   };
 
@@ -92,12 +188,12 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!response.ok) throw new Error("Failed to delete");
       setApplications((prev) => prev.filter((app) => app._id !== id));
     } catch (error) {
       console.error("Delete failed:", error);
-      alert("Could not delete application. Please try again.");
     }
   };
 
@@ -111,31 +207,21 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ note }),
       });
       if (!response.ok) throw new Error("Failed to save note");
     } catch (error) {
       console.error("Save note failed:", error);
-      alert("Could not save note. Please try again.");
-    }
-  };
-
-
-  const handleLogout = async () => {
-    try {
-      await fetch(`${BASE_URL}/logout`);
-      setApplications([]);
-      alert("Successfully logged out and disconnected Gmail accounts.");
-    } catch (error) {
-      console.error("Logout failed:", error);
     }
   };
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
-
     if (!formData.company || !formData.role) {
       setFormError("Company and Role are required.");
       return;
@@ -145,28 +231,25 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify(formData)
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to add application");
-      }
+      if (!response.ok) throw new Error("Failed to add application");
 
       setShowAddModal(false);
       setFormData({ company: "", role: "", email: "", date: "" });
       await fetchApplications();
     } catch (error) {
       console.error(error);
-      setFormError("Failed to add application. Please try again.");
+      setFormError("Failed to add application.");
     } finally {
       setSubmitting(false);
     }
   };
-
-  useEffect(() => {
-    fetchApplications();
-  }, []);
 
   // Stats calculation
   const total = applications.length;
@@ -182,6 +265,82 @@ export default function JobTrackerDashboard() {
     todayStart.setHours(0, 0, 0, 0);
     return appDate >= todayStart;
   };
+
+  // ── RENDERING ─────────────────────────────────────────────────────────────
+
+  if (!token) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f8fafc',
+        fontFamily: 'Inter, sans-serif',
+        padding: '20px'
+      }}>
+        <style dangerouslySetInnerHTML={{ __html: `
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@800&display=swap');
+          .auth-card { background: white; width: 100%; max-width: 400px; padding: 40px; border-radius: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+          .auth-title { font-family: 'Manrope', sans-serif; font-size: 28px; font-weight: 800; color: #1e293b; text-align: center; margin-bottom: 8px; letter-spacing: -0.02em; }
+          .auth-sub { text-align: center; color: #64748b; margin-bottom: 32px; font-size: 15px; }
+          .form-group { margin-bottom: 20px; }
+          .form-label { display: block; font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+          .form-input { width: 100%; padding: 12px 16px; border: 1.5px solid #e2e8f0; border-radius: 12px; outline: none; transition: all 0.2s; background: #f8fafc; font-size: 15px; }
+          .form-input:focus { border-color: #0d9488; background: white; box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.1); }
+          .auth-btn { width: 100%; padding: 14px; background: #0d9488; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-size: 15px; margin-top: 12px; }
+          .auth-btn:hover { background: #0f766e; transform: translateY(-1px); }
+          .auth-toggle { text-align: center; margin-top: 24px; font-size: 14px; color: #64748b; }
+          .auth-toggle span { color: #0d9488; font-weight: 700; cursor: pointer; }
+          .error-box { background: #fef2f2; color: #ef4444; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; margin-bottom: 20px; border: 1px solid #fee2e2; }
+          .logo-box { width: 48px; height: 48px; background: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-weight: 800; font-size: 20px; margin: 0 auto 24px; box-shadow: 0 4px 6px rgba(13, 148, 136, 0.1); }
+        `}} />
+        
+        <div className="auth-card">
+          <div className="logo-box">ET</div>
+          <h1 className="auth-title">{isLoginView ? "Welcome Back" : "Create Account"}</h1>
+          <p className="auth-sub">{isLoginView ? "Log in to track your opportunities" : "Start managing your job hunt today"}</p>
+          
+          {authError && <div className="error-box">{authError}</div>}
+          
+          <form onSubmit={handleAuthSubmit}>
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <input 
+                type="email" 
+                className="form-input" 
+                placeholder="you@example.com"
+                value={authForm.email}
+                onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                required 
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input 
+                type="password" 
+                className="form-input" 
+                placeholder="••••••••"
+                value={authForm.password}
+                onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+                required 
+              />
+            </div>
+            <button className="auth-btn" disabled={authLoading}>
+              {authLoading ? "Processing..." : (isLoginView ? "Sign In" : "Sign Up")}
+            </button>
+          </form>
+          
+          <div className="auth-toggle">
+            {isLoginView ? "Don't have an account?" : "Already have an account?"} {" "}
+            <span onClick={() => { setIsLoginView(!isLoginView); setAuthError(""); }}>
+              {isLoginView ? "Sign Up" : "Log In"}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -406,7 +565,7 @@ export default function JobTrackerDashboard() {
                 🗑️
               </button>
               <div style={{ width: 38, height: 38, background: '#f1f5f9', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: 15 }}>
-                U
+                {user ? user.email.substring(0, 1).toUpperCase() : "U"}
               </div>
             </div>
           </header>
