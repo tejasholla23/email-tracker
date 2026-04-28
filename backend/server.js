@@ -195,6 +195,7 @@ async function fetchAndProcessEmails() {
     }
   } catch (err) {
     console.error("Fetch error:", err.message);
+    throw err;
   }
 }
 
@@ -210,13 +211,21 @@ app.get("/sync", async (req, res) => {
 // 🧪 MANUAL CRON TRIGGER
 // ==========================
 app.get("/run-cron", async (req, res) => {
-  console.log("Cron triggered");
   try {
     await fetchAndProcessEmails();
-    res.json({ message: "Cron executed successfully" });
-  } catch (error) {
-    console.error("Manual cron trigger error:", error);
-    res.status(500).json({ message: "Cron failed" });
+
+    res.status(200).json({
+      success: true,
+      message: "Cron executed successfully"
+    });
+  } catch (err) {
+    console.error("Cron failed:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Cron failed",
+      error: err.message
+    });
   }
 });
 
