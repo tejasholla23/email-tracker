@@ -17,7 +17,12 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI =
   process.env.MONGO_URI || "mongodb://127.0.0.1:27017/email-tracker";
 
-// OAuth
+// OAuth Validation
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
+  console.error("CRITICAL: Google OAuth environment variables are missing!");
+  console.log("Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI");
+}
+
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
