@@ -348,7 +348,6 @@ export default function JobTrackerDashboard() {
               {syncing ? "Syncing..." : "Sync Emails"}
             </button>
             <div className="nav-item" onClick={handleLogout} style={{ marginTop: 0, color: '#ba1a1a' }}>
-              <span style={{ fontSize: 18 }}>🚪</span>
               <span>Sign Out</span>
             </div>
           </div>
@@ -574,3 +573,4 @@ export default function JobTrackerDashboard() {
     </>
   );
 }
+
