@@ -12,7 +12,7 @@ const applicationRoutes = require("./routes/applicationRoutes");
 const { parseEmailWithLLM } = require("./utils/parseEmailWithLLM");
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 const MONGO_URI =
   process.env.MONGO_URI || "mongodb://127.0.0.1:27017/email-tracker";
@@ -230,6 +230,11 @@ app.get("/run-cron", (req, res) => {
 // });
 
 // ==========================
-app.listen(PORT, () => {
+app.use((err, req, res, next) => {
+  console.error("Global error handler:", err.message);
+  res.status(500).json({ success: false, error: "Internal Server Error" });
+});
+
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
