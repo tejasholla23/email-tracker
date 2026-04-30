@@ -223,10 +223,13 @@ app.get("/run-cron", async (req, res) => {
 // ==========================
 // ⏱ CRON (AUTO SYNC)
 // ==========================
+// Internal cron disabled — using external cron-job.org for scheduling via /run-cron
+/*
 cron.schedule("0 */2 * * *", async () => {
   console.log("Auto syncing emails...");
   await fetchAndProcessEmails();
 });
+*/
 
 // ==========================
 app.listen(PORT, () => {
