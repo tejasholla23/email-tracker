@@ -94,8 +94,8 @@ app.get("/auth/google/callback", async (req, res) => {
 
     res.send("Gmail connected successfully");
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Auth failed");
+    console.error("Google Auth Callback Error:", err.message);
+    res.status(500).send(`Auth failed: ${err.message}`);
   }
 });
 
