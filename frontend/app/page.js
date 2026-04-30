@@ -120,6 +120,16 @@ export default function JobTrackerDashboard() {
       alert("Could not save note. Please try again.");
     }
   };
+  const handleLogout = async () => {
+    if (!window.confirm("Are you sure you want to log out and disconnect Gmail?")) return;
+    try {
+      await fetch(`${BASE_URL}/logout`);
+      setApplications([]);
+      alert("Logged out successfully.");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -337,6 +347,10 @@ export default function JobTrackerDashboard() {
             <button className="sync-btn" onClick={handleSync} disabled={syncing}>
               {syncing ? "Syncing..." : "Sync Emails"}
             </button>
+            <div className="nav-item" onClick={handleLogout} style={{ marginTop: 0, color: '#ba1a1a' }}>
+              <span style={{ fontSize: 18 }}>🚪</span>
+              <span>Sign Out</span>
+            </div>
           </div>
         </aside>
 
