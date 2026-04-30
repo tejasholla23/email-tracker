@@ -207,17 +207,17 @@ app.get("/sync", async (req, res) => {
 // ==========================
 // 🧪 MANUAL CRON TRIGGER
 // ==========================
-app.get("/run-cron", async (req, res) => {
+app.get("/run-cron", (req, res) => {
   if (isProcessing) {
     return res.status(200).json({ success: true, message: "Sync already in progress" });
   }
 
-  try {
-    await fetchAndProcessEmails();
-    res.status(200).json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
+  // Trigger sync in background to avoid HTTP timeout (502)
+  fetchAndProcessEmails()
+    .then(() => console.log("Background sync completed"))
+    .catch((err) => console.error("Background sync failed:", err.message));
+
+  res.status(200).json({ success: true, message: "Sync triggered" });
 });
 
 // ==========================
