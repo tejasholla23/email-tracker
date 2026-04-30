@@ -85,9 +85,7 @@ function sanitizeCompany(raw = "") {
  * @returns {object}          - Parsed application data or { isRelevant: false }
  */
 async function parseEmailWithLLM(emailText, sender = "") {
-  console.log("\n─── parseEmailWithLLM ───");
-  console.log("[INPUT] snippet:", emailText.slice(0, 200));
-  console.log("[INPUT] sender :", sender);
+  // console.log("--- parseEmailWithLLM ---");
 
   // ── 1. Build an improved, strict prompt ─────────────────────────────────
   const prompt = `
@@ -144,7 +142,6 @@ ${emailText}
     });
 
     llmRaw = (response.text || "").trim();
-    console.log("[LLM RAW]:", llmRaw.slice(0, 300));
 
     // Strip markdown code fences if present
     const jsonText = llmRaw
@@ -178,7 +175,7 @@ ${emailText}
     parsed.date = (parsed.date || "").trim();
     parsed.link = (parsed.link || "").trim();
 
-    console.log("[FINAL PARSED]:", JSON.stringify(parsed));
+    // console.log("[FINAL PARSED]:", JSON.stringify(parsed));
     return parsed;
   }
 
@@ -208,11 +205,11 @@ ${emailText}
       _source: "keyword-fallback",
     };
 
-    console.log("[FALLBACK RESULT]:", JSON.stringify(fallbackResult));
+    // console.log("[FALLBACK RESULT]:", JSON.stringify(fallbackResult));
     return fallbackResult;
   }
 
-  console.log("[RESULT]: Not relevant");
+  // console.log("[RESULT]: Not relevant");
   return { isRelevant: false };
 }
 

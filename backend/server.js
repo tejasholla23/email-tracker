@@ -112,10 +112,20 @@ app.get("/logout", async (req, res) => {
   }
 });
 
+let isProcessing = false;
+
 // ==========================
 // 📥 FETCH + SAVE EMAILS
 // ==========================
 async function fetchAndProcessEmails() {
+  if (isProcessing) {
+    console.log("Cron already running, skipping...");
+    return;
+  }
+
+  isProcessing = true;
+  let count = 0;
+
   try {
     const accounts = await Account.find();
 
@@ -125,10 +135,9 @@ async function fetchAndProcessEmails() {
     }
 
     for (let acc of accounts) {
-      // ONLY process the specific college account
       if (acc.email !== "1ms23ci126@msrit.edu") continue;
 
-      console.log("Processing account:", acc.email);
+      console.log(`Processing account: ${acc.email}`);
       oauth2Client.setCredentials(acc.tokens);
 
       const gmail = google.gmail({
@@ -139,7 +148,7 @@ async function fetchAndProcessEmails() {
       const response = await gmail.users.messages.list({
         userId: "me",
         maxResults: 5,
-        q: "from:placement@msrit.edu OR from:dean.tap@msrit.edu newer_than:7d",
+        q: "(to:1ms23ci126@msrit.edu) AND (from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:7d",
       });
 
       const messages = response.data.messages || [];
@@ -150,35 +159,17 @@ async function fetchAndProcessEmails() {
           id: msg.id,
         });
 
-        const emailDate = new Date(parseInt(email.data.internalDate));
-
         const headers = email.data.payload.headers;
-
         const fromHeader = headers.find((h) => h.name === "From")?.value || "";
-        if (
-          !fromHeader.includes("placement@msrit.edu") &&
-          !fromHeader.includes("dean.tap@msrit.edu")
-        ) {
-          continue; // skip irrelevant sender
-        }
-
-        const subject =
-          headers.find((h) => h.name === "Subject")?.value || "";
-
+        const subject = headers.find((h) => h.name === "Subject")?.value || "";
         const snippet = email.data.snippet || "";
         const rawText = `${subject} ${snippet}`.trim();
 
-        // ❌ skip duplicates
         const exists = await Application.findOne({ rawText });
         if (exists) continue;
 
         const parsed = await parseEmailWithLLM(rawText, fromHeader);
-
-        // ✅ ONLY save real relevant emails
-        if (!parsed || parsed.isRelevant !== true) continue;
-
-        // ❌ DO NOT allow empty/fake data
-        if (!parsed.company || !parsed.role) continue;
+        if (!parsed || !parsed.isRelevant || !parsed.company || !parsed.role) continue;
 
         const newApp = new Application({
           company: parsed.company,
@@ -189,16 +180,19 @@ async function fetchAndProcessEmails() {
           rawText,
           source: "Gmail",
           email: acc.email,
-          date: emailDate,
+          date: new Date(parseInt(email.data.internalDate)),
         });
 
         await newApp.save();
-        console.log("Saved:", parsed.company);
+        count++;
       }
     }
+    console.log(`Successfully processed ${count} emails`);
   } catch (err) {
     console.error("Fetch error:", err.message);
     throw err;
+  } finally {
+    isProcessing = false;
   }
 }
 
@@ -214,21 +208,15 @@ app.get("/sync", async (req, res) => {
 // 🧪 MANUAL CRON TRIGGER
 // ==========================
 app.get("/run-cron", async (req, res) => {
+  if (isProcessing) {
+    return res.status(200).json({ success: true, message: "Sync already in progress" });
+  }
+
   try {
     await fetchAndProcessEmails();
-
-    res.status(200).json({
-      success: true,
-      message: "Cron executed successfully"
-    });
+    res.status(200).json({ success: true });
   } catch (err) {
-    console.error("Cron failed:", err);
-
-    res.status(500).json({
-      success: false,
-      message: "Cron failed",
-      error: err.message
-    });
+    res.status(500).json({ success: false });
   }
 });
 
