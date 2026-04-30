@@ -190,7 +190,7 @@ async function fetchAndProcessEmails() {
     console.log(`Successfully processed ${count} emails`);
   } catch (err) {
     console.error("Fetch error:", err.message);
-    throw err;
+    // Removed 'throw err' to prevent unhandled rejections in background execution
   } finally {
     isProcessing = false;
   }
@@ -199,9 +199,16 @@ async function fetchAndProcessEmails() {
 // ==========================
 // 🔘 MANUAL TRIGGER (SYNC BUTTON)
 // ==========================
-app.get("/sync", async (req, res) => {
-  await fetchAndProcessEmails();
-  res.send("Emails synced");
+app.get("/sync", (req, res) => {
+  if (isProcessing) {
+    return res.status(200).send("Sync already in progress");
+  }
+
+  fetchAndProcessEmails()
+    .then(() => console.log("Manual sync completed"))
+    .catch((err) => console.error("Manual sync failed:", err.message));
+
+  res.send("Sync triggered in background");
 });
 
 // ==========================
