@@ -23,6 +23,20 @@ export default function JobTrackerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  useEffect(() => {
+    // Check local storage for dark mode preference
+    const savedMode = localStorage.getItem("darkMode");
+    if (savedMode === "true") {
+      setIsDarkMode(true);
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+    localStorage.setItem("darkMode", !isDarkMode);
+  };
 
   const fetchApplications = async () => {
     setLoading(true);
@@ -89,15 +103,18 @@ export default function JobTrackerDashboard() {
   };
 
   const handleDeleteOne = async (id) => {
+    const previousApps = [...applications];
+    setApplications((prev) => prev.filter((app) => app._id !== id));
+
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete");
-      setApplications((prev) => prev.filter((app) => app._id !== id));
     } catch (error) {
       console.error("Delete failed:", error);
-      alert("Could not delete application. Please try again.");
+      alert("Could not remove application. Please try again.");
+      setApplications(previousApps);
     }
   };
 
@@ -321,10 +338,61 @@ export default function JobTrackerDashboard() {
           .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
           .topbar-actions > button { flex: 1; min-width: 100px; text-align: center; justify-content: center; display: flex; align-items: center; }
         }
+
+        /* Dark Mode */
+        .dark { background-color: #0f172a; color: #f1f5f9; min-height: 100vh; }
+        .dark .sidebar { background-color: #1e293b; border-color: #334155; }
+        .dark .logo-box { background: #0f766e; color: #ccfbf1; }
+        .dark .logo-text { color: #2dd4bf; }
+        .dark .nav-item { color: #94a3b8; }
+        .dark .nav-item:hover { background: #334155; color: #2dd4bf; }
+        .dark .nav-item.active { background: #0f172a; border-color: #2dd4bf; color: #2dd4bf; }
+        .dark .sidebar-bottom { border-color: #334155; }
+        
+        .dark .topbar { background: rgba(30, 41, 59, 0.8); border-color: #334155; }
+        .dark .search-container input { background-color: #1e293b; border-color: #334155; color: #f1f5f9; }
+        .dark .search-container input:focus { border-color: #2dd4bf; background-color: #0f172a; }
+        .dark .outline-btn { background: #1e293b; border-color: #0d9488; color: #2dd4bf; }
+        .dark .outline-btn:hover { background: #0f766e; color: white; }
+        
+        .dark .page-title { color: #f8fafc; }
+        .dark .page-subtitle { color: #cbd5e1; }
+        
+        .dark .stat-card { background: #1e293b; border-color: #334155; }
+        .dark .stat-title { color: #94a3b8; }
+        .dark .stat-value { color: #f8fafc; }
+        .dark .stat-card.total .stat-value { color: #2dd4bf; }
+        
+        .dark .filters { background: #1e293b; border-color: #334155; }
+        .dark .filter-btn { color: #cbd5e1; }
+        .dark .filter-btn.active { background: #0d9488; }
+        .dark .filter-btn:hover:not(.active) { background: #334155; }
+        
+        .dark .app-card { background: #1e293b; border-color: #334155; }
+        .dark .company-logo { background: #0f172a; border-color: #334155; color: #2dd4bf; }
+        .dark .role-title { color: #f8fafc; }
+        .dark .company-name { color: #cbd5e1; }
+        .dark .app-footer { border-color: #334155; color: #94a3b8; }
+        
+        .dark .modal-content { background: #1e293b; color: #f8fafc; }
+        .dark .modal-title { color: #f8fafc; }
+        .dark .form-label { color: #cbd5e1; }
+        .dark .form-input, .dark .form-select { background: #0f172a; border-color: #334155; color: #f8fafc; }
+        .dark .form-input:focus { border-color: #2dd4bf; }
+        .dark .btn-cancel { background: #334155; color: #cbd5e1; }
+        .dark .btn-cancel:hover { background: #475569; }
+        .dark .note-input { background: #0f172a; border-color: #334155; color: #f1f5f9; }
+        .dark .note-input:focus { background: #1e293b; border-color: #2dd4bf; }
+        
+        .dark .card-actions { border-color: #334155; }
+        .dark .card-btn-done { background: #064e3b; border-color: #065f46; color: #34d399; }
+        .dark .card-btn-done:hover:not(:disabled) { background: #065f46; border-color: #10b981; }
+        .dark .card-btn-remove { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
+        .dark .card-btn-remove:hover { background: #991b1b; border-color: #b91c1c; }
+        .dark .app-card.is-done .role-title { color: #64748b; }
       `}} />
 
-
-      <div className="layout">
+      <div className={`layout ${isDarkMode ? 'dark' : ''}`}>
         {/* Mobile Sidebar Overlay */}
         <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
 
@@ -369,6 +437,14 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
             <div className="topbar-actions">
+              <button 
+                onClick={toggleDarkMode} 
+                className="outline-btn" 
+                style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                title="Toggle Dark Mode"
+              >
+                {isDarkMode ? "☀️" : "🌙"}
+              </button>
               <button className="btn-primary" onClick={() => setShowAddModal(true)}>
                 + Add Application
               </button>

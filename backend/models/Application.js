@@ -15,6 +15,7 @@ const applicationSchema = new mongoose.Schema(
       type: String,
       default: "pending",
     },
+    isDeleted: { type: Boolean, default: false },
     rawText: { type: String },
     note: { type: String, default: "" },
     messageId: { type: String, unique: true, sparse: true },

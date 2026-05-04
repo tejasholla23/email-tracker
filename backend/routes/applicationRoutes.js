@@ -6,7 +6,7 @@ const router = express.Router();
 // GET /applications - return all applications
 router.get("/", async (req, res) => {
   try {
-    const applications = await Application.find().sort({ date: -1 });
+    const applications = await Application.find({ isDeleted: { $ne: true } }).sort({ date: -1 });
     res.json(applications);
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch applications" });
@@ -50,7 +50,7 @@ router.patch("/:id", async (req, res) => {
 // DELETE /applications/clear - delete all applications
 router.delete("/clear", async (req, res) => {
   try {
-    await Application.deleteMany({});
+    await Application.updateMany({}, { isDeleted: true });
     res.json({ message: "All applications cleared" });
   } catch (error) {
     res.status(500).json({ message: "Failed to clear applications" });
@@ -60,7 +60,7 @@ router.delete("/clear", async (req, res) => {
 // DELETE /applications/:id - delete a single application
 router.delete("/:id", async (req, res) => {
   try {
-    const deleted = await Application.findByIdAndDelete(req.params.id);
+    const deleted = await Application.findByIdAndUpdate(req.params.id, { isDeleted: true });
     if (!deleted) {
       return res.status(404).json({ message: "Application not found" });
     }
