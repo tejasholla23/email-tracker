@@ -207,6 +207,17 @@ async function fetchAndProcessEmails() {
 
           const finalRole = parsed.role || "Unknown Role";
 
+          const contentExists = await Application.findOne({
+            company: parsed.company,
+            role: finalRole
+          });
+
+          if (contentExists) {
+            console.log(`[SKIP] ${id} | Reason: Duplicate content (company + role match)`);
+            skippedCount++;
+            continue;
+          }
+
           const newApp = new Application({
             company: parsed.company,
             role: finalRole,

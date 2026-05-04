@@ -73,6 +73,57 @@ function sanitizeCompany(raw = "") {
   return trimmed;
 }
 
+/**
+ * Keyword fallback for missing or noisy roles
+ */
+function keywordRoleFallback(text = "") {
+  const t = text.toLowerCase();
+  if (t.includes("apprentice")) return "Apprentice";
+  if (t.includes("intern")) return "Intern";
+  if (t.includes("software engineer") || t.includes("sde") || t.includes("developer")) return "Software Engineer";
+  if (t.includes("engineer")) return "Engineer";
+  if (t.includes("analyst")) return "Analyst";
+  return "Unknown Role";
+}
+
+/**
+ * Clean and normalize extracted role
+ */
+function cleanRole(rawRole = "", emailText = "") {
+  let role = rawRole.trim();
+  if (!role || role.toLowerCase() === "unknown role" || role.toLowerCase() === "unknown" || role.toLowerCase() === "null") {
+    return keywordRoleFallback(emailText);
+  }
+  
+  // Remove noise words
+  const noiseWords = /\b(program|drive|recruitment|campus|202\d|final year|student|opportunity|opening|role)\b/gi;
+  role = role.replace(noiseWords, "").trim();
+  role = role.replace(/\s+/g, " ");
+  
+  // Normalize variants
+  const lowerRole = role.toLowerCase();
+  if (lowerRole.includes("sde intern") || lowerRole.includes("software dev intern")) {
+    role = "Software Engineer Intern";
+  } else if (lowerRole.includes("apprentice")) {
+    role = "Apprentice";
+  }
+  
+  // Trim length
+  const words = role.split(" ");
+  if (words.length > 6) {
+    role = words.slice(0, 6).join(" ");
+  }
+  
+  // Title case
+  role = role.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+  
+  if (!role) {
+    return keywordRoleFallback(emailText);
+  }
+  
+  return role;
+}
+
 // ─────────────────────────────────────────────
 // MAIN EXPORT
 // ─────────────────────────────────────────────
@@ -114,6 +165,14 @@ Analyze the following email text and determine if it is related to:
 - Prefer the sender domain if the body is ambiguous (e.g. @google.com → "Google").
 - NEVER return "unknown", "company", "team", or any generic placeholder.
 - If truly unresolvable, return an empty string "".
+
+=== ROLE EXTRACTION RULES ===
+- Extract ONLY the core job role or title (e.g., "Software Engineer Intern", "Apprentice", "Analyst").
+- Keep it short and meaningful (2-5 words max). Do NOT include full program names.
+- Examples: 
+  "2027 Final Year Student Apprentice Program" → "Apprentice"
+  "Campus Recruitment for SDE Intern Role" → "Software Engineer Intern"
+- If no clear role is found, return "Unknown Role".
 
 === STATUS CLASSIFICATION ===
 - "offer"     → offer, congratulations, selected, pleased to inform, happy to inform
@@ -169,8 +228,13 @@ ${emailText}
       parsed.company = cleanCompany;
     }
 
-    // Trim all string fields
-    parsed.role = (parsed.role || "").trim();
+    // Clean role and log it
+    const rawRole = parsed.role || "";
+    parsed.role = cleanRole(rawRole, emailText);
+    if (rawRole !== parsed.role) {
+      console.log(`[ROLE_CLEANUP] Raw: "${rawRole}" → Clean: "${parsed.role}"`);
+    }
+
     parsed.type = (parsed.type || "unknown").trim().toLowerCase();
     parsed.date = (parsed.date || "").trim();
     parsed.link = (parsed.link || "").trim();
@@ -197,7 +261,7 @@ ${emailText}
     const fallbackResult = {
       isRelevant: true,
       company: fallbackCompany,
-      role: "",
+      role: keywordRoleFallback(emailText),
       type: "unknown",
       status: fallbackStatus,
       date: "",
