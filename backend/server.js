@@ -129,7 +129,9 @@ async function fetchAndProcessEmails() {
   }
 
   isProcessing = true;
-  let count = 0;
+  let insertedCount = 0;
+  let skippedCount = 0;
+  let fetchedCount = 0;
 
   try {
     const accounts = await Account.find();
@@ -152,47 +154,86 @@ async function fetchAndProcessEmails() {
 
       const response = await gmail.users.messages.list({
         userId: "me",
-        maxResults: 5,
-        q: "(to:1ms23ci126@msrit.edu) AND (from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:7d",
+        maxResults: 50,
+        q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:7d",
       });
 
       const messages = response.data.messages || [];
+      fetchedCount += messages.length;
+      console.log(`\n--- STARTING SYNC FOR ${acc.email} ---`);
 
       for (let msg of messages) {
-        const email = await gmail.users.messages.get({
-          userId: "me",
-          id: msg.id,
-        });
+        const id = msg.id;
+        try {
+          const email = await gmail.users.messages.get({
+            userId: "me",
+            id: id,
+          });
 
-        const headers = email.data.payload.headers;
-        const fromHeader = headers.find((h) => h.name === "From")?.value || "";
-        const subject = headers.find((h) => h.name === "Subject")?.value || "";
-        const snippet = email.data.snippet || "";
-        const rawText = `${subject} ${snippet}`.trim();
+          const headers = email.data.payload.headers;
+          const fromHeader = headers.find((h) => h.name === "From")?.value || "";
+          const subject = headers.find((h) => h.name === "Subject")?.value || "";
+          const snippet = email.data.snippet || "";
+          const rawText = `${subject} ${snippet}`.trim();
+          
+          console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
 
-        const exists = await Application.findOne({ rawText });
-        if (exists) continue;
+          const exists = await Application.findOne({ messageId: id });
+          if (exists) {
+            console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
+            skippedCount++;
+            continue;
+          }
 
-        const parsed = await parseEmailWithLLM(rawText, fromHeader);
-        if (!parsed || !parsed.isRelevant || !parsed.company || !parsed.role) continue;
+          console.log(`[PARSE_START] ${id}`);
+          const parsed = await parseEmailWithLLM(rawText, fromHeader);
+          console.log(`[PARSE_RESULT] ${id}`, parsed);
+          
+          if (!parsed) {
+            console.log(`[SKIP] ${id} | Reason: Parsing failed`);
+            skippedCount++;
+            continue;
+          }
+          if (!parsed.isRelevant) {
+            console.log(`[SKIP] ${id} | Reason: Marked not relevant`);
+            skippedCount++;
+            continue;
+          }
+          if (!parsed.company) {
+            console.log(`[SKIP] ${id} | Reason: Missing company`);
+            skippedCount++;
+            continue;
+          }
 
-        const newApp = new Application({
-          company: parsed.company,
-          role: parsed.role,
-          type: parsed.type || "",
-          status: parsed.status || "pending",
-          link: parsed.link || "",
-          rawText,
-          source: "Gmail",
-          email: acc.email,
-          date: new Date(parseInt(email.data.internalDate)),
-        });
+          const finalRole = parsed.role || "Unknown Role";
 
-        await newApp.save();
-        count++;
+          const newApp = new Application({
+            company: parsed.company,
+            role: finalRole,
+            type: parsed.type || "",
+            status: parsed.status || "pending",
+            link: parsed.link || "",
+            rawText,
+            messageId: id,
+            source: "Gmail",
+            email: acc.email,
+            date: new Date(parseInt(email.data.internalDate)),
+          });
+
+          await newApp.save();
+          insertedCount++;
+          console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
+        } catch (error) {
+          if (error.code === 11000) {
+            console.log(`[SKIP] ${id} | Reason: Duplicate key error (E11000)`);
+          } else {
+            console.log(`[ERROR] ${id}`, error.message);
+          }
+          skippedCount++;
+        }
       }
     }
-    console.log(`Successfully processed ${count} emails`);
+    console.log(`\nSUMMARY: Fetched ${fetchedCount} | Inserted ${insertedCount} | Skipped ${skippedCount}`);
   } catch (err) {
     console.error("Fetch error:", err.message);
     // Removed 'throw err' to prevent unhandled rejections in background execution

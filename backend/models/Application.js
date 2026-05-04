@@ -17,6 +17,7 @@ const applicationSchema = new mongoose.Schema(
     },
     rawText: { type: String },
     note: { type: String, default: "" },
+    messageId: { type: String, unique: true, sparse: true },
   },
   { timestamps: true }
 );
