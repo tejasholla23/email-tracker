@@ -50,8 +50,8 @@ router.patch("/:id", async (req, res) => {
 // DELETE /applications/clear - delete all applications
 router.delete("/clear", async (req, res) => {
   try {
-    await Application.updateMany({}, { isDeleted: true });
-    res.json({ message: "All applications cleared" });
+    await Application.deleteMany({});
+    res.json({ message: "All applications permanently cleared" });
   } catch (error) {
     res.status(500).json({ message: "Failed to clear applications" });
   }
@@ -60,11 +60,11 @@ router.delete("/clear", async (req, res) => {
 // DELETE /applications/:id - delete a single application
 router.delete("/:id", async (req, res) => {
   try {
-    const deleted = await Application.findByIdAndUpdate(req.params.id, { isDeleted: true });
+    const deleted = await Application.findByIdAndDelete(req.params.id);
     if (!deleted) {
       return res.status(404).json({ message: "Application not found" });
     }
-    res.json({ message: "Application deleted" });
+    res.json({ message: "Application permanently deleted" });
   } catch (error) {
     res.status(500).json({ message: "Failed to delete application" });
   }
