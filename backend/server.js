@@ -199,7 +199,7 @@ async function fetchAndProcessEmails() {
       const response = await gmail.users.messages.list({
         userId: "me",
         maxResults: 50,
-        q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:7d",
+        q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:30d",
       });
 
       const messages = response.data.messages || [];
