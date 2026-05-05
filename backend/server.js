@@ -4,12 +4,56 @@ const cron = require("node-cron");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const he = require("he");
 const { google } = require("googleapis");
 
 const Application = require("./models/Application");
 const Account = require("./models/Account");
 const applicationRoutes = require("./routes/applicationRoutes");
 const { parseEmailWithLLM } = require("./utils/parseEmailWithLLM");
+
+// Helper to extract full body text from Gmail payload
+function extractText(payload) {
+  if (payload.mimeType === "text/plain" && payload.body.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const text = extractText(part);
+      if (text) return text;
+    }
+  }
+  return null;
+}
+
+function extractHtml(payload) {
+  if (payload.mimeType === "text/html" && payload.body.data) {
+    return Buffer.from(payload.body.data, "base64")
+      .toString("utf-8")
+      .replace(/<[^>]*>?/gm, " ");
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const html = extractHtml(part);
+      if (html) return html;
+    }
+  }
+  return null;
+}
+
+function getFullBodyText(payload) {
+  let text = extractText(payload) || extractHtml(payload) || "";
+  
+  // Decode HTML entities (e.g., &nbsp; -> " ")
+  text = he.decode(text);
+  
+  // Safety: Truncate extremely long bodies (keep newest content at the end)
+  if (text.length > 20000) {
+    text = text.slice(-20000);
+  }
+  
+  return text;
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -168,6 +212,7 @@ async function fetchAndProcessEmails() {
           const email = await gmail.users.messages.get({
             userId: "me",
             id: id,
+            format: "full",
           });
 
           const headers = email.data.payload.headers;
@@ -175,6 +220,9 @@ async function fetchAndProcessEmails() {
           const subject = headers.find((h) => h.name === "Subject")?.value || "";
           const snippet = email.data.snippet || "";
           const rawText = `${subject} ${snippet}`.trim();
+          
+          const fullBodyText = getFullBodyText(email.data.payload);
+          console.log(`[BODY_FETCHED] ${id} length: ${fullBodyText.length}`);
           
           console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
 
@@ -186,7 +234,7 @@ async function fetchAndProcessEmails() {
           }
 
           console.log(`[PARSE_START] ${id}`);
-          const parsed = await parseEmailWithLLM(rawText, fromHeader);
+          const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
           console.log(`[PARSE_RESULT] ${id}`, parsed);
           
           if (!parsed) {
@@ -226,6 +274,8 @@ async function fetchAndProcessEmails() {
             link: parsed.link || "",
             links: parsed.links || [],
             isFormLink: parsed.isFormLink || false,
+            deadline: parsed.deadline || "",
+            deadlineISO: parsed.deadlineISO || "",
             rawText,
             messageId: id,
             source: "Gmail",

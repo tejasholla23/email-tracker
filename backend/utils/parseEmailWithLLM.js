@@ -161,6 +161,84 @@ function extractFormLink(text = "") {
   return { primary, all, isForm };
 }
 
+/**
+ * Extract deadline from text using regex patterns.
+ * Returns { deadline: string, iso: string }
+ */
+function extractDeadline(text = "") {
+  if (!text) return { deadline: "", iso: "" };
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  // Normalize spaces
+  const cleanText = text.replace(/\s+/g, " ");
+  
+  // Split into chunks by punctuation or newlines
+  const segments = cleanText.split(/[.!?]|\r?\n/);
+  const deadlineKeywords = /deadline|apply|register|before|last date|by|on or before/i;
+
+  for (const segment of segments) {
+    if (deadlineKeywords.test(segment)) {
+
+      // 1. Today + Time
+      const todayMatch = segment.match(/(\d{1,2})(?::(\d{2}))?\s*(pm|am)\s+today/i) || 
+                         segment.match(/today(?:\s+at|\s+before|\s+by)?\s+(\d{1,2})(?::(\d{2}))?\s*(pm|am)/i);
+      
+      if (todayMatch) {
+        const hour = parseInt(todayMatch[1]);
+        const min = todayMatch[2] || "00";
+        const ampm = todayMatch[3].toUpperCase();
+        const readable = `Today, ${hour}${todayMatch[2] ? ":" + min : ""} ${ampm}`;
+        
+        const isoDate = new Date(now);
+        let h = hour;
+        if (ampm === "PM" && h < 12) h += 12;
+        if (ampm === "AM" && h === 12) h = 0;
+        isoDate.setHours(h, parseInt(min), 0, 0);
+        
+        return { deadline: readable, iso: isoDate.toISOString() };
+      }
+
+      // 2. Date Alpha
+      const dateAlphaMatch = segment.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i);
+      if (dateAlphaMatch) {
+        const day = dateAlphaMatch[1];
+        const monthStr = dateAlphaMatch[2].charAt(0).toUpperCase() + dateAlphaMatch[2].slice(1, 3).toLowerCase();
+        
+        const yearMatch = segment.match(/\b(202[4-9]|2030)\b/);
+        const year = yearMatch ? yearMatch[1] : currentYear;
+        
+        const readable = `${day} ${monthStr}${year != currentYear ? " " + year : ""}`;
+        const monthIdx = months.indexOf(monthStr);
+        if (monthIdx !== -1) {
+          const isoDate = new Date(year, monthIdx, parseInt(day));
+          return { deadline: readable, iso: isoDate.toISOString() };
+        }
+      }
+
+      // 3. Date Numeric
+      const dateNumericMatch = segment.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+      if (dateNumericMatch) {
+        const day = parseInt(dateNumericMatch[1]);
+        const month = parseInt(dateNumericMatch[2]);
+        let year = dateNumericMatch[3] ? parseInt(dateNumericMatch[3]) : currentYear;
+        if (year < 100) year += 2000;
+
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          const monthStr = months[month - 1];
+          const readable = `${day} ${monthStr}${year != currentYear ? " " + year : ""}`;
+          const isoDate = new Date(year, month - 1, day);
+          return { deadline: readable, iso: isoDate.toISOString() };
+        }
+      }
+    }
+  }
+
+  return { deadline: "", iso: "" };
+}
+
 // ─────────────────────────────────────────────
 // MAIN EXPORT
 // ─────────────────────────────────────────────
@@ -168,11 +246,12 @@ function extractFormLink(text = "") {
 /**
  * Parse a raw email text (subject + snippet) via Gemini LLM.
  *
- * @param {string} emailText  - Combined subject + body snippet
- * @param {string} [sender]   - Raw "From" header value (used for domain fallback)
- * @returns {object}          - Parsed application data or { isRelevant: false }
+ * @param {string} emailText      - Combined subject + body snippet (for LLM)
+ * @param {string} [sender]       - Raw "From" header value
+ * @param {string} [fullBodyText] - Full email body (for link extraction)
+ * @returns {object}              - Parsed application data
  */
-async function parseEmailWithLLM(emailText, sender = "") {
+async function parseEmailWithLLM(emailText, sender = "", fullBodyText = "") {
   // console.log("--- parseEmailWithLLM ---");
 
   // ── 1. Build an improved, strict prompt ─────────────────────────────────
@@ -282,10 +361,25 @@ ${emailText}
     parsed.date = (parsed.date || "").trim();
 
     // Always run regex extraction — deterministic & beats the LLM for links
-    const linkResult = extractFormLink(emailText);
+    const linkTextSource = fullBodyText || emailText;
+    const linkResult = extractFormLink(linkTextSource);
     parsed.link  = linkResult.primary || (parsed.link || "").trim();
     parsed.links = linkResult.all;
     parsed.isFormLink = linkResult.isForm;
+
+    if (parsed.link) {
+      console.log(`[LINK_SOURCE] ${fullBodyText ? "fullBody" : "snippet"}`);
+    }
+
+    // Extact deadline using regex
+    const deadlineResult = extractDeadline(fullBodyText || emailText);
+    parsed.deadline = deadlineResult.deadline;
+    parsed.deadlineISO = deadlineResult.iso;
+
+    if (parsed.deadline) {
+      console.log(`[DEADLINE_EXTRACTED] "${parsed.deadline}"`);
+      console.log(`[DEADLINE_SOURCE] regex`);
+    }
 
     // console.log("[FINAL PARSED]:", JSON.stringify(parsed));
     return parsed;
@@ -300,13 +394,15 @@ ${emailText}
     "position", "interview", "offer", "selected", "hiring", "recruitment",
     "assessment", "test", "rejected", "regret", "register", "registration",
     "placement", "shortlist", "shortlisted", "congratulations", "apprentice",
+    "deadline", "last date", "before", "by"
   ];
   const looksRelevant = jobKeywords.some((kw) => lowerText.includes(kw));
 
   if (looksRelevant) {
     const fallbackCompany = companyFromSender(sender) || "";
     const fallbackStatus  = inferStatusFromText(emailText);
-    const { primary, all, isForm } = extractFormLink(emailText);
+    const linkTextSource = fullBodyText || emailText;
+    const { primary, all, isForm } = extractFormLink(linkTextSource);
 
     const fallbackResult = {
       isRelevant: true,
@@ -320,6 +416,19 @@ ${emailText}
       isFormLink: isForm,
       _source: "keyword-fallback",
     };
+
+    const deadlineResult = extractDeadline(fullBodyText || emailText);
+    fallbackResult.deadline = deadlineResult.deadline;
+    fallbackResult.deadlineISO = deadlineResult.iso;
+
+    if (primary) {
+      console.log(`[LINK_SOURCE] ${fullBodyText ? "fullBody" : "snippet"} (fallback)`);
+    }
+
+    if (fallbackResult.deadline) {
+      console.log(`[DEADLINE_EXTRACTED] "${fallbackResult.deadline}" (fallback)`);
+      console.log(`[DEADLINE_SOURCE] regex`);
+    }
 
     // console.log("[FALLBACK RESULT]:", JSON.stringify(fallbackResult));
     return fallbackResult;

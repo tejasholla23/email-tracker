@@ -299,6 +299,26 @@ export default function JobTrackerDashboard() {
         .note-input:focus { border-color: #0d9488; background: #fff; }
         .note-save-hint { font-size: 11px; color: #9ca3af; text-align: right; margin-top: -4px; }
         
+        .deadline-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 13px;
+          color: #6b7280;
+          background: #f3f4f6;
+          padding: 4px 10px;
+          border-radius: 6px;
+          width: fit-content;
+          margin-top: -8px;
+          font-weight: 500;
+        }
+        .deadline-badge.urgent {
+          background: #fef2f2;
+          color: #991b1b;
+          font-weight: 600;
+          border: 1px solid #fee2e2;
+        }
+        
         /* Card action buttons */
         .card-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eaefed; }
         .card-btn { flex: 1; padding: 7px 0; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s; text-align: center; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
@@ -394,6 +414,16 @@ export default function JobTrackerDashboard() {
         .dark .card-btn-apply { background: #1e3a5f; border-color: #1d4ed8; color: #93c5fd; }
         .dark .card-btn-apply:hover { background: #1d4ed8; color: #fff; }
         .dark .app-card.is-done .role-title { color: #64748b; }
+        
+        .dark .deadline-badge {
+          background: #1e293b;
+          color: #94a3b8;
+        }
+        .dark .deadline-badge.urgent {
+          background: #450a0a;
+          color: #fca5a5;
+          border-color: #7f1d1d;
+        }
       `}} />
 
       <div className={`layout ${isDarkMode ? 'dark' : ''}`}>
@@ -537,6 +567,13 @@ export default function JobTrackerDashboard() {
                           </div>
                           {isNew && <span className="new-tag">New</span>}
                         </div>
+                        
+                        {app.deadline && (
+                          <div className={`deadline-badge ${app.deadline.toLowerCase().includes('today') ? 'urgent' : ''}`}>
+                            ⏰ Deadline: {app.deadline}
+                          </div>
+                        )}
+
                         <div className="app-footer">
                           <div className="email-info">
                             <span style={{ fontSize: 16 }}>✉️</span>
