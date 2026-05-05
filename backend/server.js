@@ -141,7 +141,15 @@ app.get("/auth/google/callback", async (req, res) => {
       { upsert: true }
     );
 
-    res.send("Gmail connected successfully");
+    const allowedEmail = "1ms23ci126@msrit.edu";
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+
+    if (email !== allowedEmail) {
+      console.warn(`[AUTH] Denied login attempt from: ${email}`);
+      return res.redirect(`${frontendUrl}?error=unauthorized`);
+    }
+
+    res.redirect(`${frontendUrl}?auth_success=true&email=${encodeURIComponent(email)}`);
   } catch (err) {
     console.error("Google Auth Callback Error:", err.message);
     res.status(500).send(`Auth failed: ${err.message}`);

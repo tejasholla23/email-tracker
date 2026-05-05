@@ -25,7 +25,29 @@ export default function JobTrackerDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   
+  const [userEmail, setUserEmail] = useState(null);
+
   useEffect(() => {
+    // Check URL for auth params
+    const params = new URLSearchParams(window.location.search);
+    const emailFromUrl = params.get("email");
+    const authSuccess = params.get("auth_success");
+    const error = params.get("error");
+
+    if (error === "unauthorized") {
+      alert("Access Denied: Your account is not authorized to view this dashboard.");
+      window.history.replaceState({}, document.title, "/");
+    } else if (authSuccess && emailFromUrl) {
+      localStorage.setItem("userEmail", emailFromUrl);
+      setUserEmail(emailFromUrl);
+      window.history.replaceState({}, document.title, "/");
+    } else {
+      const savedEmail = localStorage.getItem("userEmail");
+      if (savedEmail) {
+        setUserEmail(savedEmail);
+      }
+    }
+
     // Check local storage for dark mode preference
     const savedMode = localStorage.getItem("darkMode");
     if (savedMode === "true") {
@@ -33,15 +55,28 @@ export default function JobTrackerDashboard() {
     }
   }, []);
 
+  useEffect(() => {
+    if (userEmail) {
+      fetchApplications();
+    }
+  }, [userEmail]);
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
     localStorage.setItem("darkMode", !isDarkMode);
   };
 
   const fetchApplications = async () => {
+    if (!userEmail) return;
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/applications`);
+      const response = await fetch(`${BASE_URL}/applications`, {
+        headers: { "x-user-email": userEmail }
+      });
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
       const data = await response.json();
       setApplications(data);
     } catch (error) {
@@ -54,7 +89,9 @@ export default function JobTrackerDashboard() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await fetch(`${BASE_URL}/sync`);
+      await fetch(`${BASE_URL}/sync`, {
+        headers: { "x-user-email": userEmail }
+      });
       await fetchApplications();
     } catch (error) {
       console.error("Sync failed:", error);
@@ -73,6 +110,7 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/clear`, {
         method: "DELETE",
+        headers: { "x-user-email": userEmail }
       });
       if (!response.ok) throw new Error("Clear failed");
       alert("All applications cleared.");
@@ -89,7 +127,10 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-user-email": userEmail
+        },
         body: JSON.stringify({ status: "done" }),
       });
       if (!response.ok) throw new Error("Failed to mark as done");
@@ -109,6 +150,7 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "DELETE",
+        headers: { "x-user-email": userEmail }
       });
       if (!response.ok) throw new Error("Failed to delete");
     } catch (error) {
@@ -128,7 +170,10 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-user-email": userEmail
+        },
         body: JSON.stringify({ note }),
       });
       if (!response.ok) throw new Error("Failed to save note");
@@ -138,11 +183,11 @@ export default function JobTrackerDashboard() {
     }
   };
   const handleLogout = async () => {
-    if (!window.confirm("Are you sure you want to log out and disconnect Gmail?")) return;
+    localStorage.removeItem("userEmail");
+    setUserEmail(null);
     try {
       await fetch(`${BASE_URL}/logout`);
       setApplications([]);
-      alert("Logged out successfully.");
     } catch (error) {
       console.error("Logout failed:", error);
     }
@@ -161,7 +206,10 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-user-email": userEmail
+        },
         body: JSON.stringify(formData)
       });
 
@@ -180,10 +228,6 @@ export default function JobTrackerDashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchApplications();
-  }, []);
-
   // Stats calculation
   const total = applications.length;
   const pending = applications.filter(
@@ -198,6 +242,18 @@ export default function JobTrackerDashboard() {
     todayStart.setHours(0, 0, 0, 0);
     return appDate >= todayStart;
   };
+
+  if (!userEmail) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '32px', marginBottom: '16px' }}>Email Job Tracker</h1>
+        <p style={{ marginBottom: '32px', color: '#6b7280' }}>Sign in to track your job applications via Gmail.</p>
+        <a href={`${BASE_URL}/auth/google`} style={{ padding: '12px 24px', backgroundColor: '#0d9488', color: 'white', borderRadius: '8px', textDecoration: 'none', fontWeight: 600 }}>
+          Sign in with Google
+        </a>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -232,6 +288,7 @@ export default function JobTrackerDashboard() {
         .search-container input { padding: 10px 16px 10px 40px; border-radius: 999px; border: 1px solid #e5e7eb; background: #f9fafb url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 320px; outline: none; font-size: 14px; transition: all 0.2s; }
         .search-container input:focus { border-color: #0d9488; box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1); background-color: #fff; }
         .topbar-actions { display: flex; align-items: center; gap: 16px; }
+        .user-badge { padding: 8px 16px; border-radius: 999px; background: #f0fdfa; border: 1px solid #ccfbf1; font-size: 13px; color: #0f766e; font-weight: 500; }
         .outline-btn { padding: 8px 16px; border: 1px solid #ccfbf1; background: #f0fdfa; color: #0f766e; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
         .outline-btn:hover { background: #ccfbf1; }
         
@@ -437,7 +494,6 @@ export default function JobTrackerDashboard() {
       `}} />
 
       <div className={`layout ${isDarkMode ? 'dark' : ''}`}>
-        {/* Mobile Sidebar Overlay */}
         <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
 
         <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
@@ -488,6 +544,12 @@ export default function JobTrackerDashboard() {
                 title="Toggle Dark Mode"
               >
                 {isDarkMode ? "☀️" : "🌙"}
+              </button>
+              <div className="user-badge">
+                <span className="user-email">{userEmail}</span>
+              </div>
+              <button className="outline-btn" onClick={handleLogout} style={{ background: '#fef2f2', borderColor: '#fee2e2', color: '#991b1b' }}>
+                Logout
               </button>
               <button className="btn-primary" onClick={() => setShowAddModal(true)}>
                 + Add Application
