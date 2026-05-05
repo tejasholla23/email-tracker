@@ -329,9 +329,17 @@ export default function JobTrackerDashboard() {
         .card-btn-done:disabled { opacity: 0.55; cursor: default; }
         .card-btn-remove { background: #fff5f5; color: #b91c1c; border: 1px solid #fecaca; }
         .card-btn-remove:hover { background: #fee2e2; border-color: #fca5a5; }
-        /* Done card dimming */
-        .app-card.is-done { opacity: 0.55; }
-        .app-card.is-done .role-title { text-decoration: line-through; color: #6d7a77; }
+        /* Done card blurring and dimming */
+        .app-card.is-done { 
+          opacity: 0.45; 
+          filter: blur(1.2px) grayscale(0.2);
+          transition: all 0.3s ease;
+        }
+        .app-card.is-done:hover {
+          opacity: 0.7;
+          filter: blur(0.4px);
+        }
+        .app-card.is-done .role-title { text-decoration: none; }
         
         /* Responsive Styles */
         .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #0d9488; }
@@ -413,7 +421,9 @@ export default function JobTrackerDashboard() {
         .dark .card-btn-remove:hover { background: #991b1b; border-color: #b91c1c; }
         .dark .card-btn-apply { background: #1e3a5f; border-color: #1d4ed8; color: #93c5fd; }
         .dark .card-btn-apply:hover { background: #1d4ed8; color: #fff; }
-        .dark .app-card.is-done .role-title { color: #64748b; }
+        .dark .app-card.is-done .role-title { color: #94a3b8; }
+        .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
+        .dark .app-card.is-done:hover { opacity: 0.6; filter: blur(0.5px); }
         
         .dark .deadline-badge {
           background: #1e293b;
