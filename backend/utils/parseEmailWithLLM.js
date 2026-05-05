@@ -124,6 +124,43 @@ function cleanRole(rawRole = "", emailText = "") {
   return role;
 }
 
+/**
+ * Clean a single URL: strip trailing punctuation, validate scheme.
+ * Returns null if invalid.
+ */
+function cleanUrl(raw = "") {
+  const url = raw.replace(/[)>.,;"']+$/g, "").trim();
+  if (!url.startsWith("http")) return null;
+  return url;
+}
+
+/**
+ * Extract all links from email text.
+ * Returns { primary, all, isForm }
+ *   primary  → best link to show (forms.gle > docs.google.com/forms > first URL)
+ *   all      → every clean URL found in the text
+ *   isForm   → true when primary is a Google Form
+ */
+function extractFormLink(text = "") {
+  // 1. Collect every raw URL
+  const rawAll = text.match(/https?:\/\/[^\s"'<>)]+/gi) || [];
+  const all = rawAll.map(cleanUrl).filter(Boolean);
+
+  // 2. Prioritise by type
+  const formsGle   = all.find(u => /forms\.gle\//i.test(u));
+  const docsForms  = all.find(u => /docs\.google\.com\/forms\//i.test(u));
+  const primary    = formsGle || docsForms || all[0] || "";
+  const isForm     = !!(formsGle || docsForms);
+
+  if (primary) {
+    console.log(`[LINK_EXTRACTED] primary=${primary} isForm=${isForm} total=${all.length}`);
+  } else {
+    console.log("[LINK_EXTRACTED] No link found");
+  }
+
+  return { primary, all, isForm };
+}
+
 // ─────────────────────────────────────────────
 // MAIN EXPORT
 // ─────────────────────────────────────────────
@@ -179,6 +216,12 @@ Analyze the following email text and determine if it is related to:
 - "interview" → interview, schedule, shortlisted, assessment, test, next round, aptitude
 - "rejected"  → regret, unfortunately, not selected, unsuccessful, cannot move forward
 - "applied"   → default when none of the above match
+
+=== LINK EXTRACTION RULES ===
+- Look for any registration / application URL in the email.
+- STRONGLY prefer links matching: https://forms.gle/... or https://docs.google.com/forms/...
+- If a Google Form link is present, it MUST be returned in the "link" field.
+- If no relevant link exists, return an empty string "".
 
 === DATE RULES ===
 - Extract the most relevant date (test date, interview date, deadline).
@@ -237,7 +280,12 @@ ${emailText}
 
     parsed.type = (parsed.type || "unknown").trim().toLowerCase();
     parsed.date = (parsed.date || "").trim();
-    parsed.link = (parsed.link || "").trim();
+
+    // Always run regex extraction — deterministic & beats the LLM for links
+    const linkResult = extractFormLink(emailText);
+    parsed.link  = linkResult.primary || (parsed.link || "").trim();
+    parsed.links = linkResult.all;
+    parsed.isFormLink = linkResult.isForm;
 
     // console.log("[FINAL PARSED]:", JSON.stringify(parsed));
     return parsed;
@@ -250,13 +298,15 @@ ${emailText}
   const jobKeywords = [
     "apply", "application", "intern", "internship", "job", "role",
     "position", "interview", "offer", "selected", "hiring", "recruitment",
-    "assessment", "test", "rejected", "regret",
+    "assessment", "test", "rejected", "regret", "register", "registration",
+    "placement", "shortlist", "shortlisted", "congratulations", "apprentice",
   ];
   const looksRelevant = jobKeywords.some((kw) => lowerText.includes(kw));
 
   if (looksRelevant) {
     const fallbackCompany = companyFromSender(sender) || "";
     const fallbackStatus  = inferStatusFromText(emailText);
+    const { primary, all, isForm } = extractFormLink(emailText);
 
     const fallbackResult = {
       isRelevant: true,
@@ -265,7 +315,9 @@ ${emailText}
       type: "unknown",
       status: fallbackStatus,
       date: "",
-      link: "",
+      link: primary,
+      links: all,
+      isFormLink: isForm,
       _source: "keyword-fallback",
     };
 

@@ -8,6 +8,8 @@ const applicationSchema = new mongoose.Schema(
     deadline: { type: Date },
     testDate: { type: Date },
     link: { type: String },
+    links: { type: [String], default: [] },
+    isFormLink: { type: Boolean, default: false },
     source: { type: String },
     email: { type: String },
     date: { type: Date },

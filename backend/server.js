@@ -224,6 +224,8 @@ async function fetchAndProcessEmails() {
             type: parsed.type || "",
             status: parsed.status || "pending",
             link: parsed.link || "",
+            links: parsed.links || [],
+            isFormLink: parsed.isFormLink || false,
             rawText,
             messageId: id,
             source: "Gmail",

@@ -301,7 +301,9 @@ export default function JobTrackerDashboard() {
         
         /* Card action buttons */
         .card-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #eaefed; }
-        .card-btn { flex: 1; padding: 7px 0; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s; }
+        .card-btn { flex: 1; padding: 7px 0; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s; text-align: center; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+        .card-btn-apply { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+        .card-btn-apply:hover { background: #dbeafe; border-color: #93c5fd; }
         .card-btn-done { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
         .card-btn-done:hover:not(:disabled) { background: #dcfce7; border-color: #86efac; }
         .card-btn-done:disabled { opacity: 0.55; cursor: default; }
@@ -389,6 +391,8 @@ export default function JobTrackerDashboard() {
         .dark .card-btn-done:hover:not(:disabled) { background: #065f46; border-color: #10b981; }
         .dark .card-btn-remove { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
         .dark .card-btn-remove:hover { background: #991b1b; border-color: #b91c1c; }
+        .dark .card-btn-apply { background: #1e3a5f; border-color: #1d4ed8; color: #93c5fd; }
+        .dark .card-btn-apply:hover { background: #1d4ed8; color: #fff; }
         .dark .app-card.is-done .role-title { color: #64748b; }
       `}} />
 
@@ -553,6 +557,16 @@ export default function JobTrackerDashboard() {
                         </div>
 
                         <div className="card-actions">
+                          {app.link && (
+                            <a
+                              className="card-btn card-btn-apply"
+                              href={app.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {app.isFormLink ? "📋 Apply (Form)" : "🔗 Open Link"}
+                            </a>
+                          )}
                           <button
                             className="card-btn card-btn-done"
                             onClick={() => handleMarkDone(app._id)}
