@@ -1,5 +1,6 @@
 const express = require("express");
 const Application = require("../models/Application");
+const CompanyInfo = require("../models/CompanyInfo");
 
 const router = express.Router();
 
@@ -16,12 +17,34 @@ const authCheck = (req, res, next) => {
 // Protect all routes below
 router.use(authCheck);
 
-// GET /applications - return all applications
+// GET /applications - return all applications with company info
 router.get("/", async (req, res) => {
   try {
-    const applications = await Application.find({ isDeleted: { $ne: true } }).sort({ date: -1 });
+    const applications = await Application.aggregate([
+      { $match: { isDeleted: { $ne: true } } },
+      { $sort: { date: -1 } },
+      {
+        $lookup: {
+          from: "companyinfos", // MongoDB collection name for CompanyInfo model
+          localField: "company",
+          foreignField: "name",
+          as: "companyInfoData"
+        }
+      },
+      {
+        $addFields: {
+          companyInfo: { $arrayElemAt: ["$companyInfoData", 0] }
+        }
+      },
+      {
+        $project: {
+          companyInfoData: 0
+        }
+      }
+    ]);
     res.json(applications);
   } catch (error) {
+    console.error("Fetch applications error:", error.message);
     res.status(500).json({ message: "Failed to fetch applications" });
   }
 });
@@ -29,7 +52,9 @@ router.get("/", async (req, res) => {
 // POST /applications - add a new application
 router.post("/", async (req, res) => {
   try {
-    const newApplication = await Application.create(req.body);
+    // Remove companyInfo from body if passed manually (should be fetched/generated during sync)
+    const { companyInfo, ...appData } = req.body;
+    const newApplication = await Application.create(appData);
     res.status(201).json(newApplication);
   } catch (error) {
     res.status(400).json({ message: "Failed to create application" });

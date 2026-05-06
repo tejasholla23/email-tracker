@@ -11,6 +11,7 @@ const Application = require("./models/Application");
 const Account = require("./models/Account");
 const applicationRoutes = require("./routes/applicationRoutes");
 const { parseEmailWithLLM } = require("./utils/parseEmailWithLLM");
+const { getCompanyInfo } = require("./utils/companyInfoService");
 
 // Helper to extract full body text from Gmail payload
 function extractText(payload) {
@@ -262,6 +263,9 @@ async function fetchAndProcessEmails() {
           }
 
           const finalRole = parsed.role || "Unknown Role";
+          
+          // Fetch Company Info (with caching inside)
+          const companyInfo = await getCompanyInfo(parsed.company);
 
           const contentExists = await Application.findOne({
             company: parsed.company,

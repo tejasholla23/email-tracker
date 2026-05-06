@@ -19,6 +19,10 @@ export default function JobTrackerDashboard() {
     email: "",
     date: ""
   });
+  
+  // Company Info Modal State
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [selectedApp, setSelectedApp] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -491,6 +495,69 @@ export default function JobTrackerDashboard() {
           color: #fca5a5;
           border-color: #7f1d1d;
         }
+
+        /* Company Info Styles */
+        .company-short-desc {
+          font-size: 13px;
+          color: #64748b;
+          line-height: 1.5;
+          margin-top: -8px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          cursor: pointer;
+          transition: color 0.2s;
+        }
+        .company-short-desc:hover {
+          color: #0d9488;
+        }
+        .dark .company-short-desc {
+          color: #94a3b8;
+        }
+        .dark .company-short-desc:hover {
+          color: #2dd4bf;
+        }
+
+        .info-modal-content {
+          max-width: 550px;
+        }
+        .info-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid #eaefed;
+        }
+        .dark .info-grid {
+          border-color: #334155;
+        }
+        .info-item-label {
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #94a3b8;
+          margin-bottom: 4px;
+        }
+        .info-item-value {
+          font-size: 14px;
+          font-weight: 500;
+          color: #1e293b;
+        }
+        .dark .info-item-value {
+          color: #f1f5f9;
+        }
+        .info-description {
+          font-size: 15px;
+          line-height: 1.6;
+          color: #475569;
+          margin-bottom: 20px;
+        }
+        .dark .info-description {
+          color: #cbd5e1;
+        }
       `}} />
 
       <div className={`layout ${isDarkMode ? 'dark' : ''}`}>
@@ -639,6 +706,19 @@ export default function JobTrackerDashboard() {
                           </div>
                           {isNew && <span className="new-tag">New</span>}
                         </div>
+
+                        {app.companyInfo?.shortDescription && (
+                          <p 
+                            className="company-short-desc"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedApp(app);
+                              setShowInfoModal(true);
+                            }}
+                          >
+                            {app.companyInfo.shortDescription}
+                          </p>
+                        )}
                         
                         {app.deadline && (
                           <div className={`deadline-badge ${app.deadline.toLowerCase().includes('today') ? 'urgent' : ''}`}>
@@ -766,6 +846,45 @@ export default function JobTrackerDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showInfoModal && selectedApp && (
+        <div className="modal-overlay" onClick={() => setShowInfoModal(false)}>
+          <div className="modal-content info-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{selectedApp.company}</h3>
+                <p style={{ fontSize: '14px', color: '#64748b' }}>Company Details</p>
+              </div>
+              <button className="modal-close" onClick={() => setShowInfoModal(false)}>&times;</button>
+            </div>
+
+            <div className="info-description">
+              {selectedApp.companyInfo?.fullDescription || "No detailed description available."}
+            </div>
+
+            <div className="info-grid">
+              <div>
+                <div className="info-item-label">Industry</div>
+                <div className="info-item-value">{selectedApp.companyInfo?.industry || "N/A"}</div>
+              </div>
+              <div>
+                <div className="info-item-label">Type</div>
+                <div className="info-item-value">{selectedApp.companyInfo?.companyType || "N/A"}</div>
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <div className="info-item-label">Headquarters</div>
+                <div className="info-item-value">{selectedApp.companyInfo?.headquarters || "N/A"}</div>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-primary" onClick={() => setShowInfoModal(false)}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
