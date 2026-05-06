@@ -1,8 +1,10 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 const CompanyInfo = require("../models/CompanyInfo");
 
 // Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
 
 /**
  * Get company information. 
@@ -30,8 +32,6 @@ async function getCompanyInfo(companyName) {
     // 2. Generate with LLM
     console.log(`[COMPANY_INFO_FETCHED] ${normalizedName}`);
     
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const prompt = `
       You are a precise business research assistant. Generate concise, factual information about the following company.
       
@@ -55,10 +55,13 @@ async function getCompanyInfo(companyName) {
       
       Rule: Return ONLY the JSON. No markdown fences.
     `;
+    
+    const response = await genAI.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: prompt,
+    });
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text().trim();
+    let text = (response.text || "").trim();
 
     // Clean JSON if it contains markdown fences
     if (text.startsWith("```json")) {
