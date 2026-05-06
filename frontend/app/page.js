@@ -725,7 +725,7 @@ export default function JobTrackerDashboard() {
                             app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() 
                             ? 'urgent' : ''
                           }`}>
-                            ⏰ {app.deadline}
+                            Deadline: {app.deadline}
                           </div>
                         )}
 
