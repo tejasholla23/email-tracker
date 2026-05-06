@@ -721,8 +721,11 @@ export default function JobTrackerDashboard() {
                         )}
                         
                         {app.deadline && (
-                          <div className={`deadline-badge ${app.deadline.toLowerCase().includes('today') ? 'urgent' : ''}`}>
-                            ⏰ Deadline: {app.deadline}
+                          <div className={`deadline-badge ${
+                            app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() 
+                            ? 'urgent' : ''
+                          }`}>
+                            ⏰ {app.deadline}
                           </div>
                         )}
 

@@ -182,15 +182,19 @@ function extractDeadline(text = "") {
   for (const segment of segments) {
     if (deadlineKeywords.test(segment)) {
 
-      // 1. Today + Time
-      const todayMatch = segment.match(/(\d{1,2})(?::(\d{2}))?\s*(pm|am)\s+today/i) || 
-                         segment.match(/today(?:\s+at|\s+before|\s+by)?\s+(\d{1,2})(?::(\d{2}))?\s*(pm|am)/i);
+      // 1. Today/Tomorrow + Time
+      const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(pm|am)/i;
+      const todayMatch = segment.match(new RegExp(`today(?:\\s+at|\\s+before|\\s+by)?\\s+${timeRegex.source}`, "i")) || 
+                         segment.match(new RegExp(`${timeRegex.source}\\s+today`, "i"));
       
       if (todayMatch) {
         const hour = parseInt(todayMatch[1]);
         const min = todayMatch[2] || "00";
         const ampm = todayMatch[3].toUpperCase();
-        const readable = `Today, ${hour}${todayMatch[2] ? ":" + min : ""} ${ampm}`;
+        
+        const day = now.getDate();
+        const monthStr = months[now.getMonth()];
+        const readable = `${day} ${monthStr}, ${hour}${min !== "00" ? ":" + min : ""} ${ampm}`;
         
         const isoDate = new Date(now);
         let h = hour;
