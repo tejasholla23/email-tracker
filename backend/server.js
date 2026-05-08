@@ -237,6 +237,29 @@ async function fetchAndProcessEmails() {
 
           const exists = await Application.findOne({ messageId: id });
           if (exists) {
+            const missingDetails = !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
+            if (missingDetails) {
+              console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
+              const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
+              if (parsed && parsed.isRelevant) {
+                const updatePayload = {};
+                if (!exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+                if (!exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+                if (!exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+                if (!exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+                if (!exists.link && parsed.link) updatePayload.link = parsed.link;
+                if ((!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+                if (!exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+                if (!exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+                if (!exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+
+                if (Object.keys(updatePayload).length > 0) {
+                  await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
+                  console.log(`[UPDATED] ${id} | Existing application enriched with program data`);
+                }
+              }
+            }
+
             console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
             skippedCount++;
             continue;
@@ -277,6 +300,22 @@ async function fetchAndProcessEmails() {
           });
 
           if (contentExists) {
+            const updatePayload = {};
+            if (!contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+            if (!contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+            if (!contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+            if (!contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+            if (!contentExists.link && parsed.link) updatePayload.link = parsed.link;
+            if ((!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+            if (!contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+            if (!contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+            if (!contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+
+            if (Object.keys(updatePayload).length > 0) {
+              await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
+              console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data`);
+            }
+
             console.log(`[SKIP] ${id} | Reason: Duplicate content (company + role match)`);
             skippedCount++;
             continue;
