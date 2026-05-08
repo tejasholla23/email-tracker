@@ -265,7 +265,11 @@ async function fetchAndProcessEmails() {
           const finalRole = parsed.role || "Unknown Role";
           
           // Fetch Company Info (with caching inside)
+          console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
           const companyInfo = await getCompanyInfo(parsed.company);
+          if (!companyInfo) {
+            console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
+          }
 
           const contentExists = await Application.findOne({
             company: parsed.company,

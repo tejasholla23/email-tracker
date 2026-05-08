@@ -82,6 +82,14 @@ export default function JobTrackerDashboard() {
         return;
       }
       const data = await response.json();
+      console.debug("[FETCH_APPLICATIONS] count=", data.length, "companyInfoCount=", data.filter((a) => !!a.companyInfo).length);
+      if (data.length > 0) {
+        console.debug("[FETCH_APPLICATIONS_SAMPLE]", {
+          company: data[0].company,
+          hasCompanyInfo: !!data[0].companyInfo,
+          shortDescription: data[0].companyInfo?.shortDescription,
+        });
+      }
       setApplications(data);
     } catch (error) {
       console.error("Failed to fetch applications:", error);

@@ -21,6 +21,7 @@ async function getCompanyInfo(companyName) {
   const normalizedName = companyName.trim();
 
   try {
+    console.log(`[COMPANY_INFO_FETCH_START] ${normalizedName}`);
     // 1. Check Cache (Dedicated CompanyInfo collection)
     const cachedInfo = await CompanyInfo.findOne({ name: normalizedName });
 
@@ -84,7 +85,7 @@ async function getCompanyInfo(companyName) {
 
     return newCompanyInfo;
   } catch (error) {
-    console.error(`[COMPANY_INFO_ERROR] ${normalizedName}:`, error.message);
+    console.error(`[COMPANY_INFO_FAILED] ${normalizedName}:`, error.message);
     return null; // Fallback gracefully
   }
 }
