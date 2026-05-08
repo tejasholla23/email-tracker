@@ -520,11 +520,34 @@ export default function JobTrackerDashboard() {
         .company-short-desc:hover {
           color: #0d9488;
         }
+        .program-details {
+          margin-top: 12px;
+          border-left: 3px solid #e2e8f0;
+          padding-left: 12px;
+          color: #475569;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+        .program-detail {
+          margin-bottom: 8px;
+        }
+        .program-detail-label {
+          font-weight: 700;
+          color: #334155;
+          margin-right: 6px;
+        }
         .dark .company-short-desc {
           color: #94a3b8;
         }
         .dark .company-short-desc:hover {
           color: #2dd4bf;
+        }
+        .dark .program-details {
+          border-left-color: #334155;
+          color: #cbd5e1;
+        }
+        .dark .program-detail-label {
+          color: #e2e8f0;
         }
 
         .info-modal-content {
@@ -727,6 +750,35 @@ export default function JobTrackerDashboard() {
                             {app.companyInfo.shortDescription}
                           </p>
                         )}
+
+                        {(app.programRoles || app.programDuration || app.programStipend || app.deadlineText) && (
+                          <div className="program-details">
+                            {app.programRoles && (
+                              <div className="program-detail">
+                                <span className="program-detail-label">Roles:</span>
+                                <span>{app.programRoles}</span>
+                              </div>
+                            )}
+                            {app.programDuration && (
+                              <div className="program-detail">
+                                <span className="program-detail-label">Duration:</span>
+                                <span>{app.programDuration}</span>
+                              </div>
+                            )}
+                            {app.programStipend && (
+                              <div className="program-detail">
+                                <span className="program-detail-label">Stipend:</span>
+                                <span>{app.programStipend}</span>
+                              </div>
+                            )}
+                            {app.deadlineText && (
+                              <div className="program-detail">
+                                <span className="program-detail-label">Deadline:</span>
+                                <span>{app.deadlineText}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         
                         {app.deadline && (
                           <div className={`deadline-badge ${
@@ -875,6 +927,35 @@ export default function JobTrackerDashboard() {
             <div className="info-description">
               {selectedApp.companyInfo?.fullDescription || "No detailed description available."}
             </div>
+
+            {(selectedApp.programRoles || selectedApp.programDuration || selectedApp.programStipend || selectedApp.deadlineText) && (
+              <div className="program-details" style={{ marginBottom: '20px' }}>
+                {selectedApp.programRoles && (
+                  <div className="program-detail">
+                    <span className="program-detail-label">Roles:</span>
+                    <span>{selectedApp.programRoles}</span>
+                  </div>
+                )}
+                {selectedApp.programDuration && (
+                  <div className="program-detail">
+                    <span className="program-detail-label">Duration:</span>
+                    <span>{selectedApp.programDuration}</span>
+                  </div>
+                )}
+                {selectedApp.programStipend && (
+                  <div className="program-detail">
+                    <span className="program-detail-label">Stipend:</span>
+                    <span>{selectedApp.programStipend}</span>
+                  </div>
+                )}
+                {selectedApp.deadlineText && (
+                  <div className="program-detail">
+                    <span className="program-detail-label">Deadline:</span>
+                    <span>{selectedApp.deadlineText}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="info-grid">
               <div>

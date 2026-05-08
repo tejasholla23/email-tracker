@@ -243,6 +243,70 @@ function extractDeadline(text = "") {
   return { deadline: "", iso: "" };
 }
 
+function extractProgramRoles(text = "") {
+  const roleMatch = text.match(/Roles?:\s*([^\r\n]+)/i);
+  if (roleMatch && roleMatch[1]) {
+    return roleMatch[1].trim();
+  }
+
+  return "";
+}
+
+function extractProgramDuration(text = "") {
+  const durationMatch = text.match(/Duration:\s*([^\r\n]+)/i);
+  if (durationMatch && durationMatch[1]) {
+    return durationMatch[1].trim();
+  }
+
+  const minDurationMatch = text.match(/minimum of\s*([0-9]+\s*(?:months|month|weeks|week|days|day))/i);
+  if (minDurationMatch && minDurationMatch[1]) {
+    return `${minDurationMatch[1].trim()}`;
+  }
+
+  return "";
+}
+
+function extractProgramStipend(text = "") {
+  const stipendMatch = text.match(/(B\.?Tech|BE)(?:\/MCA|\/CS|\/BE|\/)?\s*[:\-]\s*₹[0-9,]+(?:\s*per\s*month)?/i);
+  if (stipendMatch && stipendMatch[0]) {
+    return stipendMatch[0].trim();
+  }
+
+  const stipendLineMatch = text.match(/(B\.?Tech|BE)[^\r\n]*₹[0-9,]+(?:\s*per\s*month)?/i);
+  if (stipendLineMatch && stipendLineMatch[0]) {
+    return stipendLineMatch[0].trim();
+  }
+
+  return "";
+}
+
+function extractDeadlineText(text = "") {
+  const match = text.match(/register\s+before\s*([^\r\n.]+)/i) || text.match(/register.*?(before\s*[^\r\n.]+)/i);
+  if (match && match[1]) {
+    let deadline = match[1].trim();
+    if (!/^before/i.test(deadline.toLowerCase())) {
+      deadline = `Before ${deadline}`;
+    }
+    return deadline;
+  }
+
+  const simpleMatch = text.match(/before\s*([^\r\n.]+)/i);
+  if (simpleMatch && simpleMatch[1]) {
+    return `Before ${simpleMatch[1].trim()}`;
+  }
+
+  return "";
+}
+
+function enrichProgramDetails(text = "") {
+  return {
+    programRoles: extractProgramRoles(text),
+    programDuration: extractProgramDuration(text),
+    programStipend: extractProgramStipend(text),
+    deadlineText: extractDeadlineText(text),
+  };
+}
+
 // ─────────────────────────────────────────────
 // MAIN EXPORT
 // ─────────────────────────────────────────────
@@ -380,9 +444,18 @@ ${emailText}
     parsed.deadline = deadlineResult.deadline;
     parsed.deadlineISO = deadlineResult.iso;
 
+    const programDetails = enrichProgramDetails(fullBodyText || emailText);
+    parsed.programRoles = programDetails.programRoles;
+    parsed.programDuration = programDetails.programDuration;
+    parsed.programStipend = programDetails.programStipend;
+    parsed.deadlineText = programDetails.deadlineText;
+
     if (parsed.deadline) {
       console.log(`[DEADLINE_EXTRACTED] "${parsed.deadline}"`);
       console.log(`[DEADLINE_SOURCE] regex`);
+    }
+    if (parsed.deadlineText) {
+      console.log(`[DEADLINE_TEXT_EXTRACTED] "${parsed.deadlineText}"`);
     }
 
     // console.log("[FINAL PARSED]:", JSON.stringify(parsed));
@@ -424,6 +497,12 @@ ${emailText}
     const deadlineResult = extractDeadline(fullBodyText || emailText);
     fallbackResult.deadline = deadlineResult.deadline;
     fallbackResult.deadlineISO = deadlineResult.iso;
+
+    const programDetails = enrichProgramDetails(fullBodyText || emailText);
+    fallbackResult.programRoles = programDetails.programRoles;
+    fallbackResult.programDuration = programDetails.programDuration;
+    fallbackResult.programStipend = programDetails.programStipend;
+    fallbackResult.deadlineText = programDetails.deadlineText;
 
     if (primary) {
       console.log(`[LINK_SOURCE] ${fullBodyText ? "fullBody" : "snippet"} (fallback)`);
