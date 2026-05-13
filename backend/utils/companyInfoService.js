@@ -51,14 +51,15 @@ async function getCompanyInfo(companyName) {
         "fullDescription": "Concise paragraph (2-3 sentences) explaining core business and impact.",
         "industry": "Primary industry (e.g., E-commerce, Fintech)",
         "companyType": "e.g., Product-based | Service-based | Startup",
-        "headquarters": "City, Country"
+        "headquarters": "City, Country",
+        "domain": "official website domain (e.g. google.com)"
       }
       
       Rule: Return ONLY the JSON. No markdown fences.
     `;
     
     const response = await genAI.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
       contents: prompt,
     });
 
@@ -73,6 +74,12 @@ async function getCompanyInfo(companyName) {
 
     const info = JSON.parse(text);
 
+    // Calculate logo URL if domain is present
+    let logo = "";
+    if (info.domain && info.domain.toLowerCase() !== "unknown") {
+      logo = `https://logo.clearbit.com/${info.domain.toLowerCase()}`;
+    }
+
     // Save to CompanyInfo collection for future use
     const newCompanyInfo = await CompanyInfo.create({
       name: normalizedName,
@@ -81,6 +88,8 @@ async function getCompanyInfo(companyName) {
       industry: info.industry || "Unknown",
       companyType: info.companyType || "Unknown",
       headquarters: info.headquarters || "Unknown",
+      domain: info.domain || "",
+      logo: logo
     });
 
     return newCompanyInfo;

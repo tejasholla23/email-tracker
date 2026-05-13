@@ -325,14 +325,90 @@ export default function JobTrackerDashboard() {
         
         /* App Grid */
         .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
-        .app-card { background: #fff; border: 1px solid #dee4e1; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 24px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
-        .app-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(13, 148, 136, 0.08); border-color: #bcc9c6; }
-        
-        .app-header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .app-info { display: flex; gap: 16px; }
-        .company-logo { width: 48px; height: 48px; border-radius: 12px; background: #f5faf8; border: 1px solid #dee4e1; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #00685f; font-size: 20px; flex-shrink: 0; }
-        .role-title { font-family: 'Manrope', sans-serif; font-size: 18px; font-weight: 700; color: #171d1c; margin-bottom: 4px; line-height: 1.2; }
-        .company-name { font-size: 14px; color: #3d4947; }
+        .app-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 16px;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .app-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+          border-color: #cbd5e1;
+        }
+        .app-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .app-info {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex: 1;
+        }
+        .company-logo-container {
+          width: 44px;
+          height: 44px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          flex-shrink: 0;
+          transition: transform 0.2s ease;
+        }
+        .app-card:hover .company-logo-container {
+          transform: scale(1.05);
+        }
+        .company-logo-img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 4px;
+        }
+        .company-logo-fallback {
+          font-weight: 700;
+          font-size: 18px;
+          color: #64748b;
+        }
+        .role-company {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .role-title {
+          font-weight: 600;
+          font-size: 15px;
+          color: #1e293b;
+          line-height: 1.2;
+        }
+        .company-name {
+          font-size: 13px;
+          color: #64748b;
+          font-weight: 500;
+        }
+        .status-badge {
+          padding: 4px 10px;
+          border-radius: 9999px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.025em;
+        }
+        .status-applied { background: #f1f5f9; color: #475569; }
+        .status-interview { background: #f0fdfa; color: #0d9488; }
+        .status-offer { background: #f0fdf4; color: #16a34a; }
+        .status-rejected { background: #fef2f2; color: #dc2626; }
+        .status-done { background: #f0fdfa; color: #0d9488; }
         
         .app-footer { border-top: 1px solid #eaefed; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #6d7a77; }
         .email-info { display: flex; align-items: center; gap: 6px; }
@@ -467,10 +543,33 @@ export default function JobTrackerDashboard() {
         .dark .filter-btn.active { background: #0d9488; }
         .dark .filter-btn:hover:not(.active) { background: #334155; }
         
-        .dark .app-card { background: #1e293b; border-color: #334155; }
-        .dark .company-logo { background: #0f172a; border-color: #334155; color: #2dd4bf; }
-        .dark .role-title { color: #f8fafc; }
-        .dark .company-name { color: #cbd5e1; }
+        /* Dark Mode Extensions */
+        .dark .app-card {
+          background: #1e293b;
+          border-color: #334155;
+        }
+        .dark .app-card:hover {
+          border-color: #475569;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+        .dark .company-logo-container {
+          background: #0f172a;
+          border-color: #334155;
+        }
+        .dark .company-logo-fallback {
+          color: #94a3b8;
+        }
+        .dark .role-title {
+          color: #f1f5f9;
+        }
+        .dark .company-name {
+          color: #94a3b8;
+        }
+        .dark .status-applied { background: #334155; color: #cbd5e1; }
+        .dark .status-interview { background: #064e3b; color: #5eead4; }
+        .dark .status-offer { background: #064e3b; color: #86efac; }
+        .dark .status-rejected { background: #450a0a; color: #fca5a5; }
+        .dark .status-done { background: #064e3b; color: #5eead4; }
         .dark .app-footer { border-color: #334155; color: #94a3b8; }
         
         .dark .modal-content { background: #1e293b; color: #f8fafc; }
@@ -739,13 +838,33 @@ export default function JobTrackerDashboard() {
                       <div key={app._id} className={`app-card${isDone ? " is-done" : ""}`}>
                         <div className="app-header">
                           <div className="app-info">
-                            <div className="company-logo">{companyInitials}</div>
-                            <div>
+                            <div className="company-logo-container">
+                              {app.companyInfo?.logo ? (
+                                <img 
+                                  src={app.companyInfo.logo} 
+                                  alt={app.company}
+                                  className="company-logo-img"
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div className="company-logo-fallback" style={{ display: app.companyInfo?.logo ? 'none' : 'flex' }}>
+                                {companyInitials}
+                              </div>
+                            </div>
+                            <div className="role-company">
                               <div className="role-title">{app.role || "Unknown Role"}</div>
                               <div className="company-name">{app.company || "Unknown Company"}</div>
                             </div>
                           </div>
-                          {isNew && <span className="new-tag">New</span>}
+                          <div className="status-badge-container">
+                            <span className={`status-badge status-${(app.status || "applied").toLowerCase()}`}>
+                              {app.status || "applied"}
+                            </span>
+                          </div>
                         </div>
 
                         {app.companyInfo?.shortDescription && (

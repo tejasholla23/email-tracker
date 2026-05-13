@@ -8,6 +8,8 @@ const companyInfoSchema = new mongoose.Schema(
     industry: { type: String },
     companyType: { type: String },
     headquarters: { type: String },
+    domain: { type: String }, // e.g., google.com
+    logo: { type: String },   // e.g., https://logo.clearbit.com/google.com
   },
   { timestamps: true }
 );
