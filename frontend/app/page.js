@@ -256,6 +256,11 @@ export default function JobTrackerDashboard() {
     return d.toDateString() === now.toDateString() && (a.status || "").toLowerCase() !== "done";
   }).length;
 
+  const unmarkedCount = applications.filter(
+    (a) => (a.status || "").toLowerCase() !== "done"
+  ).length;
+
+
 
   const isAddedToday = (app) => {
     const raw = app.date || app.createdAt;
@@ -364,6 +369,11 @@ export default function JobTrackerDashboard() {
           background: #fef2f2; 
           color: #dc2626; 
           box-shadow: 0 0 15px rgba(220, 38, 38, 0.1);
+        }
+        .stat-card.unmarked .stat-icon { 
+          background: #fffbeb; 
+          color: #d97706; 
+          box-shadow: 0 0 15px rgba(217, 119, 6, 0.1);
         }
         .stat-content {
           display: flex;
@@ -629,6 +639,7 @@ export default function JobTrackerDashboard() {
         .dark .stat-value { color: #f8fafc; }
         .dark .stat-card.total .stat-icon { background: #064e3b; color: #2dd4bf; }
         .dark .stat-card.urgent .stat-icon { background: #450a0a; color: #fca5a5; }
+        .dark .stat-card.unmarked .stat-icon { background: #451a03; color: #fbbf24; }
         .dark .stat-trend { background: #064e3b; color: #4ade80; }
         .dark .stat-subtext { color: #64748b; }
         
@@ -891,6 +902,17 @@ export default function JobTrackerDashboard() {
                   <div className="stat-main">
                     <span className="stat-value">{urgentDeadlines}</span>
                     <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="stat-card unmarked">
+                <div className="stat-icon">📝</div>
+                <div className="stat-content">
+                  <span className="stat-label">Unmarked</span>
+                  <div className="stat-main">
+                    <span className="stat-value">{unmarkedCount}</span>
+                    <span className="stat-subtext">Needs review</span>
                   </div>
                 </div>
               </div>
