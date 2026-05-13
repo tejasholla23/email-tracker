@@ -14,7 +14,14 @@ async function backfill() {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("Connected to MongoDB");
 
-    const companies = await CompanyInfo.find({ $or: [{ domain: { $exists: false } }, { domain: "" }] });
+    const companies = await CompanyInfo.find({ 
+      $or: [
+        { domain: { $exists: false } }, 
+        { domain: "" }, 
+        { domain: "undefined" },
+        { domain: "Unknown" }
+      ] 
+    });
     console.log(`Found ${companies.length} companies to update`);
 
     for (const company of companies) {
@@ -22,23 +29,40 @@ async function backfill() {
       
       const prompt = `Find the official website domain for ${company.name}. Return ONLY the domain (e.g. google.com). If unknown, return "Unknown".`;
       
-      const response = await genAI.models.generateContent({
-        model: "gemini-3.1-flash-lite-preview",
-        contents: prompt,
-      });
-
-      let domain = (response.text || "").trim().toLowerCase();
-      if (domain.includes(" ")) domain = "Unknown";
+      let domain = "";
+      try {
+        const response = await genAI.models.generateContent({
+          model: "gemini-3.1-flash-lite-preview",
+          contents: prompt,
+        });
+        domain = (response.text || "").trim().toLowerCase().replace(/^["']|["']$/g, "");
+      } catch (e) {
+        if (e.message.includes("429")) {
+          console.log(`Rate limit hit for ${company.name}, using fallback guess`);
+          domain = company.name.toLowerCase().replace(/[^a-z0-9]/g, "") + ".com";
+        } else {
+          throw e;
+        }
+      }
+      
+      // Strict domain validation
+      const isInvalid = domain.includes(" ") || 
+                        domain === "unknown" || 
+                        domain === "undefined" || 
+                        domain === "null" ||
+                        !domain.includes(".");
+                        
+      if (isInvalid) domain = "";
       
       let logo = "";
-      if (domain !== "unknown") {
+      if (domain) {
         logo = `https://logo.clearbit.com/${domain}`;
       }
 
-      company.domain = domain === "unknown" ? "" : domain;
+      company.domain = domain;
       company.logo = logo;
       await company.save();
-      console.log(`Updated ${company.name} with domain: ${domain}`);
+      console.log(`Updated ${company.name} with domain: ${domain || "NONE"}`);
 
       // Add a small delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 5000));

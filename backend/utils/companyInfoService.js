@@ -75,9 +75,20 @@ async function getCompanyInfo(companyName) {
     const info = JSON.parse(text);
 
     // Calculate logo URL if domain is present
+    let domain = (info.domain || "").trim().toLowerCase().replace(/^["']|["']$/g, "");
+    
+    // Strict domain validation
+    const isInvalid = domain.includes(" ") || 
+                      domain === "unknown" || 
+                      domain === "undefined" || 
+                      domain === "null" ||
+                      !domain.includes(".");
+                      
+    if (isInvalid) domain = "";
+    
     let logo = "";
-    if (info.domain && info.domain.toLowerCase() !== "unknown") {
-      logo = `https://logo.clearbit.com/${info.domain.toLowerCase()}`;
+    if (domain) {
+      logo = `https://logo.clearbit.com/${domain}`;
     }
 
     // Save to CompanyInfo collection for future use
@@ -88,7 +99,7 @@ async function getCompanyInfo(companyName) {
       industry: info.industry || "Unknown",
       companyType: info.companyType || "Unknown",
       headquarters: info.headquarters || "Unknown",
-      domain: info.domain || "",
+      domain: domain,
       logo: logo
     });
 
