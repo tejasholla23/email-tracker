@@ -839,19 +839,24 @@ export default function JobTrackerDashboard() {
                         <div className="app-header">
                           <div className="app-info">
                             <div className="company-logo-container">
-                              {app.companyInfo?.logo ? (
+                              {app.companyInfo?.logo || app.companyInfo?.domain ? (
                                 <img 
-                                  src={app.companyInfo.logo} 
+                                  src={app.companyInfo?.logo || `https://www.google.com/s2/favicons?domain=${app.companyInfo?.domain}&sz=128`} 
                                   alt={app.company}
                                   className="company-logo-img"
                                   onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.style.display = 'none';
-                                    e.target.nextSibling.style.display = 'flex';
+                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                                    if (!e.target.src.includes('google.com')) {
+                                      e.target.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                    } else {
+                                      e.target.onerror = null;
+                                      e.target.style.display = 'none';
+                                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }
                                   }}
                                 />
                               ) : null}
-                              <div className="company-logo-fallback" style={{ display: app.companyInfo?.logo ? 'none' : 'flex' }}>
+                              <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
                                 {companyInitials}
                               </div>
                             </div>
