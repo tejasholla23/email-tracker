@@ -242,9 +242,20 @@ export default function JobTrackerDashboard() {
 
   // Stats calculation
   const total = applications.length;
-  const pending = applications.filter(
-    (a) => (a.status || "").toLowerCase() !== "done"
-  ).length;
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  const newThisWeek = applications.filter(a => {
+    const d = new Date(a.date || a.createdAt);
+    return d >= weekAgo;
+  }).length;
+
+  const urgentDeadlines = applications.filter(a => {
+    if (!a.deadlineISO) return false;
+    const d = new Date(a.deadlineISO);
+    return d.toDateString() === now.toDateString() && (a.status || "").toLowerCase() !== "done";
+  }).length;
+
 
   const isAddedToday = (app) => {
     const raw = app.date || app.createdAt;
@@ -310,12 +321,86 @@ export default function JobTrackerDashboard() {
         .page-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: #171d1c; margin-bottom: 4px; }
         .page-subtitle { color: #3d4947; font-size: 15px; }
         
-        /* Stats */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; margin-bottom: 32px; }
-        .stat-card { background: #fff; border: 1px solid #dee4e1; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px rgba(13, 148, 136, 0.02); display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; }
-        .stat-title { font-size: 12px; font-weight: 600; color: #3d4947; text-transform: uppercase; letter-spacing: 0.05em; z-index: 1; }
-        .stat-value { font-size: 42px; font-family: 'Manrope', sans-serif; font-weight: 700; color: #171d1c; line-height: 1; z-index: 1; }
-        .stat-card.total .stat-value { color: #00685f; }
+        /* Stats Section */
+        .stats-grid { 
+          display: grid; 
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+          gap: 20px; 
+          margin-bottom: 32px; 
+        }
+        .stat-card { 
+          background: #fff; 
+          border: 1px solid #e2e8f0; 
+          border-radius: 14px; 
+          padding: 20px; 
+          display: flex; 
+          align-items: center; 
+          gap: 16px;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
+        }
+        .stat-card:hover {
+          transform: translateY(-4px);
+          border-color: #cbd5e1;
+          box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.05);
+        }
+        .stat-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          flex-shrink: 0;
+        }
+        .stat-card.total .stat-icon { 
+          background: #f0fdfa; 
+          color: #0d9488; 
+          box-shadow: 0 0 15px rgba(13, 148, 136, 0.1);
+        }
+        .stat-card.urgent .stat-icon { 
+          background: #fef2f2; 
+          color: #dc2626; 
+          box-shadow: 0 0 15px rgba(220, 38, 38, 0.1);
+        }
+        .stat-content {
+          display: flex;
+          flex-direction: column;
+        }
+        .stat-label { 
+          font-size: 12px; 
+          font-weight: 600; 
+          color: #64748b; 
+          text-transform: uppercase;
+          letter-spacing: 0.025em;
+          margin-bottom: 2px;
+        }
+        .stat-main {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+        }
+        .stat-value { 
+          font-size: 28px; 
+          font-weight: 700; 
+          color: #1e293b; 
+          line-height: 1;
+        }
+        .stat-subtext {
+          font-size: 12px;
+          font-weight: 500;
+          color: #94a3b8;
+        }
+        .stat-trend {
+          font-size: 11px;
+          font-weight: 700;
+          padding: 2px 6px;
+          border-radius: 6px;
+          background: #f0fdf4;
+          color: #16a34a;
+        }
         
         /* Filters */
         .filters { display: flex; gap: 8px; background: #f0f5f2; padding: 8px; border-radius: 12px; border: 1px solid #dee4e1; margin-bottom: 24px; overflow-x: auto; align-items: center; }
@@ -533,10 +618,19 @@ export default function JobTrackerDashboard() {
         .dark .page-title { color: #f8fafc; }
         .dark .page-subtitle { color: #cbd5e1; }
         
-        .dark .stat-card { background: #1e293b; border-color: #334155; }
-        .dark .stat-title { color: #94a3b8; }
+        .dark .stat-card { 
+          background: #1e293b; 
+          border-color: #334155; 
+        }
+        .dark .stat-card:hover {
+          border-color: #475569;
+        }
+        .dark .stat-label { color: #94a3b8; }
         .dark .stat-value { color: #f8fafc; }
-        .dark .stat-card.total .stat-value { color: #2dd4bf; }
+        .dark .stat-card.total .stat-icon { background: #064e3b; color: #2dd4bf; }
+        .dark .stat-card.urgent .stat-icon { background: #450a0a; color: #fca5a5; }
+        .dark .stat-trend { background: #064e3b; color: #4ade80; }
+        .dark .stat-subtext { color: #64748b; }
         
         .dark .filters { background: #1e293b; border-color: #334155; }
         .dark .filter-btn { color: #cbd5e1; }
@@ -780,12 +874,25 @@ export default function JobTrackerDashboard() {
 
             <div className="stats-grid">
               <div className="stat-card total">
-                <span className="stat-title">Total Applications</span>
-                <span className="stat-value">{total}</span>
+                <div className="stat-icon">📊</div>
+                <div className="stat-content">
+                  <span className="stat-label">Total Applications</span>
+                  <div className="stat-main">
+                    <span className="stat-value">{total}</span>
+                    {newThisWeek > 0 && <span className="stat-trend">+{newThisWeek} this week</span>}
+                  </div>
+                </div>
               </div>
-              <div className="stat-card">
-                <span className="stat-title">Pending</span>
-                <span className="stat-value">{pending}</span>
+              
+              <div className="stat-card urgent">
+                <div className="stat-icon">🔔</div>
+                <div className="stat-content">
+                  <span className="stat-label">Deadlines Today</span>
+                  <div className="stat-main">
+                    <span className="stat-value">{urgentDeadlines}</span>
+                    <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
