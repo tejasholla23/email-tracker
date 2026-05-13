@@ -521,20 +521,27 @@ export default function JobTrackerDashboard() {
           color: #0d9488;
         }
         .program-details {
-          margin-top: 12px;
-          border-left: 3px solid #e2e8f0;
-          padding-left: 12px;
+          margin-top: 14px;
+          border-left: 2px solid #0d9488;
+          padding-left: 14px;
           color: #475569;
-          font-size: 13px;
-          line-height: 1.6;
+          font-size: 12.5px;
+          line-height: 1.5;
         }
         .program-detail {
-          margin-bottom: 8px;
+          margin-bottom: 6px;
+          display: flex;
+          align-items: baseline;
         }
         .program-detail-label {
-          font-weight: 700;
-          color: #334155;
-          margin-right: 6px;
+          font-weight: 600;
+          color: #64748b;
+          width: 70px;
+          flex-shrink: 0;
+        }
+        .program-detail-value {
+          color: #1e293b;
+          font-weight: 500;
         }
         .dark .company-short-desc {
           color: #94a3b8;
@@ -543,11 +550,14 @@ export default function JobTrackerDashboard() {
           color: #2dd4bf;
         }
         .dark .program-details {
-          border-left-color: #334155;
-          color: #cbd5e1;
+          border-left-color: #0d9488;
+          color: #94a3b8;
         }
         .dark .program-detail-label {
-          color: #e2e8f0;
+          color: #94a3b8;
+        }
+        .dark .program-detail-value {
+          color: #f1f5f9;
         }
 
         .info-modal-content {
@@ -751,34 +761,39 @@ export default function JobTrackerDashboard() {
                           </p>
                         )}
 
-                        {(app.programRoles || app.programDuration || app.programStipend || app.deadlineText) && (
-                          <div className="program-details">
-                            {app.programRoles && (
-                              <div className="program-detail">
-                                <span className="program-detail-label">Roles:</span>
-                                <span>{app.programRoles}</span>
-                              </div>
-                            )}
-                            {app.programDuration && (
-                              <div className="program-detail">
-                                <span className="program-detail-label">Duration:</span>
-                                <span>{app.programDuration}</span>
-                              </div>
-                            )}
-                            {app.programStipend && (
-                              <div className="program-detail">
-                                <span className="program-detail-label">Stipend:</span>
-                                <span>{app.programStipend}</span>
-                              </div>
-                            )}
-                            {app.deadlineText && (
-                              <div className="program-detail">
-                                <span className="program-detail-label">Deadline:</span>
-                                <span>{app.deadlineText}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        {(() => {
+                          const hasDetails = [app.programRoles, app.programDuration, app.programStipend, app.deadlineText].some(v => v && v.trim().length > 0);
+                          if (!hasDetails) return null;
+                          
+                          return (
+                            <div className="program-details">
+                              {app.programRoles && (
+                                <div className="program-detail">
+                                  <span className="program-detail-label">Roles</span>
+                                  <span className="program-detail-value">{app.programRoles}</span>
+                                </div>
+                              )}
+                              {app.programDuration && (
+                                <div className="program-detail">
+                                  <span className="program-detail-label">Duration</span>
+                                  <span className="program-detail-value">{app.programDuration}</span>
+                                </div>
+                              )}
+                              {app.programStipend && (
+                                <div className="program-detail">
+                                  <span className="program-detail-label">Stipend</span>
+                                  <span className="program-detail-value">{app.programStipend}</span>
+                                </div>
+                              )}
+                              {app.deadlineText && (
+                                <div className="program-detail">
+                                  <span className="program-detail-label">Deadline</span>
+                                  <span className="program-detail-value">{app.deadlineText}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         
                         {app.deadline && (
                           <div className={`deadline-badge ${

@@ -126,13 +126,23 @@ function cleanRole(rawRole = "", emailText = "") {
 
 function cleanProgramValue(raw = "") {
   let value = raw.trim();
-  // Remove leading/trailing asterisks, bullets, dashes, and spaces
-  value = value.replace(/^[\*\u2022\-\s]+/, "").trim();
-  value = value.replace(/[\*\u2022\-\s]+$/, "").trim();
+  // Remove leading/trailing symbols: asterisks, bullets, dashes, dots, and spaces
+  // Includes various unicode bullets and asterisks
+  const symbolRegex = /^[\*\u2022\u2023\u25E6\u2043\u2219\-\.\s\:]+/;
+  const trailingSymbolRegex = /[\*\u2022\u2023\u25E6\u2043\u2219\-\.\s\:]+$/;
+  
+  value = value.replace(symbolRegex, "").trim();
+  value = value.replace(trailingSymbolRegex, "").trim();
+  
   // Collapse multiple spaces
   value = value.replace(/\s{2,}/g, " ");
-  // Remove standalone "Details*" or "Details"
-  value = value.replace(/^\s*Details\*?\s*$/i, "").trim();
+  
+  // Check if the value is just "Details" or noise
+  const lowerValue = value.toLowerCase();
+  if (!value || lowerValue === "details" || lowerValue === "n/a" || lowerValue === "none" || /^[^a-zA-Z0-9]+$/.test(value)) {
+    return "";
+  }
+  
   // Remove year-only values
   if (/^\d{4}$/.test(value)) {
     return "";
