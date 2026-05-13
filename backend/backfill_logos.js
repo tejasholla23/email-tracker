@@ -41,7 +41,7 @@ async function backfill() {
       console.log(`Updated ${company.name} with domain: ${domain}`);
 
       // Add a small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
 
     console.log("Backfill complete");
