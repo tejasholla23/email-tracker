@@ -19,7 +19,6 @@
     "googleapis": "^171.4.0",
     "he": "^1.2.0",
     "mongoose": "^9.5.0",
-    "node-cron": "^4.2.1",
-    "openai": "^6.34.0"
+    "node-cron": "^4.2.1"
   }
 }
