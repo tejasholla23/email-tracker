@@ -58,10 +58,27 @@ async function getCompanyInfo(companyName) {
       Rule: Return ONLY the JSON. No markdown fences.
     `;
     
-    const response = await genAI.models.generateContent({
-      model: "gemini-3.1-flash-lite-preview",
-      contents: prompt,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    let response;
+    try {
+      response = await genAI.models.generateContent({
+        model: "gemini-3.1-flash-lite-preview",
+        contents: prompt,
+        config: {
+          abortSignal: controller.signal
+        }
+      });
+      clearTimeout(timeoutId);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError" || controller.signal.aborted) {
+        const timeoutError = new Error("Gemini company lookup request timed out");
+        timeoutError.code = "ETIMEOUT";
+        throw timeoutError;
+      }
+      throw err;
+    }
 
     let text = (response.text || "").trim();
 

@@ -30,4 +30,10 @@ const applicationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound index for duplicate-check during sync: Application.findOne({ company, role })
+applicationSchema.index({ company: 1, role: 1 });
+
+// Compound index for primary dashboard query: Application.find({ isDeleted: false }).sort({ date: -1 })
+applicationSchema.index({ isDeleted: 1, date: -1 });
+
 module.exports = mongoose.model("Application", applicationSchema);

@@ -1,6 +1,7 @@
 const express = require("express");
 const Application = require("../models/Application");
 const CompanyInfo = require("../models/CompanyInfo");
+const Account = require("../models/Account");
 
 const router = express.Router();
 
@@ -16,6 +17,25 @@ const authCheck = (req, res, next) => {
 
 // Protect all routes below
 router.use(authCheck);
+
+// GET /applications/sync-status - return Google sync status
+router.get("/sync-status", async (req, res) => {
+  try {
+    const email = req.headers["x-user-email"];
+    const account = await Account.findOne({ email });
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+    res.json({
+      syncStatus: account.syncStatus || "success",
+      syncError: account.syncError || null,
+      lastSyncTime: account.lastSyncTime || null,
+    });
+  } catch (error) {
+    console.error("Fetch sync status error:", error.message);
+    res.status(500).json({ message: "Failed to fetch sync status" });
+  }
+});
 
 // GET /applications - return all applications with company info
 router.get("/", async (req, res) => {

@@ -8,6 +8,9 @@ export default function JobTrackerDashboard() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("success");
+  const [syncError, setSyncError] = useState(null);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
 
   // Add Application Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -59,9 +62,27 @@ export default function JobTrackerDashboard() {
     }
   }, []);
 
+  const fetchSyncStatus = async () => {
+    if (!userEmail) return;
+    try {
+      const response = await fetch(`${BASE_URL}/applications/sync-status`, {
+        headers: { "x-user-email": userEmail }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSyncStatus(data.syncStatus);
+        setSyncError(data.syncError);
+        setLastSyncTime(data.lastSyncTime);
+      }
+    } catch (error) {
+      console.error("Failed to fetch sync status:", error);
+    }
+  };
+
   useEffect(() => {
     if (userEmail) {
       fetchApplications();
+      fetchSyncStatus();
     }
   }, [userEmail]);
 
@@ -104,6 +125,7 @@ export default function JobTrackerDashboard() {
       await fetch(`${BASE_URL}/sync`, {
         headers: { "x-user-email": userEmail }
       });
+      await fetchSyncStatus();
       await fetchApplications();
     } catch (error) {
       console.error("Sync failed:", error);
@@ -803,6 +825,62 @@ export default function JobTrackerDashboard() {
         .dark .info-description {
           color: #cbd5e1;
         }
+        
+        /* Sync Warning Banner */
+        .sync-warning-banner {
+          background-color: #fef2f2;
+          border: 1px solid #fca5a5;
+          border-radius: 12px;
+          padding: 16px 20px;
+          margin-bottom: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .sync-warning-content {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: #991b1b;
+          font-size: 14.5px;
+          font-weight: 500;
+        }
+        .sync-warning-icon {
+          font-size: 20px;
+          flex-shrink: 0;
+        }
+        .sync-reauth-btn {
+          padding: 8px 16px;
+          background-color: #dc2626;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 13.5px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+          white-space: nowrap;
+          text-decoration: none;
+          display: inline-block;
+        }
+        .sync-reauth-btn:hover {
+          background-color: #b91c1c;
+        }
+        .dark .sync-warning-banner {
+          background-color: #450a0a;
+          border-color: #7f1d1d;
+        }
+        .dark .sync-warning-content {
+          color: #fca5a5;
+        }
+        .dark .sync-reauth-btn {
+          background-color: #ef4444;
+        }
+        .dark .sync-reauth-btn:hover {
+          background-color: #dc2626;
+        }
       `}} />
 
       <div className={`layout ${isDarkMode ? 'dark' : ''}`}>
@@ -827,6 +905,11 @@ export default function JobTrackerDashboard() {
             <button className="sync-btn" onClick={handleSync} disabled={syncing}>
               {syncing ? "Syncing..." : "Sync Emails"}
             </button>
+            {lastSyncTime && (
+              <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '-12px', marginBottom: '16px' }}>
+                Last synced: {new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
             <div className="nav-item" onClick={handleLogout} style={{ marginTop: 0, color: '#ba1a1a' }}>
               <span>Sign Out</span>
             </div>
@@ -876,6 +959,20 @@ export default function JobTrackerDashboard() {
           </header>
 
           <main className="content">
+            {syncStatus === "failed" && (
+              <div className="sync-warning-banner">
+                <div className="sync-warning-content">
+                  <span className="sync-warning-icon">⚠️</span>
+                  <span>
+                    <strong>Gmail Connection Expired:</strong> {syncError || "The dashboard has stopped updating. Please re-authenticate."}
+                  </span>
+                </div>
+                <a href={`${BASE_URL}/auth/google`} className="sync-reauth-btn">
+                  Re-authenticate
+                </a>
+              </div>
+            )}
+
             <div className="page-header">
               <div>
                 <h2 className="page-title">Applications Overview</h2>

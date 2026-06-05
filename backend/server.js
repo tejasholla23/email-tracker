@@ -83,7 +83,23 @@ app.use("/applications", applicationRoutes);
 // ==========================
 mongoose
   .connect(MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
+  .then(async () => {
+    console.log("MongoDB connected");
+    try {
+      const result = await Account.updateMany(
+        { syncStatus: "pending" },
+        { 
+          syncStatus: "failed", 
+          syncError: "Previous sync was interrupted due to server restart or unexpected shutdown." 
+        }
+      );
+      if (result.modifiedCount > 0) {
+        console.log(`[STARTUP_RECOVERY] Restored ${result.modifiedCount} stale pending sync account(s) to failed state.`);
+      }
+    } catch (err) {
+      console.error("[STARTUP_RECOVERY_FAILED] Failed to clean up stale sync states:", err.message);
+    }
+  })
   .catch((err) => console.error("Mongo error:", err.message));
 
 // ==========================
@@ -198,161 +214,241 @@ async function fetchAndProcessEmails() {
       if (acc.email !== "1ms23ci126@msrit.edu") continue;
 
       console.log(`Processing account: ${acc.email}`);
-      oauth2Client.setCredentials(acc.tokens);
+      try {
+        await Account.findOneAndUpdate({ email: acc.email }, { syncStatus: "pending" });
 
-      const gmail = google.gmail({
-        version: "v1",
-        auth: oauth2Client,
-      });
+        const localOauth2Client = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET,
+          process.env.GOOGLE_REDIRECT_URI
+        );
+        localOauth2Client.setCredentials(acc.tokens);
 
-      const response = await gmail.users.messages.list({
-        userId: "me",
-        maxResults: 50,
-        q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:30d",
-      });
+        localOauth2Client.on("tokens", async (newTokens) => {
+          console.log(`[TOKEN_REFRESH] Received refreshed Google tokens for: ${acc.email}`);
+          try {
+            const updatedTokens = {
+              ...acc.tokens,
+              ...newTokens,
+            };
+            await Account.findOneAndUpdate(
+              { email: acc.email },
+              { tokens: updatedTokens }
+            );
+            console.log(`[TOKEN_REFRESH_PERSISTED] Refreshed tokens persisted to MongoDB for: ${acc.email}`);
+            acc.tokens = updatedTokens;
+          } catch (dbErr) {
+            console.error(`[TOKEN_REFRESH_PERSIST_FAILED] Failed to persist refreshed tokens for ${acc.email}:`, dbErr.message);
+          }
+        });
 
-      const messages = response.data.messages || [];
-      fetchedCount += messages.length;
-      console.log(`\n--- STARTING SYNC FOR ${acc.email} ---`);
-
-      for (let msg of messages) {
-        const id = msg.id;
+        const gmail = google.gmail({
+          version: "v1",
+          auth: localOauth2Client,
+        });
+        const listController = new AbortController();
+        const listTimeoutId = setTimeout(() => listController.abort(), 15000);
+        let response;
         try {
-          const email = await gmail.users.messages.get({
+          response = await gmail.users.messages.list({
             userId: "me",
-            id: id,
-            format: "full",
+            maxResults: 250,
+            q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:90d",
+          }, {
+            signal: listController.signal
           });
+          clearTimeout(listTimeoutId);
+        } catch (error) {
+          clearTimeout(listTimeoutId);
+          if (error.name === "AbortError" || listController.signal.aborted) {
+            const timeoutError = new Error("Gmail list messages request timed out");
+            timeoutError.code = "ETIMEOUT";
+            throw timeoutError;
+          }
+          throw error;
+        }
 
-          const headers = email.data.payload.headers;
-          const fromHeader = headers.find((h) => h.name === "From")?.value || "";
-          const subject = headers.find((h) => h.name === "Subject")?.value || "";
-          const snippet = email.data.snippet || "";
-          const rawText = `${subject} ${snippet}`.trim();
-          
-          const fullBodyText = getFullBodyText(email.data.payload);
-          console.log(`[BODY_FETCHED] ${id} length: ${fullBodyText.length}`);
-          
-          console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
+        const messages = response.data.messages || [];
+        fetchedCount += messages.length;
+        console.log(`\n--- STARTING SYNC FOR ${acc.email} ---`);
 
-          const exists = await Application.findOne({ messageId: id });
-          if (exists) {
-            const missingDetails = !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
-            if (missingDetails) {
-              console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
-              const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
-              if (parsed && parsed.isRelevant) {
-                const updatePayload = {};
-                if (!exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-                if (!exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-                if (!exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-                if (!exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-                if (!exists.link && parsed.link) updatePayload.link = parsed.link;
-                if ((!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-                if (!exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-                if (!exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-                if (!exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+        for (let msg of messages) {
+          const id = msg.id;
+          try {
+            const getController = new AbortController();
+            const getTimeoutId = setTimeout(() => getController.abort(), 15000);
+            let email;
+            try {
+              email = await gmail.users.messages.get({
+                userId: "me",
+                id: id,
+                format: "full",
+              }, {
+                signal: getController.signal
+              });
+              clearTimeout(getTimeoutId);
+            } catch (error) {
+              clearTimeout(getTimeoutId);
+              if (error.name === "AbortError" || getController.signal.aborted) {
+                const timeoutError = new Error(`Gmail get message ${id} request timed out`);
+                timeoutError.code = "ETIMEOUT";
+                throw timeoutError;
+              }
+              throw error;
+            }
 
-                if (Object.keys(updatePayload).length > 0) {
-                  await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-                  console.log(`[UPDATED] ${id} | Existing application enriched with program data`);
+            const headers = email.data.payload.headers;
+            const fromHeader = headers.find((h) => h.name === "From")?.value || "";
+            const subject = headers.find((h) => h.name === "Subject")?.value || "";
+            const snippet = email.data.snippet || "";
+            const rawText = `${subject} ${snippet}`.trim();
+            
+            const fullBodyText = getFullBodyText(email.data.payload);
+            console.log(`[BODY_FETCHED] ${id} length: ${fullBodyText.length}`);
+            
+            console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
+
+            const exists = await Application.findOne({ messageId: id });
+            if (exists) {
+              const missingDetails = !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
+              if (missingDetails) {
+                console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
+                const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
+                if (parsed && parsed.isRelevant) {
+                  const updatePayload = {};
+                  if (!exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+                  if (!exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+                  if (!exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+                  if (!exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+                  if (!exists.link && parsed.link) updatePayload.link = parsed.link;
+                  if ((!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+                  if (!exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+                  if (!exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+                  if (!exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+
+                  if (Object.keys(updatePayload).length > 0) {
+                    await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
+                    console.log(`[UPDATED] ${id} | Existing application enriched with program data`);
+                  }
                 }
               }
+
+              console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
+              skippedCount++;
+              continue;
             }
 
-            console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
-            skippedCount++;
-            continue;
-          }
-
-          console.log(`[PARSE_START] ${id}`);
-          const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
-          console.log(`[PARSE_RESULT] ${id}`, parsed);
-          
-          if (!parsed) {
-            console.log(`[SKIP] ${id} | Reason: Parsing failed`);
-            skippedCount++;
-            continue;
-          }
-          if (!parsed.isRelevant) {
-            console.log(`[SKIP] ${id} | Reason: Marked not relevant`);
-            skippedCount++;
-            continue;
-          }
-          if (!parsed.company) {
-            console.log(`[SKIP] ${id} | Reason: Missing company`);
-            skippedCount++;
-            continue;
-          }
-
-          const finalRole = parsed.role || "Unknown Role";
-          
-          // Fetch Company Info (with caching inside)
-          console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
-          const companyInfo = await getCompanyInfo(parsed.company);
-          if (!companyInfo) {
-            console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
-          }
-
-          const contentExists = await Application.findOne({
-            company: parsed.company,
-            role: finalRole
-          });
-
-          if (contentExists) {
-            const updatePayload = {};
-            if (!contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-            if (!contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-            if (!contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-            if (!contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-            if (!contentExists.link && parsed.link) updatePayload.link = parsed.link;
-            if ((!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-            if (!contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-            if (!contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-            if (!contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-
-            if (Object.keys(updatePayload).length > 0) {
-              await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
-              console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data`);
+            console.log(`[PARSE_START] ${id}`);
+            const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
+            console.log(`[PARSE_RESULT] ${id}`, parsed);
+            
+            if (!parsed) {
+              console.log(`[SKIP] ${id} | Reason: Parsing failed`);
+              skippedCount++;
+              continue;
+            }
+            if (!parsed.isRelevant) {
+              console.log(`[SKIP] ${id} | Reason: Marked not relevant`);
+              skippedCount++;
+              continue;
+            }
+            if (!parsed.company) {
+              console.log(`[SKIP] ${id} | Reason: Missing company`);
+              skippedCount++;
+              continue;
             }
 
-            console.log(`[SKIP] ${id} | Reason: Duplicate content (company + role match)`);
+            const finalRole = parsed.role || "Unknown Role";
+            
+            // Fetch Company Info (with caching inside)
+            console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
+            const companyInfo = await getCompanyInfo(parsed.company);
+            if (!companyInfo) {
+              console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
+            }
+
+            const contentExists = await Application.findOne({
+              company: parsed.company,
+              role: finalRole
+            });
+
+            if (contentExists) {
+              const updatePayload = {};
+              if (!contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+              if (!contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+              if (!contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+              if (!contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+              if (!contentExists.link && parsed.link) updatePayload.link = parsed.link;
+              if ((!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+              if (!contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+              if (!contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+              if (!contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+
+              if (Object.keys(updatePayload).length > 0) {
+                await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
+                console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data`);
+              }
+
+              console.log(`[SKIP] ${id} | Reason: Duplicate content (company + role match)`);
+              skippedCount++;
+              continue;
+            }
+
+            const newApp = new Application({
+              company: parsed.company,
+              role: finalRole,
+              type: parsed.type || "",
+              status: parsed.status || "pending",
+              link: parsed.link || "",
+              links: parsed.links || [],
+              isFormLink: parsed.isFormLink || false,
+              deadline: parsed.deadline || "",
+              deadlineISO: parsed.deadlineISO || "",
+              deadlineText: parsed.deadlineText || "",
+              programRoles: parsed.programRoles || "",
+              programDuration: parsed.programDuration || "",
+              programStipend: parsed.programStipend || "",
+              rawText,
+              messageId: id,
+              source: "Gmail",
+              email: acc.email,
+              date: new Date(parseInt(email.data.internalDate)),
+            });
+
+            await newApp.save();
+            insertedCount++;
+            console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
+          } catch (error) {
+            if (error.code === 11000) {
+              console.log(`[SKIP] ${id} | Reason: Duplicate key error (E11000)`);
+            } else {
+              console.log(`[ERROR] ${id}`, error.message);
+            }
             skippedCount++;
-            continue;
           }
-
-          const newApp = new Application({
-            company: parsed.company,
-            role: finalRole,
-            type: parsed.type || "",
-            status: parsed.status || "pending",
-            link: parsed.link || "",
-            links: parsed.links || [],
-            isFormLink: parsed.isFormLink || false,
-            deadline: parsed.deadline || "",
-            deadlineISO: parsed.deadlineISO || "",
-            deadlineText: parsed.deadlineText || "",
-            programRoles: parsed.programRoles || "",
-            programDuration: parsed.programDuration || "",
-            programStipend: parsed.programStipend || "",
-            rawText,
-            messageId: id,
-            source: "Gmail",
-            email: acc.email,
-            date: new Date(parseInt(email.data.internalDate)),
-          });
-
-          await newApp.save();
-          insertedCount++;
-          console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
-        } catch (error) {
-          if (error.code === 11000) {
-            console.log(`[SKIP] ${id} | Reason: Duplicate key error (E11000)`);
-          } else {
-            console.log(`[ERROR] ${id}`, error.message);
-          }
-          skippedCount++;
         }
+
+        // Successfully updated this account
+        await Account.findOneAndUpdate(
+          { email: acc.email },
+          { syncStatus: "success", syncError: null, lastSyncTime: new Date() }
+        );
+      } catch (err) {
+        console.error(`Fetch error for account ${acc.email}:`, err.message);
+        let errorMsg = err.message || "Unknown sync error";
+        if (
+          err.message?.includes("invalid_grant") ||
+          err.message?.includes("token") ||
+          err.message?.includes("auth") ||
+          err.code === 400 ||
+          err.code === 401
+        ) {
+          errorMsg = "Gmail authentication expired or revoked. Please log out and sign in again.";
+        }
+        await Account.findOneAndUpdate(
+          { email: acc.email },
+          { syncStatus: "failed", syncError: errorMsg }
+        );
       }
     }
     console.log(`\nSUMMARY: Fetched ${fetchedCount} | Inserted ${insertedCount} | Skipped ${skippedCount}`);

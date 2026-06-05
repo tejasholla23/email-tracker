@@ -458,12 +458,19 @@ ${emailText}
   let llmRaw = "";
   let parsed = null;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite-preview",
       contents: prompt,
+      config: {
+        abortSignal: controller.signal
+      }
     });
 
+    clearTimeout(timeoutId);
     llmRaw = (response.text || "").trim();
 
     // Strip markdown code fences if present
@@ -475,7 +482,13 @@ ${emailText}
 
     parsed = JSON.parse(jsonText);
   } catch (err) {
-    console.error("[LLM ERROR] Gemini call or JSON parse failed:", err.message);
+    clearTimeout(timeoutId);
+    let errorToLog = err;
+    if (err.name === "AbortError" || controller.signal.aborted) {
+      errorToLog = new Error("Gemini email parse request timed out");
+      errorToLog.code = "ETIMEOUT";
+    }
+    console.error("[LLM ERROR] Gemini call or JSON parse failed:", errorToLog.message);
     // Fall through to keyword-based fallback below
   }
 
