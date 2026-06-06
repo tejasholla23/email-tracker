@@ -1145,7 +1145,7 @@ export default function JobTrackerDashboard() {
                           );
                         })()}
                         
-                        {app.deadline && (
+                        {app.deadline && !app.deadlineText && (
                           <div className={`deadline-badge ${
                             app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() 
                             ? 'urgent' : ''

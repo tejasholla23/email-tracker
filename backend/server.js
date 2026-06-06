@@ -310,6 +310,12 @@ async function fetchAndProcessEmails() {
 
             const exists = await Application.findOne({ messageId: id });
             if (exists) {
+              // Skip if this messageId was already marked as deleted
+              if (exists.isDeleted) {
+                console.log(`[SKIP] ${id} | Reason: Message already deleted by user`);
+                skippedCount++;
+                continue;
+              }
               const missingDetails = !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
               if (missingDetails) {
                 console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
@@ -369,7 +375,8 @@ async function fetchAndProcessEmails() {
 
             const contentExists = await Application.findOne({
               company: parsed.company,
-              role: finalRole
+              role: finalRole,
+              isDeleted: { $ne: true }
             });
 
             if (contentExists) {

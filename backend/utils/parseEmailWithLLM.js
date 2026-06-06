@@ -124,8 +124,22 @@ function cleanRole(rawRole = "", emailText = "") {
   return role;
 }
 
+/**
+ * Remove markdown formatting (bold, italics, etc.) from text.
+ * Converts **text** → text, *text* → text, etc.
+ */
+function cleanMarkdown(text = "") {
+  return text
+    .replace(/\*\*([^\*]+)\*\*/g, "$1") // **text** → text
+    .replace(/\*([^\*]+)\*/g, "$1")     // *text* → text
+    .replace(/__([^_]+)__/g, "$1")        // __text__ → text
+    .replace(/_([^_]+)_/g, "$1");         // _text_ → text
+}
+
 function cleanProgramValue(raw = "") {
   let value = raw.trim();
+  // Remove markdown formatting first
+  value = cleanMarkdown(value);
   // Remove leading/trailing symbols: asterisks, bullets, dashes, dots, and spaces
   // Includes various unicode bullets and asterisks
   const symbolRegex = /^[\*\u2022\u2023\u25E6\u2043\u2219\-\.\s\:]+/;
@@ -270,36 +284,47 @@ function extractDeadline(text = "") {
 }
 
 function extractProgramRoles(text = "") {
+  // Clean markdown first
+  const cleanedText = cleanMarkdown(text);
+  
   const patterns = [
-    /(?:Roles|Positions|Openings)\s*[:\-]\s*([^\r\n]+?)(?:\s+(?:Branches|Department|Branches|CGPA|CTC|Package))/i,
+    /(?:Roles|Positions|Openings)\s*[:\-]\s*([^\r\n]+?)(?:\s+(?:Branches|Department|CGPA|CTC|Package))/i,
     /(?:Roles|Positions|Openings)\s*[:\-]\s*([^\r\n.!]+)/i,
     /(?:Role|Position|Opening)\s*-\s*([^\r\n.!]+)/i,
     /Job\s+Designation\s*[:\-]\s*([^\r\n.!]+)/i,
     /(?:hiring|internship|apprentice)\s+(?:role|program|opening)s?\s*[:\-]\s*([^\r\n.!]+)/i,
   ];
 
+  // Headers/noise to skip
+  const headerSkip = ["details", "benefits", "criteria", "eligibility", "requirements", "description", "overview"];
+
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = cleanedText.match(pattern);
     if (match && match[1]) {
       const extracted = cleanProgramValue(match[1]);
-      if (extracted && extracted.length < 150 && extracted.toLowerCase() !== "details") {
+      const lowerExtracted = extracted.toLowerCase();
+      if (extracted && extracted.length < 150 && !headerSkip.includes(lowerExtracted)) {
         return extracted;
       }
     }
   }
 
-  if (/\bapprentice\b/i.test(text)) {
-    return "Apprentice";
+  // Fallback: if email mentions internship but no role found, return "Internship"
+  if (/\binternship\b/i.test(cleanedText) || /\bintern\b/i.test(cleanedText)) {
+    return "Internship";
   }
 
-  if (/\binternship\b/i.test(text) || /\bintern\b/i.test(text)) {
-    return "Internship";
+  if (/\bapprentice\b/i.test(cleanedText)) {
+    return "Apprentice";
   }
 
   return "";
 }
 
 function extractProgramDuration(text = "") {
+  // Clean markdown first
+  const cleanedText = cleanMarkdown(text);
+  
   const patterns = [
     /Duration\s*[:\-]\s*([^\r\n.!,]+?)(?:\s+(?:Student|Student Benefits|Interns|Intern|Benefits|days|day))/i,
     /Duration\s*[:\-]\s*([^\r\n.!,]+)/i,
@@ -309,7 +334,7 @@ function extractProgramDuration(text = "") {
   ];
 
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = cleanedText.match(pattern);
     if (match && match[1]) {
       const extracted = cleanProgramValue(match[1]);
       if (extracted && /\d+/.test(extracted)) {
@@ -318,7 +343,7 @@ function extractProgramDuration(text = "") {
     }
   }
 
-  const minDurationMatch = text.match(/minimum of\s*([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))/i);
+  const minDurationMatch = cleanedText.match(/minimum of\s*([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))/i);
   if (minDurationMatch && minDurationMatch[1]) {
     return cleanProgramValue(minDurationMatch[1]);
   }
@@ -327,24 +352,42 @@ function extractProgramDuration(text = "") {
 }
 
 function extractProgramStipend(text = "") {
+  // Clean markdown first
+  const cleanedText = cleanMarkdown(text);
+  
+  // Keywords indicating free/unpaid internship
+  const unpaidKeywords = /\b(?:free|unpaid|no\s+stipend|nil|none|n\/a|zero|without\s+stipend|no\s+remuneration)\b/i;
+  if (unpaidKeywords.test(cleanedText)) {
+    return "";
+  }
+
   const patterns = [
-    /Stipend\s*[:\-]?\s*([^\r\n]+)/i,
+    // Explicit stipend label with value on same line
+    /Stipend\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
+    /Internship\s+stipend\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
+    // CTC or Package
     /(?:CTC|Package)\s*[:\-]?\s*([^\r\n]+)/i,
+    // Bullet-formatted stipends for different levels (B.Tech, M.Tech, etc)
+    /[-•]\s*(?:B\.Tech|B\.E|M\.Tech|M\.E|MCA|B\.Tech\/MCA)\s*[:\-]?\s*(₹?\s*[0-9,]+\s*(?:per\s+month|pm|LPA|lakhs|K|pa)?)/i,
+    // Standalone currency + amount pattern
     /(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\s*(?:LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
-    /[0-9]+(?:,\d{3})?(?:\.[0-9]+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+    /[0-9]+(?:,\d{3})?(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
   ];
 
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = cleanedText.match(pattern);
     if (match) {
       const value = match[1] ? match[1].trim() : match[0].trim();
       const cleaned = cleanProgramValue(value);
+      // Skip if just a bare number without currency/unit
       const numericOnly = /^[0-9]+(?:\.[0-9]+)?$/;
-      const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(match[0]);
+      const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(cleaned);
       if (numericOnly.test(cleaned) && !hasCurrencyOrUnit) {
         continue;
       }
-      return cleaned;
+      if (cleaned && cleaned.length > 1) {
+        return cleaned;
+      }
     }
   }
 
@@ -352,6 +395,9 @@ function extractProgramStipend(text = "") {
 }
 
 function extractDeadlineText(text = "") {
+  // Clean markdown first
+  const cleanedText = cleanMarkdown(text);
+  
   const patterns = [
     /(?:register|apply|submit|last date|deadline).*?\b(?:on or before|before|by|is)\b\s*([^\r\n.]+)/i,
     /(?:last date|deadline|register|apply)\s*[:\-]\s*([^\r\n.]+)/i,
@@ -359,7 +405,7 @@ function extractDeadlineText(text = "") {
   ];
 
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = cleanedText.match(pattern);
     if (match && match[1]) {
       let deadline = match[1].trim();
       if (!/^before|^by|^deadline/i.test(deadline)) {
@@ -373,11 +419,13 @@ function extractDeadlineText(text = "") {
 }
 
 function enrichProgramDetails(text = "") {
+  // Clean markdown formatting once at the start
+  const cleanedText = cleanMarkdown(text);
   return {
-    programRoles: extractProgramRoles(text),
-    programDuration: extractProgramDuration(text),
-    programStipend: extractProgramStipend(text),
-    deadlineText: extractDeadlineText(text),
+    programRoles: extractProgramRoles(cleanedText),
+    programDuration: extractProgramDuration(cleanedText),
+    programStipend: extractProgramStipend(cleanedText),
+    deadlineText: extractDeadlineText(cleanedText),
   };
 }
 
