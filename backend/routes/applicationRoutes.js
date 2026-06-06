@@ -84,10 +84,24 @@ router.post("/", async (req, res) => {
 // PATCH /applications/:id - update application status and/or note
 router.patch("/:id", async (req, res) => {
   try {
-    const { status, note } = req.body;
+    const { status, note, manualEdits } = req.body;
     const update = {};
     if (status !== undefined) update.status = status;
     if (note  !== undefined) update.note   = note;
+
+    if (manualEdits && typeof manualEdits === 'object') {
+      for (const [key, value] of Object.entries(manualEdits)) {
+        update[key] = value;
+        if (!update.$addToSet) update.$addToSet = {};
+        if (!update.$addToSet.manualOverrides) update.$addToSet.manualOverrides = { $each: [] };
+        update.$addToSet.manualOverrides.$each.push(key);
+        
+        if (key === "company") {
+          const { normalizeCompany } = require("../utils/normalizeCompany");
+          update.companyKey = normalizeCompany(value);
+        }
+      }
+    }
 
     const updatedApplication = await Application.findByIdAndUpdate(
       req.params.id,

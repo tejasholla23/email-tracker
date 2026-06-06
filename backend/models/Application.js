@@ -40,6 +40,7 @@ const applicationSchema = new mongoose.Schema(
     durationText: { type: String },
     salaryText: { type: String },
     parseMeta: { type: mongoose.Schema.Types.Mixed },
+    manualOverrides: { type: [String], default: [] },
     events: {
       type: [
         {

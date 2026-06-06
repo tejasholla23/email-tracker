@@ -367,28 +367,29 @@ async function fetchAndProcessEmails() {
                 const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
                 if (parsed && parsed.isRelevant) {
                   const updatePayload = {};
-                  if (!exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-                  if (!exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-                  if (!exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-                  if (!exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-                  if (!exists.link && parsed.link) updatePayload.link = parsed.link;
-                  if ((!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-                  if (!exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-                  if (!exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-                  if (!exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-                  if (!exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
-                  if (!exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
-                  if (!exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
-                  if (!exists.title && parsed.title) updatePayload.title = parsed.title;
-                  if (!exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
-                  if (!exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
-                  if (!exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
-                  if (!exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
-                  if (!exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
-                  if (!exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
-                  if (!exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
-                  if (!exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
-                  if (!exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+                  const ov = exists.manualOverrides || [];
+                  if (!ov.includes("programRoles") && !exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+                  if (!ov.includes("programDuration") && !exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+                  if (!ov.includes("programStipend") && !exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+                  if (!ov.includes("deadlineText") && !exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+                  if (!ov.includes("link") && !exists.link && parsed.link) updatePayload.link = parsed.link;
+                  if (!ov.includes("links") && (!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+                  if (!ov.includes("isFormLink") && !exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+                  if (!ov.includes("deadline") && !exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+                  if (!ov.includes("deadlineISO") && !exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+                  if (!ov.includes("classification") && !exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
+                  if (!ov.includes("confidenceScore") && !exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
+                  if (!ov.includes("jobRole") && !exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
+                  if (!ov.includes("title") && !exists.title && parsed.title) updatePayload.title = parsed.title;
+                  if (!ov.includes("processId") && !exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
+                  if (!ov.includes("processName") && !exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
+                  if (!ov.includes("eventDate") && !exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
+                  if (!ov.includes("eventTime") && !exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
+                  if (!ov.includes("reportingTime") && !exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
+                  if (!ov.includes("venue") && !exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
+                  if (!ov.includes("durationText") && !exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
+                  if (!ov.includes("salaryText") && !exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
+                  if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
 
                   if (eventAdded) updatePayload.events = exists.events;
 
@@ -447,39 +448,40 @@ async function fetchAndProcessEmails() {
 
             if (contentExists) {
               const updatePayload = {};
-              if (!contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-              if (!contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-              if (!contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-              if (!contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-              if (!contentExists.link && parsed.link) updatePayload.link = parsed.link;
-              if ((!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-              if (!contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-              if (!contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-              if (!contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-              if (!contentExists.classification && parsed.classification) updatePayload.classification = parsed.classification;
-              if (!contentExists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
-              if (!contentExists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
-              if (!contentExists.title && parsed.title) updatePayload.title = parsed.title;
-              if (!contentExists.processId && parsed.processId) updatePayload.processId = parsed.processId;
-              if (!contentExists.processName && parsed.processName) updatePayload.processName = parsed.processName;
+              const ov = contentExists.manualOverrides || [];
+              if (!ov.includes("programRoles") && !contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+              if (!ov.includes("programDuration") && !contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+              if (!ov.includes("programStipend") && !contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+              if (!ov.includes("deadlineText") && !contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+              if (!ov.includes("link") && !contentExists.link && parsed.link) updatePayload.link = parsed.link;
+              if (!ov.includes("links") && (!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+              if (!ov.includes("isFormLink") && !contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+              if (!ov.includes("deadline") && !contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+              if (!ov.includes("deadlineISO") && !contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+              if (!ov.includes("classification") && !contentExists.classification && parsed.classification) updatePayload.classification = parsed.classification;
+              if (!ov.includes("confidenceScore") && !contentExists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
+              if (!ov.includes("jobRole") && !contentExists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
+              if (!ov.includes("title") && !contentExists.title && parsed.title) updatePayload.title = parsed.title;
+              if (!ov.includes("processId") && !contentExists.processId && parsed.processId) updatePayload.processId = parsed.processId;
+              if (!ov.includes("processName") && !contentExists.processName && parsed.processName) updatePayload.processName = parsed.processName;
               
-              if (parsed.eventDate) {
+              if (!ov.includes("eventDate") && parsed.eventDate) {
                 if (!contentExists.eventDate || new Date(parsed.eventDate) > new Date(contentExists.eventDate)) {
                   updatePayload.eventDate = parsed.eventDate;
                 }
               }
-              if (parsed.type && parsed.type !== "unknown") {
+              if (!ov.includes("type") && parsed.type && parsed.type !== "unknown") {
                 if (!contentExists.type || contentExists.type === "unknown") {
                   updatePayload.type = parsed.type;
                 }
               }
               
-              if (!contentExists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
-              if (!contentExists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
-              if (!contentExists.venue && parsed.venue) updatePayload.venue = parsed.venue;
-              if (!contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
-              if (!contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
-              if (!contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+              if (!ov.includes("eventTime") && !contentExists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
+              if (!ov.includes("reportingTime") && !contentExists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
+              if (!ov.includes("venue") && !contentExists.venue && parsed.venue) updatePayload.venue = parsed.venue;
+              if (!ov.includes("durationText") && !contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
+              if (!ov.includes("salaryText") && !contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
+              if (!ov.includes("parseMeta") && !contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
 
               const incStatus = classificationToStatus(parsed.classification);
               const advancedStatus = advanceStatus(contentExists.status, incStatus);

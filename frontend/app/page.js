@@ -23,6 +23,13 @@ export default function JobTrackerDashboard() {
     date: ""
   });
   
+  // Edit Application Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingApp, setEditingApp] = useState(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editFormError, setEditFormError] = useState("");
+  const [editFormData, setEditFormData] = useState({});
+  
   // Company Info Modal State
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
@@ -278,6 +285,64 @@ export default function JobTrackerDashboard() {
       setFormError("Failed to add application. Please try again.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditFormError("");
+    setEditSubmitting(true);
+    
+    const manualEdits = {};
+    const original = editingApp;
+    
+    if (editFormData.company !== (original.company || "")) manualEdits.company = editFormData.company;
+    if (editFormData.jobRole !== (original.role || "")) manualEdits.role = editFormData.jobRole;
+    if (editFormData.deadlineText !== (original.deadlineText || "")) manualEdits.deadlineText = editFormData.deadlineText;
+    if (editFormData.programStipend !== (original.programStipend || "")) manualEdits.programStipend = editFormData.programStipend;
+    if (editFormData.programDuration !== (original.programDuration || "")) manualEdits.programDuration = editFormData.programDuration;
+    if (editFormData.venue !== (original.venue || "")) manualEdits.venue = editFormData.venue;
+    if (editFormData.type !== (original.type || "")) manualEdits.type = editFormData.type;
+    
+    if (editFormData.eventDate) {
+      const fd = new Date(editFormData.eventDate).toISOString();
+      const od = original.eventDate ? new Date(original.eventDate).toISOString() : null;
+      if (fd !== od) manualEdits.eventDate = fd;
+    } else if (original.eventDate) {
+      manualEdits.eventDate = null;
+    }
+
+    if (Object.keys(manualEdits).length === 0) {
+      setShowEditModal(false);
+      setEditSubmitting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BASE_URL}/applications/${editingApp._id}`, {
+        method: "PATCH",
+        headers: { 
+          "Content-Type": "application/json",
+          "x-user-email": userEmail
+        },
+        body: JSON.stringify({ manualEdits })
+      });
+
+      if (!response.ok) throw new Error("Failed to update application");
+
+      setApplications(prev => prev.map(app => {
+        if (app._id === editingApp._id) {
+          return { ...app, ...manualEdits };
+        }
+        return app;
+      }));
+
+      setShowEditModal(false);
+    } catch (error) {
+      console.error(error);
+      setEditFormError("Failed to update application. Please try again.");
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -618,6 +683,8 @@ export default function JobTrackerDashboard() {
         .card-btn-done:disabled { opacity: 0.55; cursor: default; }
         .card-btn-remove { background: #fff5f5; color: #b91c1c; border: 1px solid #fecaca; }
         .card-btn-remove:hover { background: #fee2e2; border-color: #fca5a5; }
+        .card-btn-edit { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+        .card-btn-edit:hover { background: #f1f5f9; border-color: #cbd5e1; }
         /* Done card blurring and dimming */
         .app-card.is-done { 
           opacity: 0.45; 
@@ -743,6 +810,8 @@ export default function JobTrackerDashboard() {
         .dark .card-btn-remove:hover { background: #991b1b; border-color: #b91c1c; }
         .dark .card-btn-apply { background: #1e3a5f; border-color: #1d4ed8; color: #93c5fd; }
         .dark .card-btn-apply:hover { background: #1d4ed8; color: #fff; }
+        .dark .card-btn-edit { background: #334155; border-color: #475569; color: #cbd5e1; }
+        .dark .card-btn-edit:hover { background: #475569; border-color: #64748b; }
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
         .dark .app-card.is-done:hover { opacity: 0.6; filter: blur(0.5px); }
@@ -1214,6 +1283,25 @@ export default function JobTrackerDashboard() {
                         </div>
 
                         <div className="card-actions">
+                          <button
+                            className="card-btn card-btn-edit"
+                            onClick={() => {
+                              setEditingApp(app);
+                              setEditFormData({
+                                company: app.company || "",
+                                jobRole: app.role || "",
+                                deadlineText: app.deadlineText || "",
+                                programStipend: app.programStipend || "",
+                                programDuration: app.programDuration || "",
+                                venue: app.venue || "",
+                                eventDate: app.eventDate ? new Date(app.eventDate).toISOString().substring(0, 10) : "",
+                                type: app.type || "",
+                              });
+                              setShowEditModal(true);
+                            }}
+                          >
+                            ✏️ Edit
+                          </button>
                           {app.link && (
                             <a
                               className="card-btn card-btn-apply"
@@ -1313,6 +1401,63 @@ export default function JobTrackerDashboard() {
                 <button type="submit" className="btn-submit" disabled={submitting}>
                   {submitting ? "Saving..." : "Save Application"}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Details</h3>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>&times;</button>
+            </div>
+
+            <form onSubmit={handleEditSubmit}>
+              {editFormError && <div className="form-error">{editFormError}</div>}
+
+              <div className="form-group">
+                <label className="form-label">Company</label>
+                <input type="text" className="form-input" value={editFormData.company} onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Job Role</label>
+                <input type="text" className="form-input" value={editFormData.jobRole} onChange={(e) => setEditFormData({ ...editFormData, jobRole: e.target.value })} />
+              </div>
+
+              <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Deadline</label>
+                  <input type="text" className="form-input" value={editFormData.deadlineText} onChange={(e) => setEditFormData({ ...editFormData, deadlineText: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Event Date</label>
+                  <input type="date" className="form-input" value={editFormData.eventDate} onChange={(e) => setEditFormData({ ...editFormData, eventDate: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Stipend</label>
+                  <input type="text" className="form-input" value={editFormData.programStipend} onChange={(e) => setEditFormData({ ...editFormData, programStipend: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Duration</label>
+                  <input type="text" className="form-input" value={editFormData.programDuration} onChange={(e) => setEditFormData({ ...editFormData, programDuration: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Venue</label>
+                  <input type="text" className="form-input" value={editFormData.venue} onChange={(e) => setEditFormData({ ...editFormData, venue: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Type</label>
+                  <input type="text" className="form-input" value={editFormData.type} onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="modal-actions" style={{ marginTop: '24px' }}>
+                <button type="button" className="btn-cancel" onClick={() => setShowEditModal(false)}>Cancel</button>
+                <button type="submit" className="btn-submit" disabled={editSubmitting}>{editSubmitting ? "Saving..." : "Save Changes"}</button>
               </div>
             </form>
           </div>
