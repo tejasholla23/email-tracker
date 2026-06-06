@@ -193,7 +193,7 @@ function sanitizeCompany(raw = "") {
   const wordCount = trimmed.split(/\s+/).length;
   if (wordCount > 5) return null;
 
-  const invalid = ["", "unknown", "n/a", "na", "none", "company", "team", "the company", "our company", "hiring team"];
+  const invalid = ["", "unknown", "n/a", "na", "none", "company", "team", "the company", "our company", "hiring team", "mandatory", "invitation", "eligibility criteria", "design", "registration", "assessment", "interview", "reminder", "opportunity", "deadline", "hiring process", "campus recruitment", "placement drive", "aptitude test", "roadshow", "sep roadshow", "lpa registration", "guidelines", "instructions"];
   const rejectIfContains = [
     "your institution", "your college", "your university", "your institute",
     "register", "registration", "apply by", "application", "last date",
@@ -466,9 +466,9 @@ function extractDuration(text = "") {
 function extractSalary(text = "") {
   const cleaned = normalizeText(text);
   const patterns = [
-    /(?:CTC|Package|Stipend)\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
-    /(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\s*(?:LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
-    /[0-9]+(?:,[0-9]{3})?(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+    /(?:CTC|Package|Stipend)\s*[:\-]?\s*([₹$€]?\s*[0-9,]+(?:\.\d+)?\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
+    /(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.\d+)?(?:\s*(?:LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+    /[0-9]+(?:,[0-9]{3})*(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
   ];
   for (const pattern of patterns) {
     const match = cleaned.match(pattern);
@@ -477,8 +477,22 @@ function extractSalary(text = "") {
       const cleanedValue = cleanProgramValue(value);
       const numericOnly = /^[0-9]+(?:\.[0-9]+)?$/;
       const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(cleanedValue);
+      
+      // Reject if it's just a number without context, or just "rs."
       if (numericOnly.test(cleanedValue) && !hasCurrencyOrUnit) continue;
-      if (cleanedValue) return cleanedValue;
+      if (/^(?:rs\.?|inr|₹|usd)\s*$/i.test(cleanedValue)) continue;
+
+      // Extract raw number value to ensure precision
+      const numMatch = cleanedValue.match(/([0-9,]+(?:\.\d+)?)/);
+      if (numMatch) {
+        const numVal = parseFloat(numMatch[1].replace(/,/g, ""));
+        // If number is very low (e.g. 1 or 2), it MUST have a modifier like Lakhs or LPA to be valid
+        if (numVal < 100 && !/\b(?:lpa|lakhs|k|thousands|crores)\b/i.test(cleanedValue)) {
+           continue; // Reject low precision trash
+        }
+      }
+
+      if (cleanedValue && cleanedValue.length > 1) return cleanedValue;
     }
   }
   return "";
@@ -510,21 +524,27 @@ function extractProgramRoles(text = "") {
 function extractProgramDuration(text = "") {
   const cleanedText = cleanMarkdown(text);
   const patterns = [
-    /Duration\s*[:\-]\s*([^\r\n.!,]+?)(?:\s+(?:Student|Student Benefits|Interns|Intern|Benefits|days|day))/i,
-    /Duration\s*[:\-]\s*([^\r\n.!,]+)/i,
+    /Duration\s*[:\-]\s*(\d+\s*(?:months?|weeks?|days?|years?|hours?|mins?|minutes?))/i,
     /for\s+([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))(?:\s|$)/i,
     /([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))\s*(?:long|duration|period)(?:\s|$)/i,
-    /(?:internship|apprentice|training)\s+program[^\r\n]*duration\s*[:\-]?\s*([^\r\n.!,]+)/i,
+    /(?:internship|apprentice|training)\s+program[^\r\n]*duration\s*[:\-]?\s*(\d+\s*(?:months?|weeks?|days?|years?|hours?|mins?|minutes?))/i,
   ];
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
     if (match && match[1]) {
       const extracted = cleanProgramValue(match[1]);
-      if (extracted && /\d+/.test(extracted)) return extracted;
+      if (extracted && /\d+/.test(extracted) && extracted.length < 30) return extracted;
     }
   }
   const minDurationMatch = cleanedText.match(/minimum of\s*([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))/i);
-  if (minDurationMatch && minDurationMatch[1]) return cleanProgramValue(minDurationMatch[1]);
+  if (minDurationMatch && minDurationMatch[1]) {
+    const extracted = cleanProgramValue(minDurationMatch[1]);
+    if (extracted.length < 30) return extracted;
+  }
+  
+  if (/\bdaylong\b/i.test(cleanedText)) return "Daylong";
+  if (/\bfull day\b/i.test(cleanedText)) return "Full day";
+
   return "";
 }
 
@@ -533,12 +553,12 @@ function extractProgramStipend(text = "") {
   const unpaidKeywords = /\b(?:free|unpaid|no\s+stipend|nil|none|n\/a|zero|without\s+stipend|no\s+remuneration)\b/i;
   if (unpaidKeywords.test(cleanedText)) return "";
   const patterns = [
-    /Stipend\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
-    /Internship\s+stipend\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
-    /(?:CTC|Package)\s*[:\-]?\s*([^\r\n]+)/i,
-    /[-•]\s*(?:B\.Tech|B\.E|M\.Tech|M\.E|MCA|B\.Tech\/MCA)\s*[:\-]?\s*([₹]?\s*[0-9,]+\s*(?:per\s+month|pm|LPA|lakhs|K|pa)?)/i,
-    /(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\s*(?:LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
-    /[0-9]+(?:,[0-9]{3})?(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+    /Stipend\s*[:\-]?\s*([₹$€]?\s*[0-9,]+(?:\.\d+)?\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
+    /Internship\s+stipend\s*[:\-]?\s*([₹$€]?\s*[0-9,]+(?:\.\d+)?\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
+    /(?:CTC|Package)\s*[:\-]?\s*([₹$€]?\s*[0-9,]+(?:\.\d+)?\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
+    /[-•]\s*(?:B\.Tech|B\.E|M\.Tech|M\.E|MCA|B\.Tech\/MCA)\s*[:\-]?\s*([₹]?\s*[0-9,]+(?:\.\d+)?\s*(?:per\s+month|pm|LPA|lakhs|K|pa)?)/i,
+    /(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.\d+)?(?:\s*(?:LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+    /[0-9]+(?:,[0-9]{3})*(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
   ];
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
@@ -547,7 +567,18 @@ function extractProgramStipend(text = "") {
       const cleaned = cleanProgramValue(value);
       const numericOnly = /^[0-9]+(?:\.[0-9]+)?$/;
       const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(cleaned);
+      
       if (numericOnly.test(cleaned) && !hasCurrencyOrUnit) continue;
+      if (/^(?:rs\.?|inr|₹|usd)\s*$/i.test(cleaned)) continue;
+
+      const numMatch = cleaned.match(/([0-9,]+(?:\.\d+)?)/);
+      if (numMatch) {
+        const numVal = parseFloat(numMatch[1].replace(/,/g, ""));
+        if (numVal < 100 && !/\b(?:lpa|lakhs|k|thousands|crores)\b/i.test(cleaned)) {
+           continue; 
+        }
+      }
+
       if (cleaned && cleaned.length > 1) return cleaned;
     }
   }
@@ -555,18 +586,40 @@ function extractProgramStipend(text = "") {
 }
 
 function extractDeadlineText(text = "") {
-  const cleanedText = cleanMarkdown(text);
+  // We only operate on the clean lines (not stripped of newlines yet, but trimmed)
+  const lines = (text || "").split(/[\r\n]+/);
+  
   const patterns = [
-    /(?:register|apply|submit|last date|deadline).*?\b(?:on or before|before|by|is)\b\s*([^\r\n.]+)/i,
-    /(?:last date|deadline|register|apply)\s*[:\-]\s*([^\r\n.]+)/i,
-    /\b(?:apply|submit)\s*(?:by|before)\s*([^\r\n.]+)/i,
+    /(?:register|apply|submit|last date|deadline).*?\b(?:on or before|before|by|is)\b\s*([^\r\n]+)/i,
+    /(?:last date|deadline|register|apply)\s*[:\-]\s*([^\r\n]+)/i,
+    /\b(?:apply|submit)\s*(?:by|before)\s*([^\r\n]+)/i,
   ];
-  for (const pattern of patterns) {
-    const match = cleanedText.match(pattern);
-    if (match && match[1]) {
-      let deadline = match[1].trim();
-      if (!/^(before|by|deadline)/i.test(deadline)) deadline = `Before ${deadline}`;
-      return deadline;
+  
+  for (const line of lines) {
+    const cleanedLine = cleanMarkdown(line);
+    for (const pattern of patterns) {
+      const match = cleanedLine.match(pattern);
+      if (match && match[1]) {
+        let rawDeadline = match[1].trim();
+        
+        // Stop at sentence boundaries and common separators
+        const boundaries = [". ", " - ", " | ", " Dear ", " Greetings ", " Please ", " Note: "];
+        for (const boundary of boundaries) {
+          const idx = rawDeadline.toLowerCase().indexOf(boundary.toLowerCase());
+          if (idx !== -1) {
+            rawDeadline = rawDeadline.substring(0, idx);
+          }
+        }
+        
+        rawDeadline = rawDeadline.trim();
+        
+        // Reject multi-line, obvious paragraphs, or highly suspicious long strings
+        if (rawDeadline.length > 40) return "";
+        if (/\b(dear|greetings|sincerely|thanks|regards|sir|madam)\b/i.test(rawDeadline)) return "";
+        
+        if (!/^(before|by|deadline)/i.test(rawDeadline)) rawDeadline = `Before ${rawDeadline}`;
+        return rawDeadline;
+      }
     }
   }
   return "";
