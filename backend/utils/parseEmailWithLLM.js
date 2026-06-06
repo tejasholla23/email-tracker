@@ -309,6 +309,16 @@ function extractDeadline(text = "") {
       return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
     }
 
+    if (timeMatch && !hasToday && !hasTomorrow) {
+      const hasExplicitDate = /\b(?:tomorrow|today|on\s+\w+|\d{1,2}[/-]\d{1,2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(segment);
+      if (!hasExplicitDate) {
+        const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
+        const isoDate = new Date(now);
+        isoDate.setHours(hour, minute, 0, 0);
+        return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
+      }
+    }
+
     const dateAlphaMatch = segment.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i);
     if (dateAlphaMatch) {
       const day = parseInt(dateAlphaMatch[1], 10);
