@@ -319,7 +319,7 @@ async function fetchAndProcessEmails() {
               const missingDetails = !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
               if (missingDetails) {
                 console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
-                const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
+                const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
                 if (parsed && parsed.isRelevant) {
                   const updatePayload = {};
                   if (!exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
@@ -345,7 +345,7 @@ async function fetchAndProcessEmails() {
             }
 
             console.log(`[PARSE_START] ${id}`);
-            const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText);
+            const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
             console.log(`[PARSE_RESULT] ${id}`, parsed);
             
             if (!parsed) {

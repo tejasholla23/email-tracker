@@ -253,11 +253,11 @@ function looksLikeSeminarOrTraining(text = "") {
  * Extract deadline from text using regex patterns.
  * Returns { deadline: string, iso: string }
  */
-function extractDeadline(text = "") {
+function extractDeadline(text = "", referenceDate = new Date()) {
   if (!text) return { deadline: "", iso: "" };
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const now = new Date();
+  const now = new Date(referenceDate);
   const currentYear = now.getFullYear();
   const cleanText = text.replace(/\s+/g, " ");
   const segments = cleanText.split(/[.!?]|\r?\n/);
@@ -518,7 +518,7 @@ function enrichProgramDetails(text = "") {
  * @param {string} [fullBodyText] - Full email body (for link extraction)
  * @returns {object}              - Parsed application data
  */
-async function parseEmailWithLLM(emailText, sender = "", fullBodyText = "") {
+async function parseEmailWithLLM(emailText, sender = "", fullBodyText = "", referenceDate = new Date()) {
   // console.log("--- parseEmailWithLLM ---");
 
   // ── 1. Build an improved, strict prompt ─────────────────────────────────
@@ -667,7 +667,7 @@ ${emailText}
     }
 
     // Extact deadline using regex
-    const deadlineResult = extractDeadline(fullBodyText || emailText);
+    const deadlineResult = extractDeadline(fullBodyText || emailText, referenceDate);
     parsed.deadline = deadlineResult.deadline;
     parsed.deadlineISO = deadlineResult.iso;
 
@@ -730,7 +730,7 @@ ${emailText}
       _source: "keyword-fallback",
     };
 
-    const deadlineResult = extractDeadline(fullBodyText || emailText);
+    const deadlineResult = extractDeadline(fullBodyText || emailText, referenceDate);
     fallbackResult.deadline = deadlineResult.deadline;
     fallbackResult.deadlineISO = deadlineResult.iso;
 
