@@ -1125,8 +1125,8 @@ export default function JobTrackerDashboard() {
                               </div>
                             </div>
                             <div className="role-company">
-                              <div className="role-title">{app.role || "Unknown Role"}</div>
-                              <div className="company-name">{app.company || "Unknown Company"}</div>
+                              <div className="role-title">{app.company || "Unknown Company"}</div>
+                              {app.role && <div className="company-name">{app.role}</div>}
                             </div>
                           </div>
                           <div className="status-badge-container">
