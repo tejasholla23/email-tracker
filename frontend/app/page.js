@@ -1126,7 +1126,9 @@ export default function JobTrackerDashboard() {
                             </div>
                             <div className="role-company">
                               <div className="role-title">{app.company || "Unknown Company"}</div>
-                              {app.role && <div className="company-name">{app.role}</div>}
+                              {app.role && app.role.toLowerCase() !== "unknown role" && (
+                                <div className="company-name">{app.role}</div>
+                              )}
                             </div>
                           </div>
                           <div className="status-badge-container">
