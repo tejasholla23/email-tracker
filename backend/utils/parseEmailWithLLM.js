@@ -53,6 +53,25 @@ function cleanUrl(raw = "") {
   return url;
 }
 
+function keywordRoleFallback(text = "") {
+  const lower = (text || "").toLowerCase();
+  const match = lower.match(/\b(software engineer|data analyst|intern|developer|analyst|associate|consultant|manager|trainee|apprentice|engineer)\b/i);
+  if (match) {
+    // Capitalize each word for neatness
+    return match[1].split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  return "";
+}
+
+function normalizeStatus(status = "") {
+  const lower = (status || "").toLowerCase().trim();
+  const validStatuses = ["new", "applied", "interview", "offer", "rejected", "done"];
+  if (validStatuses.includes(lower)) return lower;
+  if (lower === "selected" || lower === "shortlisted") return "offer";
+  if (lower === "test" || lower === "assessment") return "interview";
+  return "new"; // Safe fallback
+}
+
 function parseForwardedEmail(body = "") {
   const raw = body || "";
   const result = { isForwarded: false, subject: "", from: "", body: raw };
@@ -170,16 +189,26 @@ function extractCompanyFromText(text = "") {
 function sanitizeCompany(raw = "") {
   const trimmed = (raw || "").trim();
   const lower = trimmed.toLowerCase();
+  
+  const wordCount = trimmed.split(/\s+/).length;
+  if (wordCount > 5) return null;
+
   const invalid = ["", "unknown", "n/a", "na", "none", "company", "team", "the company", "our company", "hiring team"];
   const rejectIfContains = [
     "your institution", "your college", "your university", "your institute",
     "register", "registration", "apply by", "application", "last date",
     "subject", "dear sir", "dear madam", "please find", "please register",
-    "inbox", "forwarded message", "authorised signatory"
+    "inbox", "forwarded message", "authorised signatory",
+    "dear students", "kindly", "venue", "today", "tomorrow", "assessment",
+    "online test", "placement", "recruitment", "opportunity", "hiring",
+    "drive"
   ];
   if (invalid.includes(lower)) return null;
   if (rejectIfContains.some((term) => lower.includes(term))) return null;
   if (/\b(your|our|this|the)\s+(institution|college|university|institute)\b/.test(lower)) return null;
+  
+  if (/[.!?][\sA-Za-z]/.test(trimmed)) return null;
+
   return trimmed;
 }
 
@@ -187,22 +216,24 @@ function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }
   const candidates = [forwarded.subject, forwarded.from, subject, body, sender].filter(Boolean);
   for (const candidate of candidates) {
     const known = matchKnownCompany(candidate);
-    if (known) return known;
+    if (known) return { company: known, source: 'alias', confidence: 1.0 };
   }
 
   if (sender) {
     const senderCompany = companyFromSender(sender);
     if (senderCompany && !isGenericCompanyName(senderCompany)) {
       const alias = matchKnownCompany(senderCompany);
-      return alias || senderCompany;
+      return { company: alias || senderCompany, source: 'sender', confidence: 0.9 };
     }
   }
 
-  const bodyCompany = extractCompanyFromText(body);
-  if (bodyCompany) return bodyCompany;
-  const subjectCompany = extractCompanyFromText(subject);
-  if (subjectCompany) return subjectCompany;
-  return "";
+  const subjectCompany = extractCompanyFromText(subject || forwarded.subject);
+  if (subjectCompany) return { company: subjectCompany, source: 'subject', confidence: 0.7 };
+
+  const bodyCompany = extractCompanyFromText(body || forwarded.body);
+  if (bodyCompany) return { company: bodyCompany, source: 'body', confidence: 0.6 };
+
+  return { company: "", source: 'none', confidence: 0.0 };
 }
 
 function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = false }) {
@@ -600,7 +631,10 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     forwarded,
     hasLink: !!linkInfo.primary,
   });
-  let company = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
+  const companyObj = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
+  let company = companyObj.company;
+  let companyConfidence = companyObj.confidence;
+  let companySource = companyObj.source;
   const eventDate = extractEventDate(sourceBody, referenceDate);
   const deadlineInfo = extractDeadlineDetails(sourceBody, referenceDate);
   const reportingTime = extractReportingTime(sourceBody);
@@ -613,17 +647,25 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   const processId = buildProcessId(company);
 
   let llmFallback = {};
-  if ((!company || classification.confidence < 0.5) && /\b(apply|registration|interview|assessment|deadline|aptitude|profile|seminar|ppt|placement|recruitment)\b/i.test(`${sourceSubject} ${sourceBody}`)) {
+  if ((!company || companyConfidence <= 0.6 || classification.confidence < 0.5) && /\b(apply|registration|interview|assessment|deadline|aptitude|profile|seminar|ppt|placement|recruitment)\b/i.test(`${sourceSubject} ${sourceBody}`)) {
     llmFallback = await callGeminiFallback({ subject: sourceSubject, sender, body: sourceBody });
-    if (!company && llmFallback.company) {
-      company = sanitizeCompany(llmFallback.company) || companyFromSender(sender) || company;
+    if (llmFallback.company && sanitizeCompany(llmFallback.company)) {
+      if (!company || companyConfidence <= 0.6) {
+        company = sanitizeCompany(llmFallback.company);
+        companyConfidence = 0.8;
+        companySource = "llm-fallback";
+      }
     }
     if (llmFallback.role && !title) {
       title = llmFallback.role;
     }
   }
 
-  const resolvedCompany = company || sanitizeCompany(llmFallback.company || "") || "";
+  const resolvedCompany = company ? (sanitizeCompany(company) || "") : "";
+  if (!resolvedCompany) {
+    companySource = "none";
+    companyConfidence = 0;
+  }
   const finalClassification = llmFallback.classification && llmFallback.classification !== "Non-Recruitment Email"
     ? llmFallback.classification
     : classification.classification;
@@ -665,12 +707,15 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       forwarded: forwarded.isForwarded,
       sender,
       classificationSource: classification.classification,
-      companySource: resolvedCompany ? "heuristic" : "llm-fallback",
+      companySource: companySource,
+      companyConfidence: companyConfidence,
       hasLink: !!linkInfo.primary,
       rawTitle: title,
       fallback: llmFallback,
     },
   };
+
+  console.log(`[PARSER_SUMMARY] Company: ${parsed.company || 'None'}, JobRole: ${parsed.jobRole || 'None'}, Classification: ${parsed.classification} (Confidence: ${parsed.confidenceScore})`);
 
   return parsed;
 }

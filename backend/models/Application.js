@@ -26,6 +26,33 @@ const applicationSchema = new mongoose.Schema(
     rawText: { type: String },
     note: { type: String, default: "" },
     messageId: { type: String, unique: true, sparse: true },
+    classification: { type: String },
+    confidenceScore: { type: Number },
+    jobRole: { type: String },
+    title: { type: String },
+    processId: { type: String },
+    processName: { type: String },
+    eventDate: { type: Date },
+    eventTime: { type: String },
+    reportingTime: { type: String },
+    venue: { type: String },
+    durationText: { type: String },
+    salaryText: { type: String },
+    parseMeta: { type: mongoose.Schema.Types.Mixed },
+    events: {
+      type: [
+        {
+          messageId: String,
+          date: Date,
+          classification: String,
+          title: String,
+          subject: String,
+          status: String,
+          link: String,
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

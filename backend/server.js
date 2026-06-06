@@ -188,6 +188,31 @@ app.get("/logout", async (req, res) => {
 
 let isProcessing = false;
 
+function appendApplicationEvent(application, parsed, emailMetadata) {
+  const { messageId, date, subject } = emailMetadata;
+  if (!application.events) application.events = [];
+  
+  const eventExists = application.events.some(e => e.messageId === messageId);
+  if (eventExists) {
+    console.log(`[EVENT_SKIPPED_DUPLICATE] ${messageId}`);
+    return false;
+  }
+  
+  application.events.push({
+    messageId,
+    date,
+    classification: parsed.classification || "",
+    title: parsed.title || "",
+    subject: subject || "",
+    status: parsed.status || "new",
+    link: parsed.link || ""
+  });
+  
+  application.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+  console.log(`[EVENT_ADDED] ${messageId}`);
+  return true;
+}
+
 // ==========================
 // 📥 FETCH + SAVE EMAILS
 // ==========================
@@ -316,6 +341,24 @@ async function fetchAndProcessEmails() {
                 skippedCount++;
                 continue;
               }
+              
+              let eventAdded = false;
+              if (!exists.events || !exists.events.some(e => e.messageId === id)) {
+                if (!exists.events) exists.events = [];
+                exists.events.push({
+                  messageId: id,
+                  date: exists.date,
+                  classification: exists.classification,
+                  title: exists.title,
+                  subject: subject,
+                  status: exists.status,
+                  link: exists.link
+                });
+                exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+                console.log(`[EVENT_ADDED] ${id}`);
+                eventAdded = true;
+              }
+
               const missingDetails = !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
               if (missingDetails) {
                 console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
@@ -331,12 +374,29 @@ async function fetchAndProcessEmails() {
                   if (!exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
                   if (!exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
                   if (!exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+                  if (!exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
+                  if (!exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
+                  if (!exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
+                  if (!exists.title && parsed.title) updatePayload.title = parsed.title;
+                  if (!exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
+                  if (!exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
+                  if (!exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
+                  if (!exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
+                  if (!exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
+                  if (!exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
+                  if (!exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
+                  if (!exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
+                  if (!exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+
+                  if (eventAdded) updatePayload.events = exists.events;
 
                   if (Object.keys(updatePayload).length > 0) {
                     await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
                     console.log(`[UPDATED] ${id} | Existing application enriched with program data`);
                   }
                 }
+              } else if (eventAdded) {
+                await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
               }
 
               console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
@@ -390,10 +450,33 @@ async function fetchAndProcessEmails() {
               if (!contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
               if (!contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
               if (!contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+              if (!contentExists.classification && parsed.classification) updatePayload.classification = parsed.classification;
+              if (!contentExists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
+              if (!contentExists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
+              if (!contentExists.title && parsed.title) updatePayload.title = parsed.title;
+              if (!contentExists.processId && parsed.processId) updatePayload.processId = parsed.processId;
+              if (!contentExists.processName && parsed.processName) updatePayload.processName = parsed.processName;
+              if (!contentExists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
+              if (!contentExists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
+              if (!contentExists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
+              if (!contentExists.venue && parsed.venue) updatePayload.venue = parsed.venue;
+              if (!contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
+              if (!contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
+              if (!contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+
+              const eventAdded = appendApplicationEvent(contentExists, parsed, {
+                messageId: id,
+                date: new Date(parseInt(email.data.internalDate)),
+                subject: subject
+              });
+              
+              if (eventAdded) {
+                updatePayload.events = contentExists.events;
+              }
 
               if (Object.keys(updatePayload).length > 0) {
                 await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
-                console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data`);
+                console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data and/or event history`);
               }
 
               console.log(`[SKIP] ${id} | Reason: Duplicate content (company + role match)`);
@@ -417,6 +500,28 @@ async function fetchAndProcessEmails() {
               programRoles: parsed.programRoles || "",
               programDuration: parsed.programDuration || "",
               programStipend: parsed.programStipend || "",
+              classification: parsed.classification || "",
+              confidenceScore: parsed.confidenceScore || 0,
+              jobRole: parsed.jobRole || "",
+              title: parsed.title || "",
+              processId: parsed.processId || "",
+              processName: parsed.processName || "",
+              eventDate: parsed.eventDate || null,
+              eventTime: parsed.eventTime || "",
+              reportingTime: parsed.reportingTime || "",
+              venue: parsed.venue || "",
+              durationText: parsed.durationText || "",
+              salaryText: parsed.salaryText || "",
+              parseMeta: parsed.parseMeta || {},
+              events: [{
+                messageId: id,
+                date: new Date(parseInt(email.data.internalDate)),
+                classification: parsed.classification || "",
+                title: parsed.title || "",
+                subject: subject || "",
+                status: normalizedStatus,
+                link: parsed.link || ""
+              }],
               rawText,
               messageId: id,
               source: "Gmail",
