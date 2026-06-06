@@ -44,6 +44,20 @@ function extractCompanyFromText(text = "") {
   if (!text) return "";
   const cleanedText = cleanMarkdown(text).replace(/\r?\n/g, " ");
 
+  const programCompanyPatterns = [
+    { regex: /\bAmazon\s*ML\s*Summer\s*School\b/i, company: "Amazon" },
+    { regex: /\bAmazon\s*ML\b/i, company: "Amazon" },
+    { regex: /\bAmazon\s*Science\b/i, company: "Amazon" },
+    { regex: /\bGoogle\s+Summer\s+of\s+Code\b/i, company: "Google" },
+    { regex: /\bMicrosoft\s+Learn\b/i, company: "Microsoft" },
+  ];
+
+  for (const item of programCompanyPatterns) {
+    if (item.regex.test(cleanedText)) {
+      return item.company;
+    }
+  }
+
   const patterns = [
     /(?:Company|Organization|Organisation|Employer|Hiring Company|Recruiter)\s*[:\-]\s*([A-Z][A-Za-z0-9&.\s]{1,80}?)(?:\s*(?:\.|,|;|$))/i,
     /(?:from|by|at)\s+([A-Z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:for|about|regarding|hiring|is|offers?|invites?|interview|role|drive|program|placement|campus|job|internship))/i,
@@ -99,11 +113,22 @@ function normalizeStatus(raw = "") {
  */
 function sanitizeCompany(raw = "") {
   const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
   const invalid = [
     "", "unknown", "n/a", "na", "none", "company", "team",
     "the company", "our company", "hiring team",
   ];
-  if (invalid.includes(trimmed.toLowerCase())) return null;
+  const rejectIfContains = [
+    "your institution", "your college", "your university", "your institute",
+    "register", "registration", "apply by", "application", "last date",
+    "subject", "dear sir", "dear madam", "please find", "please register",
+    "inbox", "forwarded message", "authorised signatory",
+  ];
+
+  if (invalid.includes(lower)) return null;
+  if (rejectIfContains.some((term) => lower.includes(term))) return null;
+  if (/\b(your|our|this|the)\s+(institution|college|university|institute)\b/.test(lower)) return null;
+
   return trimmed;
 }
 
