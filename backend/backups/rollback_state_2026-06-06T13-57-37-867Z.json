@@ -1,0 +1,242 @@
+{
+  "deleted": [
+    {
+      "_id": "6a23c396b052ae66042a228a",
+      "company": "Amazon",
+      "role": "Unknown Role",
+      "type": "unknown",
+      "deadline": "",
+      "deadlineISO": "",
+      "deadlineText": "Before June 14",
+      "programRoles": "Internship",
+      "programDuration": "4 weekends in July 2026",
+      "programStipend": "",
+      "link": "https://unstop.com/o/KoXsOLD/?ref=amcJFfEZ",
+      "links": [
+        "https://unstop.com/o/KoXsOLD/?ref=amcJFfEZ"
+      ],
+      "isFormLink": false,
+      "source": "Gmail",
+      "email": "1ms23ci126@msrit.edu",
+      "date": "2026-06-05T05:34:48.000Z",
+      "status": "new",
+      "isDeleted": false,
+      "rawText": "Fwd: Amazon ML Summer School 2026 — Registrations Now Open | Apply by June 14 ---------- Forwarded message --------- From: @amazon.com&gt; Subject: Amazon ML Summer School 2026 — Registrations Now Open | Apply by June 14 ML Summer School 2026 Dear Sir / Madam, Greetings from",
+      "note": "",
+      "messageId": "19e964710a558375",
+      "createdAt": "2026-06-06T06:52:06.545Z",
+      "updatedAt": "2026-06-06T12:19:40.816Z",
+      "__v": 1,
+      "events": [
+        {
+          "messageId": "19e964710a558375",
+          "date": "2026-06-05T05:34:48.000Z",
+          "subject": "",
+          "status": "new",
+          "link": "https://unstop.com/o/KoXsOLD/?ref=amcJFfEZ",
+          "_id": "6a24105c60c14c90ccff2279"
+        }
+      ],
+      "companyKey": "amazon"
+    },
+    {
+      "_id": "6a23c3a4b052ae66042a2293",
+      "company": "TCS",
+      "role": "Unknown Role",
+      "type": "unknown",
+      "deadline": "15 May, 3:00 PM",
+      "deadlineISO": "2026-05-15T15:00:00.000Z",
+      "deadlineText": "Before 3pm today",
+      "programRoles": "",
+      "programDuration": "4 weeks",
+      "programStipend": "",
+      "link": "https://forms.gle/R1xG6wC5QvFpEzq2A",
+      "links": [
+        "https://nextstep.tcsapps.com/indiacampus/#/",
+        "https://forms.gle/R1xG6wC5QvFpEzq2A",
+        "https://forms.gle/R1xG6wC5QvFpEzq2A",
+        "https://forms.gle/R1xG6wC5QvFpEzq2A",
+        "https://forms.gle/R1xG6wC5QvFpEzq2A"
+      ],
+      "isFormLink": true,
+      "source": "Gmail",
+      "email": "1ms23ci126@msrit.edu",
+      "date": "2026-05-15T08:52:38.000Z",
+      "status": "new",
+      "isDeleted": false,
+      "rawText": "Re: TCS Registrations 2027 - Update the Form After Registrations Dear All, Gentle Reminder, Request you all to register by 3pm today. Thanks, Placement Department RIT On Fri, May 15, 2026 at 1:08 PM Dean Training &amp; Placements &lt;dean.tap@msrit.edu&gt; wrote:",
+      "note": "",
+      "messageId": "19e2ad6b68b50abf",
+      "createdAt": "2026-06-06T06:52:20.294Z",
+      "updatedAt": "2026-06-06T12:19:41.221Z",
+      "__v": 1,
+      "events": [
+        {
+          "messageId": "19e2ad6b68b50abf",
+          "date": "2026-05-15T08:52:38.000Z",
+          "subject": "",
+          "status": "new",
+          "link": "https://forms.gle/R1xG6wC5QvFpEzq2A",
+          "_id": "6a24105d60c14c90ccff2284"
+        }
+      ],
+      "companyKey": "tcs"
+    },
+    {
+      "_id": "6a23d3e7b052ae66042a22ac",
+      "company": "Flipr",
+      "role": "Ai Prompt",
+      "type": "test",
+      "deadline": "",
+      "deadlineISO": "",
+      "deadlineText": "",
+      "programRoles": "",
+      "programDuration": "",
+      "programStipend": "",
+      "link": "",
+      "links": [],
+      "isFormLink": false,
+      "source": "Gmail",
+      "email": "1ms23ci126@msrit.edu",
+      "date": "2026-04-28T11:47:11.000Z",
+      "status": "interview",
+      "isDeleted": false,
+      "rawText": "Fwd: Campus Recruitment - Flipr ---------- Forwarded message --------- From: @flipr.ai&gt; Subject: Re: Campus Recruitment - Flipr Hi, Please find attached the list of students who should appear for tomorrow&#39;s AI Prompt",
+      "note": "",
+      "messageId": "19dd3ea70318e5ce",
+      "createdAt": "2026-06-06T08:01:43.977Z",
+      "updatedAt": "2026-06-06T12:19:41.655Z",
+      "__v": 1,
+      "events": [
+        {
+          "messageId": "19dd3ea70318e5ce",
+          "date": "2026-04-28T11:47:11.000Z",
+          "subject": "",
+          "status": "interview",
+          "link": "",
+          "_id": "6a24105d60c14c90ccff2291"
+        }
+      ],
+      "companyKey": "flipr"
+    }
+  ],
+  "updated": [
+    {
+      "_id": "6a23c594b052ae66042a22a7",
+      "company": "Amazon",
+      "role": "Hackathon Participant",
+      "type": "hackathon",
+      "deadline": "",
+      "deadlineISO": "",
+      "deadlineText": "",
+      "programRoles": "",
+      "programDuration": "",
+      "programStipend": "INR 2",
+      "link": "https://unstop.com/o/m8BXEiH/?ref=TPO",
+      "links": [
+        "https://unstop.com/o/m8BXEiH/?ref=TPO",
+        "https://unstop.yatrack2.com/2ZSHLyTd6bWww3bsVxKX6QWMWDAzQYjhysT-qO2zNvraPxO5DngFh6omD9o_9mjJ56tp7meiubeiefodrkfKoUSBEWVdJeTQJhF0ptfjYG4K9b0P72mjburWeSGchB_arLB_Os1UOETmS6bRVWoTe1dpHbiXCFtwWcZsWpHrV2ueOg8Z0P4MgJXmO0ikBNw"
+      ],
+      "isFormLink": false,
+      "source": "Gmail",
+      "email": "1ms23ci126@msrit.edu",
+      "date": "2026-05-20T06:10:03.000Z",
+      "status": "new",
+      "isDeleted": false,
+      "rawText": "Fwd: Amazon PPIs & INR 2.25 Lakhs for your students | HackOn 6.0 is live | M S Ramaiah Institute of Technology (MSRIT), Bangalore ---------- Forwarded message --------- From: @unstop.com&gt; Subject: Amazon PPIs &amp; INR 2.25 Lakhs for your students | HackOn 6.0 is live | MS Ramaiah Institute of Technology (MSRIT), Bangalore Hi",
+      "note": "",
+      "messageId": "19e4401a28ecc3c4",
+      "createdAt": "2026-06-06T07:00:36.791Z",
+      "updatedAt": "2026-06-06T12:19:41.183Z",
+      "__v": 1,
+      "events": [
+        {
+          "messageId": "19e4401a28ecc3c4",
+          "date": "2026-05-20T06:10:03.000Z",
+          "subject": "",
+          "status": "new",
+          "link": "https://unstop.com/o/m8BXEiH/?ref=TPO",
+          "_id": "6a24105d60c14c90ccff2283"
+        }
+      ],
+      "companyKey": "amazon"
+    },
+    {
+      "_id": "6a23d3d0b052ae66042a22aa",
+      "company": "TCS",
+      "role": "National Qualifier Test",
+      "type": "test",
+      "deadline": "11 May, 11:00 AM",
+      "deadlineISO": "2026-05-11T11:00:00.000Z",
+      "deadlineText": "",
+      "programRoles": "",
+      "programDuration": "",
+      "programStipend": "",
+      "link": "https://nextstep.tcsapps.com/indiacampus/#/",
+      "links": [
+        "https://nextstep.tcsapps.com/indiacampus/#/",
+        "http://www.tcs.com"
+      ],
+      "isFormLink": false,
+      "source": "Gmail",
+      "email": "1ms23ci126@msrit.edu",
+      "date": "2026-05-10T09:14:03.000Z",
+      "status": "interview",
+      "isDeleted": false,
+      "rawText": "Re: TCS National Qualifier Test (NQT)for Priority Institutes (Batch of 2027)_Ramaiah Institute of Technology Dear Students, Greetings!! Due to one of the tech fest event full day on 11th May, scheduled session on 11th May at 11AM will not be there. Revised date will be notified soon along with venue. All",
+      "note": "",
+      "messageId": "19e112a83f8e38ad",
+      "createdAt": "2026-06-06T08:01:20.651Z",
+      "updatedAt": "2026-06-06T12:19:41.406Z",
+      "__v": 1,
+      "events": [
+        {
+          "messageId": "19e112a83f8e38ad",
+          "date": "2026-05-10T09:14:03.000Z",
+          "subject": "",
+          "status": "interview",
+          "link": "https://nextstep.tcsapps.com/indiacampus/#/",
+          "_id": "6a24105d60c14c90ccff228a"
+        }
+      ],
+      "companyKey": "tcs"
+    },
+    {
+      "_id": "6a23cccab052ae66042a22a9",
+      "company": "Flipr",
+      "role": "Unknown Role",
+      "type": "full-time",
+      "deadline": "17 Apr",
+      "deadlineISO": "2026-04-17T00:00:00.000Z",
+      "deadlineText": "",
+      "programRoles": "",
+      "programDuration": "60 minutes (per batch)",
+      "programStipend": "",
+      "link": "",
+      "links": [],
+      "isFormLink": false,
+      "source": "Gmail",
+      "email": "1ms23ci126@msrit.edu",
+      "date": "2026-04-16T09:06:04.000Z",
+      "status": "interview",
+      "isDeleted": false,
+      "rawText": "Fwd: Flipr Campus Recruitment Visit Dear All, This is to inform you that a campus recruitment drive by Flipr is scheduled for tomorrow, 17th April 2026. Important Instructions: · Carry your laptop (mandatory) · Bring a copy of your",
+      "note": "",
+      "messageId": "19d958a8f334c91d",
+      "createdAt": "2026-06-06T07:31:22.944Z",
+      "updatedAt": "2026-06-06T12:19:41.871Z",
+      "__v": 1,
+      "events": [
+        {
+          "messageId": "19d958a8f334c91d",
+          "date": "2026-04-16T09:06:04.000Z",
+          "subject": "",
+          "status": "interview",
+          "link": "",
+          "_id": "6a24105d60c14c90ccff2297"
+        }
+      ],
+      "companyKey": "flipr"
+    }
+  ]
+}

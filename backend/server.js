@@ -12,6 +12,8 @@ const Account = require("./models/Account");
 const applicationRoutes = require("./routes/applicationRoutes");
 const { parseEmailWithLLM } = require("./utils/parseEmailWithLLM");
 const { getCompanyInfo } = require("./utils/companyInfoService");
+const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
+const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
 
 // Helper to extract full body text from Gmail payload
 function extractText(payload) {
@@ -425,6 +427,8 @@ async function fetchAndProcessEmails() {
             }
 
             const finalRole = parsed.role || "Unknown Role";
+            const companyKey = normalizeCompany(parsed.company);
+            const isValid = isValidCompany(parsed.company);
             
             // Fetch Company Info (with caching inside)
             console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
@@ -433,11 +437,13 @@ async function fetchAndProcessEmails() {
               console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
             }
 
-            const contentExists = await Application.findOne({
-              company: parsed.company,
-              role: finalRole,
-              isDeleted: { $ne: true }
-            });
+            let contentExists = null;
+            if (isValid) {
+              contentExists = await Application.findOne({
+                companyKey,
+                isDeleted: { $ne: true }
+              });
+            }
 
             if (contentExists) {
               const updatePayload = {};
@@ -456,13 +462,30 @@ async function fetchAndProcessEmails() {
               if (!contentExists.title && parsed.title) updatePayload.title = parsed.title;
               if (!contentExists.processId && parsed.processId) updatePayload.processId = parsed.processId;
               if (!contentExists.processName && parsed.processName) updatePayload.processName = parsed.processName;
-              if (!contentExists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
+              
+              if (parsed.eventDate) {
+                if (!contentExists.eventDate || new Date(parsed.eventDate) > new Date(contentExists.eventDate)) {
+                  updatePayload.eventDate = parsed.eventDate;
+                }
+              }
+              if (parsed.type && parsed.type !== "unknown") {
+                if (!contentExists.type || contentExists.type === "unknown") {
+                  updatePayload.type = parsed.type;
+                }
+              }
+              
               if (!contentExists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
               if (!contentExists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
               if (!contentExists.venue && parsed.venue) updatePayload.venue = parsed.venue;
               if (!contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
               if (!contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
               if (!contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+
+              const incStatus = classificationToStatus(parsed.classification);
+              const advancedStatus = advanceStatus(contentExists.status, incStatus);
+              if (advancedStatus !== contentExists.status) {
+                updatePayload.status = advancedStatus;
+              }
 
               const eventAdded = appendApplicationEvent(contentExists, parsed, {
                 messageId: id,
@@ -479,15 +502,17 @@ async function fetchAndProcessEmails() {
                 console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data and/or event history`);
               }
 
-              console.log(`[SKIP] ${id} | Reason: Duplicate content (company + role match)`);
+              console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
               skippedCount++;
               continue;
             }
 
-            const normalizedStatus = parsed.status === "interview" ? "interview" : "new";
+            const incStatus = classificationToStatus(parsed.classification);
+            const normalizedStatus = advanceStatus("new", incStatus);
 
             const newApp = new Application({
               company: parsed.company,
+              companyKey,
               role: finalRole,
               type: parsed.type || "",
               status: normalizedStatus,

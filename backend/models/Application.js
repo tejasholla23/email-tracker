@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const applicationSchema = new mongoose.Schema(
   {
     company: { type: String, required: true },
+    companyKey: { type: String, default: "" }, // normalized key for company-level dedup
     role: { type: String, required: true },
     type: { type: String },
     deadline: { type: String },
@@ -57,8 +58,7 @@ const applicationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound index for duplicate-check during sync: Application.findOne({ company, role })
-applicationSchema.index({ company: 1, role: 1 });
+// Company-level identity index: one Application per normalized company (one hiring process)applicationSchema.index({ companyKey: 1, isDeleted: 1 });
 
 // Compound index for primary dashboard query: Application.find({ isDeleted: false }).sort({ date: -1 })
 applicationSchema.index({ isDeleted: 1, date: -1 });
