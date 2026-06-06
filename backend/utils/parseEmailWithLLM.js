@@ -24,10 +24,44 @@ function companyFromSender(senderRaw = "") {
   const genericDomains = [
     "gmail", "yahoo", "outlook", "hotmail", "noreply",
     "no-reply", "mail", "info", "notifications", "mailer",
+    "msrit", "placement", "dean", "career", "careers"
   ];
   if (genericDomains.includes(domainName)) return null;
 
   return domainName.charAt(0).toUpperCase() + domainName.slice(1);
+}
+
+function isGenericCompanyName(raw = "") {
+  const trimmed = raw.trim().toLowerCase();
+  const invalidNames = [
+    "msrit", "msrit placement cell", "msrit placements", "msrit career cell",
+    "our college", "the college", "placement cell", "training and placement" , "placement" , "career cell"
+  ];
+  return invalidNames.includes(trimmed);
+}
+
+function extractCompanyFromText(text = "") {
+  if (!text) return "";
+  const cleanedText = cleanMarkdown(text).replace(/\r?\n/g, " ");
+
+  const patterns = [
+    /(?:Company|Organization|Organisation|Employer|Hiring Company|Recruiter)\s*[:\-]\s*([A-Z][A-Za-z0-9&.\s]{1,80}?)(?:\s*(?:\.|,|;|$))/i,
+    /(?:from|by|at)\s+([A-Z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:for|about|regarding|hiring|is|offers?|invites?|interview|role|drive|program|placement|campus|job|internship))/i,
+    /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is|has|offers|invites|announces|conducts|hiring|drives|for|regarding|registered))/,
+    /\b(amazon|google|microsoft|tcs|deloitte|accenture|cognizant|infosys|wipro|blackrock|ibm|flipkart|uber|intel|capgemini|hcl|l&t|bosch|dell)\b/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = cleanedText.match(pattern);
+    if (match && match[1]) {
+      const candidate = sanitizeCompany(match[1]);
+      if (candidate && !isGenericCompanyName(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return "";
 }
 
 /**
@@ -469,6 +503,7 @@ Analyze the following email text and determine if it is related to:
 === COMPANY EXTRACTION RULES ===
 - Prefer company names found in the email body or signature.
 - Prefer the sender domain if the body is ambiguous (e.g. @google.com → "Google").
+- If the sender is @msrit.edu or another placement/college email, DO NOT return MSRIT or the college as the employer.
 - NEVER return "unknown", "company", "team", or any generic placeholder.
 - If truly unresolvable, return an empty string "".
 
@@ -547,10 +582,14 @@ ${emailText}
 
     // Sanitize company — if bad, try domain fallback
     const cleanCompany = sanitizeCompany(parsed.company || "");
-    if (!cleanCompany) {
-      parsed.company = companyFromSender(sender) || "";
+    if (!cleanCompany || isGenericCompanyName(cleanCompany)) {
+      parsed.company = extractCompanyFromText(fullBodyText || emailText) || companyFromSender(sender) || "";
     } else {
       parsed.company = cleanCompany;
+    }
+
+    if (isGenericCompanyName(parsed.company)) {
+      parsed.company = extractCompanyFromText(fullBodyText || emailText) || "";
     }
 
     // Clean role and log it
@@ -611,7 +650,10 @@ ${emailText}
   const looksRelevant = jobKeywords.some((kw) => lowerText.includes(kw));
 
   if (looksRelevant) {
-    const fallbackCompany = companyFromSender(sender) || "";
+    let fallbackCompany = companyFromSender(sender) || "";
+    if (!fallbackCompany || isGenericCompanyName(fallbackCompany)) {
+      fallbackCompany = extractCompanyFromText(fullBodyText || emailText) || "";
+    }
     const fallbackStatus  = inferStatusFromText(emailText);
     const linkTextSource = fullBodyText || emailText;
     const { primary, all, isForm } = extractFormLink(linkTextSource);
