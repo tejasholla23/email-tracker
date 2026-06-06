@@ -235,6 +235,20 @@ function extractFormLink(text = "") {
   return { primary, all, isForm };
 }
 
+function isGoogleFormLink(text = "") {
+  return /(?:https?:\/\/)?(?:docs\.google\.com\/forms\/|forms\.gle\/)/i.test(text);
+}
+
+function isInterviewEmail(text = "") {
+  const t = text.toLowerCase();
+  return /\b(interview|shortlisted|shortlist|schedule|slot|assessment|online test|next round|aptitude|technical round|hr round|panel interview|coding test|telephonic interview)\b/.test(t);
+}
+
+function looksLikeSeminarOrTraining(text = "") {
+  const t = text.toLowerCase();
+  return /\b(seminar|webinar|training|workshop|pre-placement talk|preplacement talk|info session|information session|orientation|meetup|guest lecture|career talk|placement talk|training program|faculty development program)\b/.test(t);
+}
+
 /**
  * Extract deadline from text using regex patterns.
  * Returns { deadline: string, iso: string }
@@ -580,16 +594,27 @@ ${emailText}
     // Normalize status
     parsed.status = normalizeStatus(parsed.status || "");
 
+    const sourceText = fullBodyText || emailText;
+    const linkResult = extractFormLink(sourceText);
+    const hasGoogleForm = isGoogleFormLink(sourceText) || linkResult.isForm;
+    const parsedInterview = parsed.status === "interview" || isInterviewEmail(sourceText);
+    const isSeminar = looksLikeSeminarOrTraining(sourceText);
+
+    // Reject non-actionable emails unless they include a Google Form or are interview-related.
+    if ((!hasGoogleForm && !parsedInterview) || (isSeminar && !hasGoogleForm && !parsedInterview)) {
+      return { isRelevant: false };
+    }
+
     // Sanitize company — if bad, try domain fallback
     const cleanCompany = sanitizeCompany(parsed.company || "");
     if (!cleanCompany || isGenericCompanyName(cleanCompany)) {
-      parsed.company = extractCompanyFromText(fullBodyText || emailText) || companyFromSender(sender) || "";
+      parsed.company = extractCompanyFromText(sourceText) || companyFromSender(sender) || "";
     } else {
       parsed.company = cleanCompany;
     }
 
     if (isGenericCompanyName(parsed.company)) {
-      parsed.company = extractCompanyFromText(fullBodyText || emailText) || "";
+      parsed.company = extractCompanyFromText(sourceText) || "";
     }
 
     // Clean role and log it
@@ -657,6 +682,12 @@ ${emailText}
     const fallbackStatus  = inferStatusFromText(emailText);
     const linkTextSource = fullBodyText || emailText;
     const { primary, all, isForm } = extractFormLink(linkTextSource);
+    const hasGoogleForm = isGoogleFormLink(linkTextSource) || isForm;
+    const isInterview = fallbackStatus === "interview" || isInterviewEmail(linkTextSource);
+
+    if (!hasGoogleForm && !isInterview) {
+      return { isRelevant: false };
+    }
 
     const fallbackResult = {
       isRelevant: true,

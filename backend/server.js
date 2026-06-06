@@ -401,11 +401,13 @@ async function fetchAndProcessEmails() {
               continue;
             }
 
+            const normalizedStatus = parsed.status === "interview" ? "interview" : "new";
+
             const newApp = new Application({
               company: parsed.company,
               role: finalRole,
               type: parsed.type || "",
-              status: parsed.status || "pending",
+              status: normalizedStatus,
               link: parsed.link || "",
               links: parsed.links || [],
               isFormLink: parsed.isFormLink || false,

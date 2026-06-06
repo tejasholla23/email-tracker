@@ -177,6 +177,25 @@ export default function JobTrackerDashboard() {
     }
   };
 
+  const handleApply = async (id) => {
+    try {
+      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": userEmail
+        },
+        body: JSON.stringify({ status: "applied" }),
+      });
+      if (!response.ok) throw new Error("Failed to mark as applied");
+      setApplications((prev) =>
+        prev.map((app) => app._id === id ? { ...app, status: "applied" } : app)
+      );
+    } catch (error) {
+      console.error("Apply action failed:", error);
+    }
+  };
+
   const handleDeleteOne = async (id) => {
     const previousApps = [...applications];
     setApplications((prev) => prev.filter((app) => app._id !== id));
@@ -521,6 +540,7 @@ export default function JobTrackerDashboard() {
           text-transform: uppercase;
           letter-spacing: 0.025em;
         }
+        .status-new { background: #f5f3ff; color: #5b21b6; }
         .status-applied { background: #f1f5f9; color: #475569; }
         .status-interview { background: #f0fdfa; color: #0d9488; }
         .status-offer { background: #f0fdf4; color: #16a34a; }
@@ -1180,6 +1200,7 @@ export default function JobTrackerDashboard() {
                               href={app.link}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => handleApply(app._id)}
                             >
                               {app.isFormLink ? "📋 Apply (Form)" : "🔗 Open Link"}
                             </a>

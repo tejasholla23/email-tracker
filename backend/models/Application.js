@@ -20,7 +20,7 @@ const applicationSchema = new mongoose.Schema(
     date: { type: Date },
     status: {
       type: String,
-      default: "pending",
+      default: "new",
     },
     isDeleted: { type: Boolean, default: false },
     rawText: { type: String },
