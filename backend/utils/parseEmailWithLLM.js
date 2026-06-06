@@ -4,391 +4,457 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
-
-/**
- * Derive a human-readable company name from an email sender string.
- * Examples:
- *   "no-reply@infosys.com"  → "Infosys"
- *   "careers@amazon.co.uk"  → "Amazon"
- */
-function companyFromSender(senderRaw = "") {
-  const domainMatch = senderRaw.match(/@([a-zA-Z0-9-]+)\./);
-  if (!domainMatch) return null;
-
-  const domainName = domainMatch[1].toLowerCase();
-
-  // Skip generic mail-service domains that carry no company info
-  const genericDomains = [
-    "gmail", "yahoo", "outlook", "hotmail", "noreply",
-    "no-reply", "mail", "info", "notifications", "mailer",
-    "msrit", "placement", "dean", "career", "careers"
-  ];
-  if (genericDomains.includes(domainName)) return null;
-
-  return domainName.charAt(0).toUpperCase() + domainName.slice(1);
+function normalizeText(raw = "") {
+  return (raw || "")
+    .toString()
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function isGenericCompanyName(raw = "") {
-  const trimmed = raw.trim().toLowerCase();
-  const invalidNames = [
-    "msrit", "msrit placement cell", "msrit placements", "msrit career cell",
-    "our college", "the college", "placement cell", "training and placement" , "placement" , "career cell"
-  ];
-  return invalidNames.includes(trimmed);
+function normalizeKey(raw = "") {
+  return (raw || "")
+    .toString()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
-function extractCompanyFromText(text = "") {
-  if (!text) return "";
-  const cleanedText = cleanMarkdown(text).replace(/\r?\n/g, " ");
-
-  const programCompanyPatterns = [
-    { regex: /\bAmazon\s*ML\s*Summer\s*School\b/i, company: "Amazon" },
-    { regex: /\bAmazon\s*ML\b/i, company: "Amazon" },
-    { regex: /\bAmazon\s*Science\b/i, company: "Amazon" },
-    { regex: /\bGoogle\s+Summer\s+of\s+Code\b/i, company: "Google" },
-    { regex: /\bMicrosoft\s+Learn\b/i, company: "Microsoft" },
-  ];
-
-  for (const item of programCompanyPatterns) {
-    if (item.regex.test(cleanedText)) {
-      return item.company;
-    }
-  }
-
-  const patterns = [
-    /(?:Company|Organization|Organisation|Employer|Hiring Company|Recruiter)\s*[:\-]\s*([A-Z][A-Za-z0-9&.\s]{1,80}?)(?:\s*(?:\.|,|;|$))/i,
-    /(?:from|by|at)\s+([A-Z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:for|about|regarding|hiring|is|offers?|invites?|interview|role|drive|program|placement|campus|job|internship))/i,
-    /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is|has|offers|invites|announces|conducts|hiring|drives|for|regarding|registered))/,
-    /\b(amazon|google|microsoft|tcs|deloitte|accenture|cognizant|infosys|wipro|blackrock|ibm|flipkart|uber|intel|capgemini|hcl|l&t|bosch|dell)\b/i
-  ];
-
-  for (const pattern of patterns) {
-    const match = cleanedText.match(pattern);
-    if (match && match[1]) {
-      const candidate = sanitizeCompany(match[1]);
-      if (candidate && !isGenericCompanyName(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  return "";
-}
-
-/**
- * Lightweight keyword-based status classifier used as a fallback.
- */
-function inferStatusFromText(text) {
-  const t = text.toLowerCase();
-
-  if (/\b(offer|congratulations|selected|pleased to inform|happy to inform|job offer)\b/.test(t)) {
-    return "offer";
-  }
-  if (/\b(interview|schedule|slot|assessment|online test|next round|aptitude|shortlisted)\b/.test(t)) {
-    return "interview";
-  }
-  if (/\b(regret|unfortunately|not selected|unsuccessful|cannot move forward|will not be proceeding)\b/.test(t)) {
-    return "rejected";
-  }
-
-  return "applied";
-}
-
-/**
- * Normalize status to one of the four allowed values.
- */
-function normalizeStatus(raw = "") {
-  const s = raw.toLowerCase().trim();
-  if (["offer", "accepted"].includes(s)) return "offer";
-  if (["interview", "shortlisted", "test", "assessment"].includes(s)) return "interview";
-  if (["rejected", "declined", "unsuccessful", "done"].includes(s)) return "rejected";
-  return "applied";
-}
-
-/**
- * Sanitize a company string, rejecting generic placeholders.
- */
-function sanitizeCompany(raw = "") {
-  const trimmed = raw.trim();
-  const lower = trimmed.toLowerCase();
-  const invalid = [
-    "", "unknown", "n/a", "na", "none", "company", "team",
-    "the company", "our company", "hiring team",
-  ];
-  const rejectIfContains = [
-    "your institution", "your college", "your university", "your institute",
-    "register", "registration", "apply by", "application", "last date",
-    "subject", "dear sir", "dear madam", "please find", "please register",
-    "inbox", "forwarded message", "authorised signatory",
-  ];
-
-  if (invalid.includes(lower)) return null;
-  if (rejectIfContains.some((term) => lower.includes(term))) return null;
-  if (/\b(your|our|this|the)\s+(institution|college|university|institute)\b/.test(lower)) return null;
-
-  return trimmed;
-}
-
-/**
- * Keyword fallback for missing or noisy roles
- */
-function keywordRoleFallback(text = "") {
-  const t = text.toLowerCase();
-  if (t.includes("apprentice")) return "Apprentice";
-  if (t.includes("intern")) return "Intern";
-  if (t.includes("software engineer") || t.includes("sde") || t.includes("developer")) return "Software Engineer";
-  if (t.includes("engineer")) return "Engineer";
-  if (t.includes("analyst")) return "Analyst";
-  return "Unknown Role";
-}
-
-/**
- * Clean and normalize extracted role
- */
-function cleanRole(rawRole = "", emailText = "") {
-  let role = rawRole.trim();
-  if (!role || role.toLowerCase() === "unknown role" || role.toLowerCase() === "unknown" || role.toLowerCase() === "null") {
-    return keywordRoleFallback(emailText);
-  }
-  
-  // Remove noise words
-  const noiseWords = /\b(program|drive|recruitment|campus|202\d|final year|student|opportunity|opening|role)\b/gi;
-  role = role.replace(noiseWords, "").trim();
-  role = role.replace(/\s+/g, " ");
-  
-  // Normalize variants
-  const lowerRole = role.toLowerCase();
-  if (lowerRole.includes("sde intern") || lowerRole.includes("software dev intern")) {
-    role = "Software Engineer Intern";
-  } else if (lowerRole.includes("apprentice")) {
-    role = "Apprentice";
-  }
-  
-  // Trim length
-  const words = role.split(" ");
-  if (words.length > 6) {
-    role = words.slice(0, 6).join(" ");
-  }
-  
-  // Title case
-  role = role.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
-  
-  if (!role) {
-    return keywordRoleFallback(emailText);
-  }
-  
-  return role;
-}
-
-/**
- * Remove markdown formatting (bold, italics, etc.) from text.
- * Converts **text** → text, *text* → text, etc.
- */
 function cleanMarkdown(text = "") {
-  return text
-    .replace(/\*\*([^\*]+)\*\*/g, "$1") // **text** → text
-    .replace(/\*([^\*]+)\*/g, "$1")     // *text* → text
-    .replace(/__([^_]+)__/g, "$1")        // __text__ → text
-    .replace(/_([^_]+)_/g, "$1");         // _text_ → text
+  return (text || "")
+    .replace(/\*\*([^\*]+)\*\*/g, "$1")
+    .replace(/\*([^\*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1");
 }
 
 function cleanProgramValue(raw = "") {
-  let value = raw.trim();
-  // Remove markdown formatting first
+  let value = (raw || "").toString().trim();
   value = cleanMarkdown(value);
-  // Remove leading/trailing symbols: asterisks, bullets, dashes, dots, and spaces
-  // Includes various unicode bullets and asterisks
   const symbolRegex = /^[\*\u2022\u2023\u25E6\u2043\u2219\-\.\s\:]+/;
   const trailingSymbolRegex = /[\*\u2022\u2023\u25E6\u2043\u2219\-\.\s\:]+$/;
-  
   value = value.replace(symbolRegex, "").trim();
   value = value.replace(trailingSymbolRegex, "").trim();
-  
-  // Collapse multiple spaces
   value = value.replace(/\s{2,}/g, " ");
-  
-  // Check if the value is just "Details" or noise
   const lowerValue = value.toLowerCase();
+
   if (!value || lowerValue === "details" || lowerValue === "n/a" || lowerValue === "none" || /^[^a-zA-Z0-9]+$/.test(value)) {
     return "";
   }
-  
-  // Remove year-only values
   if (/^\d{4}$/.test(value)) {
     return "";
   }
   return value;
 }
 
-/**
- * Clean a single URL: strip trailing punctuation, validate scheme.
- * Returns null if invalid.
- */
 function cleanUrl(raw = "") {
-  const url = raw.replace(/[)>.,;"']+$/g, "").trim();
+  const url = (raw || "").toString().replace(/[)>.,;"']+$/g, "").trim();
   if (!url.startsWith("http")) return null;
   return url;
 }
 
-/**
- * Extract all links from email text.
- * Returns { primary, all, isForm }
- *   primary  → best link to show (forms.gle > docs.google.com/forms > first URL)
- *   all      → every clean URL found in the text
- *   isForm   → true when primary is a Google Form
- */
+function parseForwardedEmail(body = "") {
+  const raw = body || "";
+  const result = { isForwarded: false, subject: "", from: "", body: raw };
+  const marker = raw.match(/(?:-{2,}|\*{2,})\s*(?:Forwarded message|Begin forwarded message|Original message)\s*(?:-{2,}|\*{2,})/i);
+  if (!marker) return result;
+
+  result.isForwarded = true;
+  const index = raw.indexOf(marker[0]);
+  const forwardedBody = raw.slice(index + marker[0].length).trim();
+  result.body = forwardedBody;
+
+  const subjectMatch = forwardedBody.match(/Subject\s*[:\-]\s*(.+)/i);
+  if (subjectMatch) result.subject = subjectMatch[1].trim();
+  const fromMatch = forwardedBody.match(/From\s*[:\-]\s*(.+)/i);
+  if (fromMatch) result.from = fromMatch[1].trim();
+  return result;
+}
+
 function extractFormLink(text = "") {
-  // 1. Collect every raw URL
-  const rawAll = text.match(/https?:\/\/[^\s"'<>)]+/gi) || [];
+  const rawAll = (text || "").match(/https?:\/\/[^"]+/gi) || [];
   const all = rawAll.map(cleanUrl).filter(Boolean);
+  const formsGle = all.find((u) => /forms\.gle\//i.test(u));
+  const docsForms = all.find((u) => /docs\.google\.com\/forms\//i.test(u));
+  const primary = formsGle || docsForms || all[0] || "";
+  return { primary, all, isForm: !!(formsGle || docsForms) };
+}
 
-  // 2. Prioritise by type
-  const formsGle   = all.find(u => /forms\.gle\//i.test(u));
-  const docsForms  = all.find(u => /docs\.google\.com\/forms\//i.test(u));
-  const primary    = formsGle || docsForms || all[0] || "";
-  const isForm     = !!(formsGle || docsForms);
+function companyFromSender(senderRaw = "") {
+  const domainMatch = (senderRaw || "").match(/@([a-zA-Z0-9-]+)\./);
+  if (!domainMatch) return null;
+  const domainName = domainMatch[1].toLowerCase();
+  const genericDomains = [
+    "gmail", "yahoo", "outlook", "hotmail", "noreply", "no-reply",
+    "mail", "info", "notifications", "mailer", "msrit", "placement",
+    "dean", "career", "careers"
+  ];
+  if (genericDomains.includes(domainName)) return null;
+  return domainName
+    .split(/[-\.]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
-  if (primary) {
-    console.log(`[LINK_EXTRACTED] primary=${primary} isForm=${isForm} total=${all.length}`);
-  } else {
-    console.log("[LINK_EXTRACTED] No link found");
+function isGenericCompanyName(raw = "") {
+  const trimmed = (raw || "").trim().toLowerCase();
+  const invalidNames = [
+    "msrit", "msrit placement cell", "msrit placements", "msrit career cell",
+    "our college", "the college", "placement cell", "training and placement",
+    "placement", "career cell"
+  ];
+  return invalidNames.includes(trimmed);
+}
+
+const KNOWN_COMPANY_ALIASES = {
+  tcs: "TCS",
+  "tata consultancy services": "TCS",
+  dentsu: "Dentsu",
+  flipr: "Flipr",
+  altair: "Altair Engineering",
+  "altair engineering": "Altair Engineering",
+  nokia: "Nokia",
+  haber: "Haber",
+  amazon: "Amazon",
+  google: "Google",
+  microsoft: "Microsoft",
+  infosys: "Infosys",
+  wipro: "Wipro",
+  cognizant: "Cognizant",
+  accenture: "Accenture",
+  capgemini: "Capgemini",
+  hcl: "HCL",
+  flipkart: "Flipkart",
+  ibm: "IBM",
+};
+
+const INVALID_TITLE_FRAGMENTS = [
+  "the", "this", "hall", "today", "various stages", "a campus recruitment",
+  "forwarded message", "placement office", "from:", "subject:"
+];
+
+function matchKnownCompany(text = "") {
+  if (!text) return "";
+  const normalized = normalizeKey(text);
+  for (const alias of Object.keys(KNOWN_COMPANY_ALIASES)) {
+    if (normalized.includes(alias)) {
+      return KNOWN_COMPANY_ALIASES[alias];
+    }
+  }
+  return "";
+}
+
+function extractCompanyFromText(text = "") {
+  const cleanedText = cleanMarkdown(normalizeText(text));
+  const aliasMatch = matchKnownCompany(cleanedText);
+  if (aliasMatch) return aliasMatch;
+
+  const patterns = [
+    /(?:Company|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z][A-Za-z0-9&.\s]{1,80}?)(?:\s*(?:\.|,|;|$))/i,
+    /(?:from|by|at)\s+([A-Z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:for|about|regarding|hiring|is|offers?|invites?|interview|role|drive|program|placement|campus|job|internship))/i,
+    /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is|has|offers|invites|announces|conducts|hiring|drives|for|regarding|registered))/,
+    /\b(amazon|google|microsoft|tcs|deloitte|accenture|cognizant|infosys|wipro|blackrock|ibm|flipkart|uber|intel|capgemini|hcl|bosch|dell|nokia|haber|altair)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = cleanedText.match(pattern);
+    if (match && match[1]) {
+      const candidate = sanitizeCompany(match[1]);
+      if (candidate && !isGenericCompanyName(candidate)) return candidate;
+    }
+  }
+  return "";
+}
+
+function sanitizeCompany(raw = "") {
+  const trimmed = (raw || "").trim();
+  const lower = trimmed.toLowerCase();
+  const invalid = ["", "unknown", "n/a", "na", "none", "company", "team", "the company", "our company", "hiring team"];
+  const rejectIfContains = [
+    "your institution", "your college", "your university", "your institute",
+    "register", "registration", "apply by", "application", "last date",
+    "subject", "dear sir", "dear madam", "please find", "please register",
+    "inbox", "forwarded message", "authorised signatory"
+  ];
+  if (invalid.includes(lower)) return null;
+  if (rejectIfContains.some((term) => lower.includes(term))) return null;
+  if (/\b(your|our|this|the)\s+(institution|college|university|institute)\b/.test(lower)) return null;
+  return trimmed;
+}
+
+function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }) {
+  const candidates = [forwarded.subject, forwarded.from, subject, body, sender].filter(Boolean);
+  for (const candidate of candidates) {
+    const known = matchKnownCompany(candidate);
+    if (known) return known;
   }
 
-  return { primary, all, isForm };
+  if (sender) {
+    const senderCompany = companyFromSender(sender);
+    if (senderCompany && !isGenericCompanyName(senderCompany)) {
+      const alias = matchKnownCompany(senderCompany);
+      return alias || senderCompany;
+    }
+  }
+
+  const bodyCompany = extractCompanyFromText(body);
+  if (bodyCompany) return bodyCompany;
+  const subjectCompany = extractCompanyFromText(subject);
+  if (subjectCompany) return subjectCompany;
+  return "";
 }
 
-function isGoogleFormLink(text = "") {
-  return /(?:https?:\/\/)?(?:docs\.google\.com\/forms\/|forms\.gle\/)/i.test(text);
+function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = false }) {
+  const text = `${subject} ${body}`.toLowerCase();
+  const rules = [
+    {
+      category: "interviewResult",
+      classification: "Interview Result",
+      status: "offer",
+      type: "unknown",
+      regex: /\b(offer|congratulations|selected|shortlisted|happy to inform|pleased to inform)\b/i,
+      confidence: 0.95,
+    },
+    {
+      category: "interviewSchedule",
+      classification: "Interview Schedule",
+      status: "interview",
+      type: "interview",
+      regex: /\b(interview.*schedule|scheduled for|interview date|slot|panel interview|telephonic interview|interview schedule)\b/i,
+      confidence: 0.92,
+    },
+    {
+      category: "assessmentAnnouncement",
+      classification: "Assessment Announcement",
+      status: "interview",
+      type: "test",
+      regex: /\b(aptitude test|assessment|online test|exam|fcat|coding test|technical test)\b/i,
+      confidence: 0.9,
+    },
+    {
+      category: "registrationLink",
+      classification: "Registration Link",
+      status: "applied",
+      type: "application",
+      regex: /\b(register|registration|complete your profile|profile completion|forms\.gle|docs\.google\.com\/forms)\b/i,
+      confidence: 0.9,
+    },
+    {
+      category: "applicationReminder",
+      classification: "Application Reminder",
+      status: "applied",
+      type: "application",
+      regex: /\b(reminder|remind|register.*by|submit.*by|last date|deadline)\b/i,
+      confidence: 0.9,
+    },
+    {
+      category: "pptAnnouncement",
+      classification: "PPT Announcement",
+      status: "applied",
+      type: "unknown",
+      regex: /\b(pre[-\s]*placement talk|ppt|seminar|placement talk|info session|guest lecture)\b/i,
+      confidence: 0.88,
+    },
+    {
+      category: "venueUpdate",
+      classification: "Venue Update",
+      status: "applied",
+      type: "unknown",
+      regex: /\b(venue|hall|room|auditorium|seminar hall|location|place)\b/i,
+      confidence: 0.88,
+    },
+    {
+      category: "deadlineReminder",
+      classification: "Deadline Reminder",
+      status: "applied",
+      type: "unknown",
+      regex: /\b(deadline|last date|apply by|register by|submission deadline|before .* today|before .* tomorrow)\b/i,
+      confidence: 0.9,
+    },
+    {
+      category: "genericPlacementNotice",
+      classification: "Generic Placement Notice",
+      status: "applied",
+      type: "unknown",
+      regex: /\b(campus recruitment|placement notice|hiring process|recruitment drive|opportunity|drive)\b/i,
+      confidence: 0.75,
+    },
+  ];
+
+  for (const rule of rules) {
+    if (rule.regex.test(text)) {
+      return {
+        category: rule.category,
+        classification: rule.classification,
+        type: rule.type,
+        status: rule.status,
+        confidence: rule.confidence,
+      };
+    }
+  }
+
+  if (hasLink) {
+    return {
+      category: "registrationLink",
+      classification: "Registration Link",
+      type: "application",
+      status: "applied",
+      confidence: 0.7,
+    };
+  }
+
+  if (/\b(interview|assessment|aptitude|exam|shortlist|hiring|recruitment|application|job|internship|offer|deadline)\b/i.test(text)) {
+    return {
+      category: "newOpportunity",
+      classification: "New Hiring Opportunity",
+      type: "unknown",
+      status: "applied",
+      confidence: 0.55,
+    };
+  }
+
+  return {
+    category: "nonRecruitment",
+    classification: "Non-Recruitment Email",
+    type: "unknown",
+    status: "applied",
+    confidence: 0.25,
+  };
 }
 
-function isInterviewEmail(text = "") {
-  const t = text.toLowerCase();
-  return /\b(interview|shortlisted|shortlist|schedule|slot|assessment|online test|next round|aptitude|technical round|hr round|panel interview|coding test|telephonic interview)\b/.test(t);
-}
+function parseDateString(input = "", referenceDate = new Date()) {
+  const text = normalizeText(input);
+  if (!text) return null;
+  const lower = text.toLowerCase();
 
-function looksLikeSeminarOrTraining(text = "") {
-  const t = text.toLowerCase();
-  return /\b(seminar|webinar|training|workshop|pre-placement talk|preplacement talk|info session|information session|orientation|meetup|guest lecture|career talk|placement talk|training program|faculty development program)\b/.test(t);
-}
+  if (/\btoday\b/.test(lower)) {
+    return new Date(referenceDate);
+  }
+  if (/\btomorrow\b/.test(lower)) {
+    const next = new Date(referenceDate);
+    next.setDate(next.getDate() + 1);
+    return next;
+  }
 
-/**
- * Extract deadline from text using regex patterns.
- * Returns { deadline: string, iso: string }
- */
-function extractDeadline(text = "", referenceDate = new Date()) {
-  if (!text) return { deadline: "", iso: "" };
-
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const now = new Date(referenceDate);
-  const currentYear = now.getFullYear();
-  const cleanText = text.replace(/\s+/g, " ");
-  const segments = cleanText.split(/[.!?]|\r?\n/);
-  const deadlineKeywords = /deadline|apply|register|before|last date|by|on or before/i;
-  const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
-
-  const buildReadable = (dateObj, includeTime = false) => {
-    const day = dateObj.getDate();
-    const monthStr = months[dateObj.getMonth()];
-    const year = dateObj.getFullYear();
-    const datePart = `${day} ${monthStr}${year !== currentYear ? " " + year : ""}`;
-    if (!includeTime) return datePart;
-
-    const hour = dateObj.getHours();
-    const minute = dateObj.getMinutes();
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-    const minuteStr = minute.toString().padStart(2, "0");
-    return `${datePart}, ${displayHour}:${minuteStr} ${ampm}`;
+  const monthNames = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
   };
 
-  const parseTime = (hourStr, minuteStr = "00", ampm) => {
-    let hour = parseInt(hourStr, 10);
-    const minute = minuteStr ? parseInt(minuteStr, 10) : 0;
-    if ((ampm || "AM").toUpperCase() === "PM" && hour < 12) hour += 12;
-    if ((ampm || "AM").toUpperCase() === "AM" && hour === 12) hour = 0;
-    return { hour, minute };
-  };
+  const alphaMatch = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(20\d{2})?/i);
+  if (alphaMatch) {
+    const day = parseInt(alphaMatch[1], 10);
+    const month = monthNames[alphaMatch[2].toLowerCase().slice(0, 3)];
+    const year = alphaMatch[3] ? parseInt(alphaMatch[3], 10) : referenceDate.getFullYear();
+    const date = new Date(year, month, day);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
 
+  const altMatch = text.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?\s*(20\d{2})?/i);
+  if (altMatch) {
+    const month = monthNames[altMatch[1].toLowerCase().slice(0, 3)];
+    const day = parseInt(altMatch[2], 10);
+    const year = altMatch[3] ? parseInt(altMatch[3], 10) : referenceDate.getFullYear();
+    const date = new Date(year, month, day);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  const numericMatch = text.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+  if (numericMatch) {
+    const day = parseInt(numericMatch[1], 10);
+    const month = parseInt(numericMatch[2], 10);
+    let year = numericMatch[3] ? parseInt(numericMatch[3], 10) : referenceDate.getFullYear();
+    if (year < 100) year += 2000;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const date = new Date(year, month - 1, day);
+      if (!Number.isNaN(date.getTime())) return date;
+    }
+  }
+
+  return null;
+}
+
+function extractEventDate(text = "", referenceDate = new Date()) {
+  if (!text) return null;
+  const segments = text.split(/[\r\n]+/);
   for (const segment of segments) {
-    if (!deadlineKeywords.test(segment)) continue;
-
-    const timeMatch = segment.match(timeRegex);
-    const hasToday = /\btoday\b/i.test(segment);
-    const hasTomorrow = /\btomorrow\b/i.test(segment);
-
-    if (timeMatch && hasToday) {
-      const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
-      const isoDate = new Date(now);
-      isoDate.setHours(hour, minute, 0, 0);
-      return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
+    if (/\b(interview|scheduled|test|aptitude|assessment|drive|recruitment|ppt|seminar|hall|date)\b/i.test(segment)) {
+      const candidate = parseDateString(segment, referenceDate);
+      if (candidate) return candidate;
     }
+  }
+  return parseDateString(text, referenceDate);
+}
 
-    if (timeMatch && hasTomorrow) {
-      const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
-      const isoDate = new Date(now);
-      isoDate.setDate(isoDate.getDate() + 1);
-      isoDate.setHours(hour, minute, 0, 0);
-      return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
-    }
-
-    if (timeMatch && !hasToday && !hasTomorrow) {
-      const hasExplicitDate = /\b(?:tomorrow|today|on\s+\w+|\d{1,2}[/-]\d{1,2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(segment);
-      if (!hasExplicitDate) {
-        const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
-        const isoDate = new Date(now);
-        isoDate.setHours(hour, minute, 0, 0);
-        return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
-      }
-    }
-
-    const dateAlphaMatch = segment.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i);
-    if (dateAlphaMatch) {
-      const day = parseInt(dateAlphaMatch[1], 10);
-      const monthStr = dateAlphaMatch[2].charAt(0).toUpperCase() + dateAlphaMatch[2].slice(1, 3).toLowerCase();
-      const yearMatch = segment.match(/\b(20\d{2})\b/);
-      const year = yearMatch ? parseInt(yearMatch[1], 10) : currentYear;
-      const monthIdx = months.indexOf(monthStr);
-
-      if (monthIdx !== -1 && day >= 1 && day <= 31) {
-        const isoDate = new Date(year, monthIdx, day);
-        if (timeMatch) {
-          const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
-          isoDate.setHours(hour, minute, 0, 0);
-          return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
-        }
-        return { deadline: buildReadable(isoDate, false), iso: isoDate.toISOString() };
-      }
-    }
-
-    const dateNumericMatch = segment.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
-    if (dateNumericMatch) {
-      const day = parseInt(dateNumericMatch[1], 10);
-      const month = parseInt(dateNumericMatch[2], 10);
-      let year = dateNumericMatch[3] ? parseInt(dateNumericMatch[3], 10) : currentYear;
-      if (year < 100) year += 2000;
-
-      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-        const isoDate = new Date(year, month - 1, day);
-        if (timeMatch) {
-          const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
-          isoDate.setHours(hour, minute, 0, 0);
-          return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
-        }
-        return { deadline: buildReadable(isoDate, false), iso: isoDate.toISOString() };
+function extractDeadlineDetails(text = "", referenceDate = new Date()) {
+  const cleaned = normalizeText(text);
+  const lines = cleaned.split(/[\r\n]+/);
+  for (const line of lines) {
+    if (/\b(deadline|last date|apply by|register by|submit by|submission deadline|before .* today|before .* tomorrow)\b/i.test(line)) {
+      const date = parseDateString(line, referenceDate);
+      if (date) {
+        return {
+          deadline: date.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+          iso: date.toISOString(),
+          raw: line.trim(),
+        };
       }
     }
   }
+  return { deadline: "", iso: "", raw: "" };
+}
 
-  return { deadline: "", iso: "" };
+function extractReportingTime(text = "") {
+  const cleaned = normalizeText(text);
+  const match = cleaned.match(/report(?:ing)? time\s*(?:is|at|:)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i);
+  if (match) return match[1].toUpperCase();
+  const altMatch = cleaned.match(/at\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm))\s*(?:report|reporting)/i);
+  if (altMatch) return altMatch[1].toUpperCase();
+  return "";
+}
+
+function extractVenue(text = "") {
+  const cleaned = normalizeText(text);
+  const match = cleaned.match(/\b(?:venue|hall|room|auditorium|seminar hall|department|esb)\s*[:\-]?\s*([^\.\n]+)/i);
+  if (match) return cleanProgramValue(match[1]);
+  const hallMatch = cleaned.match(/\b(?:at|in)\s+([^\.\n]+(?:hall|room|auditorium|department|centre|center))/i);
+  if (hallMatch) return cleanProgramValue(hallMatch[1]);
+  return "";
+}
+
+function extractDuration(text = "") {
+  const cleaned = normalizeText(text);
+  const match = cleaned.match(/(?:duration|for)\s*[:\-]?\s*([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))/i);
+  if (match) return cleanProgramValue(match[1]);
+  const altMatch = cleaned.match(/([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))\s*(?:long|duration|period)/i);
+  if (altMatch) return cleanProgramValue(altMatch[1]);
+  return "";
+}
+
+function extractSalary(text = "") {
+  const cleaned = normalizeText(text);
+  const patterns = [
+    /(?:CTC|Package|Stipend)\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
+    /(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\s*(?:LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+    /[0-9]+(?:,[0-9]{3})?(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+  ];
+  for (const pattern of patterns) {
+    const match = cleaned.match(pattern);
+    if (match) {
+      const value = match[1] ? match[1].trim() : match[0].trim();
+      const cleanedValue = cleanProgramValue(value);
+      const numericOnly = /^[0-9]+(?:\.[0-9]+)?$/;
+      const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(cleanedValue);
+      if (numericOnly.test(cleanedValue) && !hasCurrencyOrUnit) continue;
+      if (cleanedValue) return cleanedValue;
+    }
+  }
+  return "";
 }
 
 function extractProgramRoles(text = "") {
-  // Clean markdown first
   const cleanedText = cleanMarkdown(text);
-  
   const patterns = [
     /(?:Roles|Positions|Openings)\s*[:\-]\s*([^\r\n]+?)(?:\s+(?:Branches|Department|CGPA|CTC|Package))/i,
     /(?:Roles|Positions|Openings)\s*[:\-]\s*([^\r\n.!]+)/i,
@@ -396,37 +462,22 @@ function extractProgramRoles(text = "") {
     /Job\s+Designation\s*[:\-]\s*([^\r\n.!]+)/i,
     /(?:hiring|internship|apprentice)\s+(?:role|program|opening)s?\s*[:\-]\s*([^\r\n.!]+)/i,
   ];
-
-  // Headers/noise to skip
   const headerSkip = ["details", "benefits", "criteria", "eligibility", "requirements", "description", "overview"];
-
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
     if (match && match[1]) {
       const extracted = cleanProgramValue(match[1]);
       const lowerExtracted = extracted.toLowerCase();
-      if (extracted && extracted.length < 150 && !headerSkip.includes(lowerExtracted)) {
-        return extracted;
-      }
+      if (extracted && extracted.length < 150 && !headerSkip.includes(lowerExtracted)) return extracted;
     }
   }
-
-  // Fallback: if email mentions internship but no role found, return "Internship"
-  if (/\binternship\b/i.test(cleanedText) || /\bintern\b/i.test(cleanedText)) {
-    return "Internship";
-  }
-
-  if (/\bapprentice\b/i.test(cleanedText)) {
-    return "Apprentice";
-  }
-
+  if (/\binternship\b/i.test(cleanedText) || /\bintern\b/i.test(cleanedText)) return "Internship";
+  if (/\bapprentice\b/i.test(cleanedText)) return "Apprentice";
   return "";
 }
 
 function extractProgramDuration(text = "") {
-  // Clean markdown first
   const cleanedText = cleanMarkdown(text);
-  
   const patterns = [
     /Duration\s*[:\-]\s*([^\r\n.!,]+?)(?:\s+(?:Student|Student Benefits|Interns|Intern|Benefits|days|day))/i,
     /Duration\s*[:\-]\s*([^\r\n.!,]+)/i,
@@ -434,352 +485,194 @@ function extractProgramDuration(text = "") {
     /([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))\s*(?:long|duration|period)(?:\s|$)/i,
     /(?:internship|apprentice|training)\s+program[^\r\n]*duration\s*[:\-]?\s*([^\r\n.!,]+)/i,
   ];
-
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
     if (match && match[1]) {
       const extracted = cleanProgramValue(match[1]);
-      if (extracted && /\d+/.test(extracted)) {
-        return extracted;
-      }
+      if (extracted && /\d+/.test(extracted)) return extracted;
     }
   }
-
   const minDurationMatch = cleanedText.match(/minimum of\s*([0-9]+\s*(?:months|month|weeks|week|days|day|years|year))/i);
-  if (minDurationMatch && minDurationMatch[1]) {
-    return cleanProgramValue(minDurationMatch[1]);
-  }
-
+  if (minDurationMatch && minDurationMatch[1]) return cleanProgramValue(minDurationMatch[1]);
   return "";
 }
 
 function extractProgramStipend(text = "") {
-  // Clean markdown first
   const cleanedText = cleanMarkdown(text);
-  
-  // Keywords indicating free/unpaid internship
   const unpaidKeywords = /\b(?:free|unpaid|no\s+stipend|nil|none|n\/a|zero|without\s+stipend|no\s+remuneration)\b/i;
-  if (unpaidKeywords.test(cleanedText)) {
-    return "";
-  }
-
+  if (unpaidKeywords.test(cleanedText)) return "";
   const patterns = [
-    // Explicit stipend label with value on same line
     /Stipend\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
     /Internship\s+stipend\s*[:\-]?\s*([₹₹$€]?\s*[0-9,]+[0-9]\s*(?:per\s+month|pm|LPA|lakhs|K|k|pa|per\s+year|p\.m)?)/i,
-    // CTC or Package
     /(?:CTC|Package)\s*[:\-]?\s*([^\r\n]+)/i,
-    // Bullet-formatted stipends for different levels (B.Tech, M.Tech, etc)
-    /[-•]\s*(?:B\.Tech|B\.E|M\.Tech|M\.E|MCA|B\.Tech\/MCA)\s*[:\-]?\s*(₹?\s*[0-9,]+\s*(?:per\s+month|pm|LPA|lakhs|K|pa)?)/i,
-    // Standalone currency + amount pattern
+    /[-•]\s*(?:B\.Tech|B\.E|M\.Tech|M\.E|MCA|B\.Tech\/MCA)\s*[:\-]?\s*([₹]?\s*[0-9,]+\s*(?:per\s+month|pm|LPA|lakhs|K|pa)?)/i,
     /(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\s*(?:LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
-    /[0-9]+(?:,\d{3})?(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
+    /[0-9]+(?:,[0-9]{3})?(?:\.\d+)?\s*(?:LPA|lakhs|K|k)(?:\s*(?:per\s*month|pm|\/month|p\.m\.|pa|\/yr))?/i,
   ];
-
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
     if (match) {
       const value = match[1] ? match[1].trim() : match[0].trim();
       const cleaned = cleanProgramValue(value);
-      // Skip if just a bare number without currency/unit
       const numericOnly = /^[0-9]+(?:\.[0-9]+)?$/;
       const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(cleaned);
-      if (numericOnly.test(cleaned) && !hasCurrencyOrUnit) {
-        continue;
-      }
-      if (cleaned && cleaned.length > 1) {
-        return cleaned;
-      }
+      if (numericOnly.test(cleaned) && !hasCurrencyOrUnit) continue;
+      if (cleaned && cleaned.length > 1) return cleaned;
     }
   }
-
   return "";
 }
 
 function extractDeadlineText(text = "") {
-  // Clean markdown first
   const cleanedText = cleanMarkdown(text);
-  
   const patterns = [
     /(?:register|apply|submit|last date|deadline).*?\b(?:on or before|before|by|is)\b\s*([^\r\n.]+)/i,
     /(?:last date|deadline|register|apply)\s*[:\-]\s*([^\r\n.]+)/i,
     /\b(?:apply|submit)\s*(?:by|before)\s*([^\r\n.]+)/i,
   ];
-
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
     if (match && match[1]) {
       let deadline = match[1].trim();
-      if (!/^before|^by|^deadline/i.test(deadline)) {
-        deadline = `Before ${deadline}`;
-      }
+      if (!/^(before|by|deadline)/i.test(deadline)) deadline = `Before ${deadline}`;
       return deadline;
     }
   }
-
   return "";
 }
 
-function enrichProgramDetails(text = "") {
-  // Clean markdown formatting once at the start
-  const cleanedText = cleanMarkdown(text);
-  return {
-    programRoles: extractProgramRoles(cleanedText),
-    programDuration: extractProgramDuration(cleanedText),
-    programStipend: extractProgramStipend(cleanedText),
-    deadlineText: extractDeadlineText(cleanedText),
-  };
+function isInvalidTitle(title = "") {
+  const normalized = normalizeKey(title);
+  if (!normalized || normalized.length < 3) return true;
+  return INVALID_TITLE_FRAGMENTS.some((fragment) => normalized.includes(fragment));
 }
 
-// ─────────────────────────────────────────────
-// MAIN EXPORT
-// ─────────────────────────────────────────────
-
-/**
- * Parse a raw email text (subject + snippet) via Gemini LLM.
- *
- * @param {string} emailText      - Combined subject + body snippet (for LLM)
- * @param {string} [sender]       - Raw "From" header value
- * @param {string} [fullBodyText] - Full email body (for link extraction)
- * @returns {object}              - Parsed application data
- */
-async function parseEmailWithLLM(emailText, sender = "", fullBodyText = "", referenceDate = new Date()) {
-  // console.log("--- parseEmailWithLLM ---");
-
-  // ── 1. Build an improved, strict prompt ─────────────────────────────────
-  const prompt = `
-You are a precise data extraction system for a job application tracker.
-
-Analyze the following email text and determine if it is related to:
-- Job applications, internships, online assessments, interviews, offers, or rejections.
-
-=== RULES ===
-1. Return ONLY valid JSON. No explanations, no markdown, no extra text.
-2. If the email IS relevant, return this exact structure:
-{
-  "isRelevant": true,
-  "company": "<company name>",
-  "role": "<job title / role>",
-  "type": "internship | full-time | test | hackathon | unknown",
-  "status": "applied | interview | offer | rejected",
-  "date": "<YYYY-MM-DD or empty string>",
-  "link": "<URL or empty string>"
+function generateTitle(company = "", classification = "newOpportunity", subject = "", roleCandidate = "", body = "") {
+  const base = company || "Opportunity";
+  const text = `${subject} ${body}`.toLowerCase();
+  if (classification === "interviewSchedule") return `${base} Interview Schedule`;
+  if (classification === "assessmentAnnouncement") return /fcat/i.test(text) ? `${base} FCAT Profile Completion` : `${base} Aptitude Test`;
+  if (classification === "registrationLink") return /profile/i.test(text) ? `${base} Profile Completion` : `${base} Registration`;
+  if (classification === "applicationReminder") return `${base} Registration Reminder`;
+  if (classification === "pptAnnouncement") return `${base} Pre-Placement Talk`;
+  if (classification === "venueUpdate") return `${base} Venue Update`;
+  if (classification === "deadlineReminder") return `${base} Deadline Reminder`;
+  if (classification === "genericPlacementNotice") return `${base} Recruitment Drive`;
+  if (classification === "interviewResult") return `${base} Interview Result`;
+  if (classification === "newOpportunity") return `${base} Opportunity`;
+  if (roleCandidate && roleCandidate !== "Unknown Role") return `${base} ${roleCandidate}`;
+  return `${base} Opportunity`;
 }
-3. If the email is NOT relevant, return:
-{ "isRelevant": false }
 
-=== COMPANY EXTRACTION RULES ===
-- Prefer company names found in the email body or signature.
-- Prefer the sender domain if the body is ambiguous (e.g. @google.com → "Google").
-- If the sender is @msrit.edu or another placement/college email, DO NOT return MSRIT or the college as the employer.
-- NEVER return "unknown", "company", "team", or any generic placeholder.
-- If truly unresolvable, return an empty string "".
+function buildProcessId(company = "") {
+  return normalizeKey(company) || "unknown-process";
+}
 
-=== ROLE EXTRACTION RULES ===
-- Extract ONLY the core job role or title (e.g., "Software Engineer Intern", "Apprentice", "Analyst").
-- Keep it short and meaningful (2-5 words max). Do NOT include full program names.
-- Examples: 
-  "2027 Final Year Student Apprentice Program" → "Apprentice"
-  "Campus Recruitment for SDE Intern Role" → "Software Engineer Intern"
-- If no clear role is found, return "Unknown Role".
-
-=== STATUS CLASSIFICATION ===
-- "offer"     → offer, congratulations, selected, pleased to inform, happy to inform
-- "interview" → interview, schedule, shortlisted, assessment, test, next round, aptitude
-- "rejected"  → regret, unfortunately, not selected, unsuccessful, cannot move forward
-- "applied"   → default when none of the above match
-
-=== LINK EXTRACTION RULES ===
-- Look for any registration / application URL in the email.
-- STRONGLY prefer links matching: https://forms.gle/... or https://docs.google.com/forms/...
-- If a Google Form link is present, it MUST be returned in the "link" field.
-- If no relevant link exists, return an empty string "".
-
-=== DATE RULES ===
-- Extract the most relevant date (test date, interview date, deadline).
-- Format: YYYY-MM-DD. Return "" if no date found.
-
-Email sender: ${sender}
-
-Email content:
-${emailText}
-`;
-
-  // ── 2. Call Gemini ───────────────────────────────────────────────────────
-  let llmRaw = "";
-  let parsed = null;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
-
+async function callGeminiFallback({ subject = "", sender = "", body = "" }) {
+  const prompt = `You are a structured parser.\nReturn only JSON.\n{\n  \"company\": \"<company name or empty>\",\n  \"role\": \"<role or event title or empty>\",\n  \"classification\": \"<New Hiring Opportunity|Registration Link|Application Reminder|PPT Announcement|Assessment Announcement|Interview Schedule|Interview Result|Venue Update|Deadline Reminder|Generic Placement Notice|Non-Recruitment Email>\",\n  \"type\": \"<internship|full-time|test|unknown>\",\n  \"status\": \"<applied|interview|offer|rejected>\",\n  \"link\": \"<URL or empty>\",\n  \"eventDate\": \"<YYYY-MM-DD or empty>\",\n  \"deadlineISO\": \"<YYYY-MM-DDTHH:MM:SS.sssZ or empty>\",\n  \"venue\": \"<venue or empty>\",\n  \"durationText\": \"<duration or empty>\",\n  \"salaryText\": \"<salary or empty>\"\n}\nSubject: ${subject}\nSender: ${sender}\nBody: ${body}`;
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite-preview",
       contents: prompt,
-      config: {
-        abortSignal: controller.signal
-      }
+      config: { abortSignal: controller.signal }
     });
-
     clearTimeout(timeoutId);
-    llmRaw = (response.text || "").trim();
-
-    // Strip markdown code fences if present
-    const jsonText = llmRaw
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
-
-    parsed = JSON.parse(jsonText);
+    let jsonText = (response.text || "").trim();
+    jsonText = jsonText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+    return JSON.parse(jsonText);
   } catch (err) {
-    clearTimeout(timeoutId);
-    let errorToLog = err;
-    if (err.name === "AbortError" || controller.signal.aborted) {
-      errorToLog = new Error("Gemini email parse request timed out");
-      errorToLog.code = "ETIMEOUT";
+    console.error("[LLM FALLBACK FAILED]", err?.message || err);
+    return {};
+  }
+}
+
+async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", referenceDate = new Date(), rawText = "") {
+  const body = normalizeText(fullBodyText || rawText || "");
+  const forwarded = parseForwardedEmail(body);
+  const sourceBody = forwarded.body || body;
+  const sourceSubject = forwarded.subject || subject || "";
+  const linkInfo = extractFormLink(sourceBody);
+  const classification = classifyEmail({
+    subject: sourceSubject,
+    body: sourceBody,
+    forwarded,
+    hasLink: !!linkInfo.primary,
+  });
+  let company = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
+  const eventDate = extractEventDate(sourceBody, referenceDate);
+  const deadlineInfo = extractDeadlineDetails(sourceBody, referenceDate);
+  const reportingTime = extractReportingTime(sourceBody);
+  const venue = extractVenue(sourceBody);
+  const durationText = extractDuration(sourceBody);
+  const salaryText = extractSalary(sourceBody);
+  const programRoles = extractProgramRoles(sourceBody);
+  const jobRole = programRoles || keywordRoleFallback(sourceBody);
+  let title = generateTitle(company, classification.category, sourceSubject, jobRole, sourceBody);
+  const processId = buildProcessId(company);
+
+  let llmFallback = {};
+  if ((!company || classification.confidence < 0.5) && /\b(apply|registration|interview|assessment|deadline|aptitude|profile|seminar|ppt|placement|recruitment)\b/i.test(`${sourceSubject} ${sourceBody}`)) {
+    llmFallback = await callGeminiFallback({ subject: sourceSubject, sender, body: sourceBody });
+    if (!company && llmFallback.company) {
+      company = sanitizeCompany(llmFallback.company) || companyFromSender(sender) || company;
     }
-    console.error("[LLM ERROR] Gemini call or JSON parse failed:", errorToLog.message);
-    // Fall through to keyword-based fallback below
+    if (llmFallback.role && !title) {
+      title = llmFallback.role;
+    }
   }
 
-  // ── 3. Post-process LLM result ───────────────────────────────────────────
-  if (parsed && parsed.isRelevant === true) {
-    // Normalize status
-    parsed.status = normalizeStatus(parsed.status || "");
+  const resolvedCompany = company || sanitizeCompany(llmFallback.company || "") || "";
+  const finalClassification = llmFallback.classification && llmFallback.classification !== "Non-Recruitment Email"
+    ? llmFallback.classification
+    : classification.classification;
+  const finalCategory = llmFallback.classification && llmFallback.classification !== "Non-Recruitment Email"
+    ? normalizeKey(llmFallback.classification).replace(/\s+/g, "")
+    : classification.category;
+  const finalStatus = llmFallback.status ? normalizeStatus(llmFallback.status) : normalizeStatus(classification.status);
+  const finalType = llmFallback.type || classification.type;
 
-    const sourceText = fullBodyText || emailText;
-    const linkResult = extractFormLink(sourceText);
-    const hasGoogleForm = isGoogleFormLink(sourceText) || linkResult.isForm;
-    const parsedInterview = parsed.status === "interview" || isInterviewEmail(sourceText);
-    const isSeminar = looksLikeSeminarOrTraining(sourceText);
+  const parsed = {
+    isRelevant: finalCategory !== "nonRecruitment",
+    classification: finalClassification,
+    type: finalType,
+    status: finalStatus,
+    confidenceScore: Math.min(1, classification.confidence + (resolvedCompany ? 0.05 : 0)),
+    company: resolvedCompany,
+    jobRole: jobRole || llmFallback.role || "Unknown Role",
+    title: title || llmFallback.role || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
+    role: title || llmFallback.role || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
+    processId: processId || buildProcessId(resolvedCompany),
+    processName: `${resolvedCompany || "Unknown Company"} hiring process`,
+    eventDate: eventDate || null,
+    eventTime: sourceBody.match(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i)?.[0]?.toUpperCase() || "",
+    reportingTime: reportingTime || "",
+    venue: venue || llmFallback.venue || "",
+    durationText: durationText || llmFallback.durationText || "",
+    salaryText: salaryText || llmFallback.salaryText || "",
+    deadline: deadlineInfo.deadline || "",
+    deadlineISO: deadlineInfo.iso || llmFallback.deadlineISO || "",
+    deadlineText: extractDeadlineText(sourceBody),
+    link: linkInfo.primary || llmFallback.link || "",
+    links: linkInfo.all.length ? linkInfo.all : llmFallback.link ? [llmFallback.link] : [],
+    isFormLink: linkInfo.isForm || /docs\.google\.com\/forms|forms\.gle/.test(linkInfo.primary || llmFallback.link || ""),
+    programRoles: programRoles || llmFallback.role || "",
+    programDuration: extractProgramDuration(sourceBody) || llmFallback.durationText || "",
+    programStipend: extractProgramStipend(sourceBody) || llmFallback.salaryText || "",
+    parseMeta: {
+      sourceSubject: sourceSubject,
+      forwarded: forwarded.isForwarded,
+      sender,
+      classificationSource: classification.classification,
+      companySource: resolvedCompany ? "heuristic" : "llm-fallback",
+      hasLink: !!linkInfo.primary,
+      rawTitle: title,
+      fallback: llmFallback,
+    },
+  };
 
-    // Reject non-actionable emails unless they include a Google Form or are interview-related.
-    if ((!hasGoogleForm && !parsedInterview) || (isSeminar && !hasGoogleForm && !parsedInterview)) {
-      return { isRelevant: false };
-    }
-
-    // Sanitize company — if bad, try domain fallback
-    const cleanCompany = sanitizeCompany(parsed.company || "");
-    if (!cleanCompany || isGenericCompanyName(cleanCompany)) {
-      parsed.company = extractCompanyFromText(sourceText) || companyFromSender(sender) || "";
-    } else {
-      parsed.company = cleanCompany;
-    }
-
-    if (isGenericCompanyName(parsed.company)) {
-      parsed.company = extractCompanyFromText(sourceText) || "";
-    }
-
-    // Clean role and log it
-    const rawRole = parsed.role || "";
-    parsed.role = cleanRole(rawRole, emailText);
-    if (rawRole !== parsed.role) {
-      console.log(`[ROLE_CLEANUP] Raw: "${rawRole}" → Clean: "${parsed.role}"`);
-    }
-
-    parsed.type = (parsed.type || "unknown").trim().toLowerCase();
-    parsed.date = (parsed.date || "").trim();
-
-    // Always run regex extraction — deterministic & beats the LLM for links
-    const linkTextSource = fullBodyText || emailText;
-    parsed.link  = linkResult.primary || (parsed.link || "").trim();
-    parsed.links = linkResult.all;
-    parsed.isFormLink = linkResult.isForm;
-
-    if (parsed.link) {
-      console.log(`[LINK_SOURCE] ${fullBodyText ? "fullBody" : "snippet"}`);
-    }
-
-    // Extact deadline using regex
-    const deadlineResult = extractDeadline(fullBodyText || emailText, referenceDate);
-    parsed.deadline = deadlineResult.deadline;
-    parsed.deadlineISO = deadlineResult.iso;
-
-    const programDetails = enrichProgramDetails(fullBodyText || emailText);
-    parsed.programRoles = programDetails.programRoles;
-    parsed.programDuration = programDetails.programDuration;
-    parsed.programStipend = programDetails.programStipend;
-    parsed.deadlineText = programDetails.deadlineText;
-
-    if (parsed.deadline) {
-      console.log(`[DEADLINE_EXTRACTED] "${parsed.deadline}"`);
-      console.log(`[DEADLINE_SOURCE] regex`);
-    }
-    if (parsed.deadlineText) {
-      console.log(`[DEADLINE_TEXT_EXTRACTED] "${parsed.deadlineText}"`);
-    }
-
-    // console.log("[FINAL PARSED]:", JSON.stringify(parsed));
-    return parsed;
-  }
-
-  // ── 4. Non-LLM keyword fallback (safety net) ────────────────────────────
-  // If LLM returned isRelevant: false or failed entirely, run a quick
-  // keyword check. If the email looks job-related, build a minimal result.
-  const lowerText = emailText.toLowerCase();
-  const jobKeywords = [
-    "apply", "application", "intern", "internship", "job", "role",
-    "position", "interview", "offer", "selected", "hiring", "recruitment",
-    "assessment", "test", "rejected", "regret", "register", "registration",
-    "placement", "shortlist", "shortlisted", "congratulations", "apprentice",
-    "deadline", "last date", "before", "by"
-  ];
-  const looksRelevant = jobKeywords.some((kw) => lowerText.includes(kw));
-
-  if (looksRelevant) {
-    let fallbackCompany = companyFromSender(sender) || "";
-    if (!fallbackCompany || isGenericCompanyName(fallbackCompany)) {
-      fallbackCompany = extractCompanyFromText(fullBodyText || emailText) || "";
-    }
-    const fallbackStatus  = inferStatusFromText(emailText);
-    const linkTextSource = fullBodyText || emailText;
-    const { primary, all, isForm } = extractFormLink(linkTextSource);
-    const hasGoogleForm = isGoogleFormLink(linkTextSource) || isForm;
-    const isInterview = fallbackStatus === "interview" || isInterviewEmail(linkTextSource);
-
-    if (!hasGoogleForm && !isInterview) {
-      return { isRelevant: false };
-    }
-
-    const fallbackResult = {
-      isRelevant: true,
-      company: fallbackCompany,
-      role: keywordRoleFallback(emailText),
-      type: "unknown",
-      status: fallbackStatus,
-      date: "",
-      link: primary,
-      links: all,
-      isFormLink: isForm,
-      _source: "keyword-fallback",
-    };
-
-    const deadlineResult = extractDeadline(fullBodyText || emailText, referenceDate);
-    fallbackResult.deadline = deadlineResult.deadline;
-    fallbackResult.deadlineISO = deadlineResult.iso;
-
-    const programDetails = enrichProgramDetails(fullBodyText || emailText);
-    fallbackResult.programRoles = programDetails.programRoles;
-    fallbackResult.programDuration = programDetails.programDuration;
-    fallbackResult.programStipend = programDetails.programStipend;
-    fallbackResult.deadlineText = programDetails.deadlineText;
-
-    if (primary) {
-      console.log(`[LINK_SOURCE] ${fullBodyText ? "fullBody" : "snippet"} (fallback)`);
-    }
-
-    if (fallbackResult.deadline) {
-      console.log(`[DEADLINE_EXTRACTED] "${fallbackResult.deadline}" (fallback)`);
-      console.log(`[DEADLINE_SOURCE] regex`);
-    }
-
-    // console.log("[FALLBACK RESULT]:", JSON.stringify(fallbackResult));
-    return fallbackResult;
-  }
-
-  // console.log("[RESULT]: Not relevant");
-  return { isRelevant: false };
+  return parsed;
 }
 
 module.exports = { parseEmailWithLLM };
