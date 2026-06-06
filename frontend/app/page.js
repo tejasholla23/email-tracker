@@ -1168,7 +1168,16 @@ export default function JobTrackerDashboard() {
                     const isDone = statusKey === "done";
 
                     return (
-                      <div key={app._id} className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}>
+                      <div 
+                        key={app._id} 
+                        className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
+                        style={{ cursor: "pointer" }}
+                        onClick={(e) => {
+                          if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
+                          setSelectedApp(app);
+                          setShowInfoModal(true);
+                        }}
+                      >
                         <div className="app-header">
                           <div className="app-info">
                             <div className="company-logo-container">
@@ -1522,6 +1531,38 @@ export default function JobTrackerDashboard() {
                 <div className="info-item-value">{selectedApp.companyInfo?.headquarters || "N/A"}</div>
               </div>
             </div>
+
+            {selectedApp.events && selectedApp.events.length > 0 && (
+              <div className="event-timeline" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                <h4 style={{ marginTop: '0', marginBottom: '16px', fontSize: '16px', color: '#1e293b', fontWeight: '600' }}>Application Timeline</h4>
+                <div className="timeline-container" style={{ position: 'relative', marginLeft: '8px' }}>
+                  {selectedApp.events.map((ev, i) => {
+                    const d = new Date(ev.date);
+                    const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
+                    return (
+                      <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === selectedApp.events.length - 1 ? '0' : '16px' }}>
+                        <div className="timeline-date" style={{ width: '48px', fontSize: '13px', color: '#64748b', textAlign: 'right', marginRight: '16px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
+                          {formattedD}
+                        </div>
+                        <div className="timeline-dot" style={{ position: 'absolute', left: '59px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
+                        {i !== selectedApp.events.length - 1 && (
+                          <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-16px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
+                        )}
+                        <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
+                          <div className="timeline-title" style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
+                            {ev.title || "Email Notification"}
+                          </div>
+                          <div className="timeline-subtitle" style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', lineHeight: '1.4' }}>
+                            {ev.status && <span style={{ textTransform: 'capitalize', marginRight: '6px', fontWeight: '600', color: '#3b82f6' }}>[{ev.status}]</span>}
+                            <span style={{ opacity: 0.9 }}>{ev.subject ? (ev.subject.length > 60 ? ev.subject.substring(0, 60) + "..." : ev.subject) : ""}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="modal-actions">
               <button className="btn-primary" onClick={() => setShowInfoModal(false)}>
