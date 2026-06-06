@@ -546,6 +546,13 @@ export default function JobTrackerDashboard() {
         .status-offer { background: #f0fdf4; color: #16a34a; }
         .status-rejected { background: #fef2f2; color: #dc2626; }
         .status-done { background: #f0fdfa; color: #0d9488; }
+        .app-card.status-outline-new { border-color: #8b5cf6; }
+        .app-card.status-outline-applied { border-color: #2563eb; }
+        .app-card.status-outline-interview { border-color: #0d9488; }
+        .app-card.status-outline-offer { border-color: #16a34a; }
+        .app-card.status-outline-rejected { border-color: #dc2626; }
+        .app-card.status-outline-done { border-color: #64748b; }
+        .app-card.is-urgent { border-color: #dc2626; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18); }
         
         .app-footer { border-top: 1px solid #eaefed; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #6d7a77; }
         .email-info { display: flex; align-items: center; gap: 6px; }
@@ -1037,7 +1044,12 @@ export default function JobTrackerDashboard() {
 
             <div className="filters">
               {[
-                { label: "All",      value: "all"      },
+                { label: "All", value: "all" },
+                { label: "Deadlines Today", value: "deadlines" },
+                { label: "New", value: "new" },
+                { label: "Interview", value: "interview" },
+                { label: "Applied", value: "applied" },
+                { label: "Done", value: "done" },
                 { label: "Unmarked", value: "unmarked" },
               ].map(({ label, value }) => (
                 <button
@@ -1062,26 +1074,32 @@ export default function JobTrackerDashboard() {
                       (app.role || "").toLowerCase().includes(query);
 
                     const s = (app.status || "").toLowerCase();
+                    const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
                     const matchesFilter =
                       activeFilter === "all" ||
-                      (activeFilter === "unmarked" && s !== "done");
+                      (activeFilter === "deadlines" && isDeadlineToday) ||
+                      (activeFilter === "unmarked" && s !== "done") ||
+                      activeFilter === s;
 
                     return matchesSearch && matchesFilter;
                   })
                   .sort((a, b) => {
-                    const dateA = new Date(a.date || a.createdAt || 0);
-                    const dateB = new Date(b.date || b.createdAt || 0);
+                    const dateA = new Date(a.deadlineISO || a.date || a.createdAt || 0);
+                    const dateB = new Date(b.deadlineISO || b.date || b.createdAt || 0);
                     return dateB - dateA;
                   })
                   .map((app) => {
-                    const dateToShow = app.date || app.testDate || app.deadline || app.createdAt;
-                    const formattedDate = dateToShow ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "N/A";
+                    const dateToShow = app.deadlineISO || app.date || app.testDate || app.createdAt;
+                    const formattedDate = dateToShow
+                      ? new Date(dateToShow).toLocaleString(undefined, app.deadlineISO ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' })
+                      : "N/A";
                     const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                    const isNew = isAddedToday(app);
-                    const isDone = (app.status || "").toLowerCase() === "done";
+                    const statusKey = (app.status || "new").toLowerCase();
+                    const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
+                    const isDone = statusKey === "done";
 
                     return (
-                      <div key={app._id} className={`app-card${isDone ? " is-done" : ""}`}>
+                      <div key={app._id} className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}>
                         <div className="app-header">
                           <div className="app-info">
                             <div className="company-logo-container">

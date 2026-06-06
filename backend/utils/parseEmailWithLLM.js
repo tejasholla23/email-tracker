@@ -259,71 +259,90 @@ function extractDeadline(text = "") {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const now = new Date();
   const currentYear = now.getFullYear();
-
-  // Normalize spaces
   const cleanText = text.replace(/\s+/g, " ");
-  
-  // Split into chunks by punctuation or newlines
   const segments = cleanText.split(/[.!?]|\r?\n/);
   const deadlineKeywords = /deadline|apply|register|before|last date|by|on or before/i;
+  const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
+
+  const buildReadable = (dateObj, includeTime = false) => {
+    const day = dateObj.getDate();
+    const monthStr = months[dateObj.getMonth()];
+    const year = dateObj.getFullYear();
+    const datePart = `${day} ${monthStr}${year !== currentYear ? " " + year : ""}`;
+    if (!includeTime) return datePart;
+
+    const hour = dateObj.getHours();
+    const minute = dateObj.getMinutes();
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+    const minuteStr = minute.toString().padStart(2, "0");
+    return `${datePart}, ${displayHour}:${minuteStr} ${ampm}`;
+  };
+
+  const parseTime = (hourStr, minuteStr = "00", ampm) => {
+    let hour = parseInt(hourStr, 10);
+    const minute = minuteStr ? parseInt(minuteStr, 10) : 0;
+    if ((ampm || "AM").toUpperCase() === "PM" && hour < 12) hour += 12;
+    if ((ampm || "AM").toUpperCase() === "AM" && hour === 12) hour = 0;
+    return { hour, minute };
+  };
 
   for (const segment of segments) {
-    if (deadlineKeywords.test(segment)) {
+    if (!deadlineKeywords.test(segment)) continue;
 
-      // 1. Today/Tomorrow + Time
-      const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(pm|am)/i;
-      const todayMatch = segment.match(new RegExp(`today(?:\\s+at|\\s+before|\\s+by)?\\s+${timeRegex.source}`, "i")) || 
-                         segment.match(new RegExp(`${timeRegex.source}\\s+today`, "i"));
-      
-      if (todayMatch) {
-        const hour = parseInt(todayMatch[1]);
-        const min = todayMatch[2] || "00";
-        const ampm = todayMatch[3].toUpperCase();
-        
-        const day = now.getDate();
-        const monthStr = months[now.getMonth()];
-        const readable = `${day} ${monthStr}, ${hour}${min !== "00" ? ":" + min : ""} ${ampm}`;
-        
-        const isoDate = new Date(now);
-        let h = hour;
-        if (ampm === "PM" && h < 12) h += 12;
-        if (ampm === "AM" && h === 12) h = 0;
-        isoDate.setHours(h, parseInt(min), 0, 0);
-        
-        return { deadline: readable, iso: isoDate.toISOString() };
-      }
+    const timeMatch = segment.match(timeRegex);
+    const hasToday = /\btoday\b/i.test(segment);
+    const hasTomorrow = /\btomorrow\b/i.test(segment);
 
-      // 2. Date Alpha
-      const dateAlphaMatch = segment.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i);
-      if (dateAlphaMatch) {
-        const day = dateAlphaMatch[1];
-        const monthStr = dateAlphaMatch[2].charAt(0).toUpperCase() + dateAlphaMatch[2].slice(1, 3).toLowerCase();
-        
-        const yearMatch = segment.match(/\b(202[4-9]|2030)\b/);
-        const year = yearMatch ? yearMatch[1] : currentYear;
-        
-        const readable = `${day} ${monthStr}${year != currentYear ? " " + year : ""}`;
-        const monthIdx = months.indexOf(monthStr);
-        if (monthIdx !== -1) {
-          const isoDate = new Date(year, monthIdx, parseInt(day));
-          return { deadline: readable, iso: isoDate.toISOString() };
+    if (timeMatch && hasToday) {
+      const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
+      const isoDate = new Date(now);
+      isoDate.setHours(hour, minute, 0, 0);
+      return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
+    }
+
+    if (timeMatch && hasTomorrow) {
+      const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
+      const isoDate = new Date(now);
+      isoDate.setDate(isoDate.getDate() + 1);
+      isoDate.setHours(hour, minute, 0, 0);
+      return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
+    }
+
+    const dateAlphaMatch = segment.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i);
+    if (dateAlphaMatch) {
+      const day = parseInt(dateAlphaMatch[1], 10);
+      const monthStr = dateAlphaMatch[2].charAt(0).toUpperCase() + dateAlphaMatch[2].slice(1, 3).toLowerCase();
+      const yearMatch = segment.match(/\b(20\d{2})\b/);
+      const year = yearMatch ? parseInt(yearMatch[1], 10) : currentYear;
+      const monthIdx = months.indexOf(monthStr);
+
+      if (monthIdx !== -1 && day >= 1 && day <= 31) {
+        const isoDate = new Date(year, monthIdx, day);
+        if (timeMatch) {
+          const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
+          isoDate.setHours(hour, minute, 0, 0);
+          return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
         }
+        return { deadline: buildReadable(isoDate, false), iso: isoDate.toISOString() };
       }
+    }
 
-      // 3. Date Numeric
-      const dateNumericMatch = segment.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
-      if (dateNumericMatch) {
-        const day = parseInt(dateNumericMatch[1]);
-        const month = parseInt(dateNumericMatch[2]);
-        let year = dateNumericMatch[3] ? parseInt(dateNumericMatch[3]) : currentYear;
-        if (year < 100) year += 2000;
+    const dateNumericMatch = segment.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+    if (dateNumericMatch) {
+      const day = parseInt(dateNumericMatch[1], 10);
+      const month = parseInt(dateNumericMatch[2], 10);
+      let year = dateNumericMatch[3] ? parseInt(dateNumericMatch[3], 10) : currentYear;
+      if (year < 100) year += 2000;
 
-        if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-          const monthStr = months[month - 1];
-          const readable = `${day} ${monthStr}${year != currentYear ? " " + year : ""}`;
-          const isoDate = new Date(year, month - 1, day);
-          return { deadline: readable, iso: isoDate.toISOString() };
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const isoDate = new Date(year, month - 1, day);
+        if (timeMatch) {
+          const { hour, minute } = parseTime(timeMatch[1], timeMatch[2], timeMatch[3]);
+          isoDate.setHours(hour, minute, 0, 0);
+          return { deadline: buildReadable(isoDate, true), iso: isoDate.toISOString() };
         }
+        return { deadline: buildReadable(isoDate, false), iso: isoDate.toISOString() };
       }
     }
   }
@@ -629,7 +648,6 @@ ${emailText}
 
     // Always run regex extraction — deterministic & beats the LLM for links
     const linkTextSource = fullBodyText || emailText;
-    const linkResult = extractFormLink(linkTextSource);
     parsed.link  = linkResult.primary || (parsed.link || "").trim();
     parsed.links = linkResult.all;
     parsed.isFormLink = linkResult.isForm;
