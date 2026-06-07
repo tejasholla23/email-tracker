@@ -40,7 +40,7 @@ export default function JobTrackerDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   
   const [userEmail, setUserEmail] = useState(null);
-
+  //test comment
   useEffect(() => {
     // Check URL for auth params
     const params = new URLSearchParams(window.location.search);
