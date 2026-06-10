@@ -223,8 +223,37 @@ function sanitizeCompany(raw = "") {
   return trimmed;
 }
 
+const PLATFORM_TERMS = [
+  "microsoft teams",
+  "google forms",
+  "google meet",
+  "zoom meeting",
+  "webex",
+  "brazen",
+  "calendly",
+  "unstop"
+];
+
+function stripPlatformReferences(text = "") {
+  let cleaned = text;
+  // Remove all URLs so domains don't trigger alias matches
+  cleaned = cleaned.replace(/https?:\/\/[^\s<>"']+/gi, "");
+  
+  // Remove generic platform names
+  for (const term of PLATFORM_TERMS) {
+    const regex = new RegExp(`\\b${term}\\b`, 'gi');
+    cleaned = cleaned.replace(regex, "");
+  }
+  return cleaned;
+}
+
 function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }) {
-  const candidates = [forwarded.subject, forwarded.from, subject, body, sender].filter(Boolean);
+  const cleanSubject = stripPlatformReferences(subject);
+  const cleanBody = stripPlatformReferences(body);
+  const cleanFwdSubject = stripPlatformReferences(forwarded.subject);
+  const cleanFwdBody = stripPlatformReferences(forwarded.body);
+
+  const candidates = [cleanFwdSubject, forwarded.from, cleanSubject, cleanBody, sender].filter(Boolean);
   for (const candidate of candidates) {
     const known = matchKnownCompany(candidate);
     if (known) return { company: known, source: 'alias', confidence: 1.0 };
@@ -238,10 +267,10 @@ function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }
     }
   }
 
-  const subjectCompany = extractCompanyFromText(subject || forwarded.subject);
+  const subjectCompany = extractCompanyFromText(cleanSubject || cleanFwdSubject);
   if (subjectCompany) return { company: subjectCompany, source: 'subject', confidence: 0.7 };
 
-  const bodyCompany = extractCompanyFromText(body || forwarded.body);
+  const bodyCompany = extractCompanyFromText(cleanBody || cleanFwdBody);
   if (bodyCompany) return { company: bodyCompany, source: 'body', confidence: 0.6 };
 
   return { company: "", source: 'none', confidence: 0.0 };
@@ -664,7 +693,7 @@ function buildProcessId(company = "") {
 }
 
 async function callGeminiFallback({ subject = "", sender = "", body = "" }) {
-  const prompt = `You are a structured parser.\nReturn only JSON.\n{\n  \"company\": \"<company name or empty>\",\n  \"role\": \"<role or event title or empty>\",\n  \"classification\": \"<New Hiring Opportunity|Registration Link|Application Reminder|PPT Announcement|Assessment Announcement|Interview Schedule|Interview Result|Venue Update|Deadline Reminder|Generic Placement Notice|Non-Recruitment Email>\",\n  \"type\": \"<internship|full-time|test|unknown>\",\n  \"status\": \"<applied|interview|offer|rejected>\",\n  \"link\": \"<URL or empty>\",\n  \"eventDate\": \"<YYYY-MM-DD or empty>\",\n  \"deadlineISO\": \"<YYYY-MM-DDTHH:MM:SS.sssZ or empty>\",\n  \"venue\": \"<venue or empty>\",\n  \"durationText\": \"<duration or empty>\",\n  \"salaryText\": \"<salary or empty>\"\n}\nSubject: ${subject}\nSender: ${sender}\nBody: ${body}`;
+  const prompt = `You are a structured parser.\nReturn only JSON.\n{\n  "company": "<company name or empty>",\n  "role": "<role or event title or empty>",\n  "classification": "<New Hiring Opportunity|Registration Link|Application Reminder|PPT Announcement|Assessment Announcement|Interview Schedule|Interview Result|Venue Update|Deadline Reminder|Generic Placement Notice|Non-Recruitment Email>",\n  "type": "<internship|full-time|test|unknown>",\n  "status": "<applied|interview|offer|rejected>",\n  "link": "<URL or empty>",\n  "eventDate": "<YYYY-MM-DD or empty>",\n  "deadlineISO": "<YYYY-MM-DDTHH:MM:SS.sssZ or empty>",\n  "venue": "<venue or empty>",\n  "durationText": "<duration or empty>",\n  "salaryText": "<salary or empty>"\n}\nIMPORTANT: Ignore webinar and form platforms (e.g., Microsoft Teams, Google Forms, Zoom, Unstop, Brazen) when determining the company name. The company is the actual employer/recruiter.\nSubject: ${subject}\nSender: ${sender}\nBody: ${body}`;
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000);
@@ -784,4 +813,4 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   return parsed;
 }
 
-module.exports = { parseEmailWithLLM, extractFormLink };
+module.exports = { parseEmailWithLLM, extractFormLink, resolveCompany };
