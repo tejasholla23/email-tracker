@@ -91,12 +91,23 @@ function parseForwardedEmail(body = "") {
 }
 
 function extractFormLink(text = "") {
-  const rawAll = (text || "").match(/https?:\/\/[^"]+/gi) || [];
-  const all = rawAll.map(cleanUrl).filter(Boolean);
-  const formsGle = all.find((u) => /forms\.gle\//i.test(u));
-  const docsForms = all.find((u) => /docs\.google\.com\/forms\//i.test(u));
-  const primary = formsGle || docsForms || all[0] || "";
-  return { primary, all, isForm: !!(formsGle || docsForms) };
+  // Extract URLs starting with http or https, stopping at whitespace, quotes, or angle brackets
+  const urlRegex = /https?:\/\/[^\s<>"']+/gi;
+  const rawAll = (text || "").match(urlRegex) || [];
+  
+  // Clean trailing punctuation (e.g. commas, dots, closing parentheses) and remove duplicates
+  const cleanedAll = rawAll.map(url => url.replace(/[.,;)]+$/, ""));
+  const uniqueUrls = [...new Set(cleanedAll)];
+
+  // Select the most relevant application URL
+  const formsGle = uniqueUrls.find((u) => /forms\.gle\//i.test(u));
+  const docsForms = uniqueUrls.find((u) => /docs\.google\.com\/forms\//i.test(u));
+  const unstop = uniqueUrls.find((u) => /unstop\.com\//i.test(u));
+  const brazen = uniqueUrls.find((u) => /brazenconnect\.com\//i.test(u));
+  
+  const primary = formsGle || docsForms || unstop || brazen || uniqueUrls[0] || "";
+  
+  return { primary, all: uniqueUrls, isForm: !!(formsGle || docsForms) };
 }
 
 function companyFromSender(senderRaw = "") {
@@ -773,4 +784,4 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   return parsed;
 }
 
-module.exports = { parseEmailWithLLM };
+module.exports = { parseEmailWithLLM, extractFormLink };

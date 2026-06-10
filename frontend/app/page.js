@@ -1317,7 +1317,12 @@ export default function JobTrackerDashboard() {
                               href={app.link}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={() => handleApply(app._id)}
+                              onClick={(e) => {
+                                console.log("[DEBUG_LINK] Clicked app ID:", app._id);
+                                console.log("[DEBUG_LINK] Original app.link value:", app.link);
+                                console.log("[DEBUG_LINK] Rendered href on click:", e.currentTarget.href);
+                                handleApply(app._id);
+                              }}
                             >
                               {app.isFormLink ? "📋 Apply (Form)" : "🔗 Open Link"}
                             </a>
