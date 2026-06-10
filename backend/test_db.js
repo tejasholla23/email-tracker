@@ -1,24 +1,27 @@
-const mongoose = require('mongoose');
-const App = require('./models/Application');
 require('dotenv').config();
+const mongoose = require('mongoose');
+const CompanyInfo = require('./models/CompanyInfo');
 
 mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
-    const docs = await App.find({
-      $or: [
-        { link: { $regex: 'unstop', $options: 'i' } },
-        { 'events.link': { $regex: 'unstop', $options: 'i' } }
-      ]
-    }).limit(3).lean();
-    
-    console.log("Unstop links:");
-    console.log(JSON.stringify(docs.map(d => ({
-      _id: d._id,
-      company: d.company,
-      link: d.link,
-      events: d.events.filter(e => e.link && e.link.includes('unstop'))
-    })), null, 2));
-    
+    // Insert WorkIndia CompanyInfo
+    const existing = await CompanyInfo.findOne({ name: "WorkIndia" });
+    if (existing) {
+      console.log("WorkIndia CompanyInfo already exists:", existing);
+    } else {
+      const info = await CompanyInfo.create({
+        name: "WorkIndia",
+        shortDescription: "WorkIndia is a Bengaluru-based product company focused on blue-collar and grey-collar job recruitment.",
+        fullDescription: "WorkIndia is an Indian job search platform that connects blue-collar and grey-collar workers with employers. The platform uses AI-based matching to simplify hiring for roles in delivery, sales, customer support, and other entry-level positions.",
+        industry: "HR Tech / Recruitment",
+        companyType: "Product-based",
+        headquarters: "Bengaluru, India",
+        domain: "workindia.in",
+        logo: "https://logo.clearbit.com/workindia.in"
+      });
+      console.log("WorkIndia CompanyInfo created:", info);
+    }
+
     process.exit();
   })
-  .catch(e => console.error(e));
+  .catch(e => { console.error(e); process.exit(1); });

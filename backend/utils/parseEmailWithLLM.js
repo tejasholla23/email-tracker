@@ -157,6 +157,7 @@ const KNOWN_COMPANY_ALIASES = {
   hcl: "HCL",
   flipkart: "Flipkart",
   ibm: "IBM",
+  workindia: "WorkIndia",
 };
 
 const INVALID_TITLE_FRAGMENTS = [

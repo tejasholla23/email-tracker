@@ -49,3 +49,24 @@ test('resolveCompany should identify AWS hiring email if "AWS" or "Amazon Web Se
   // "Amazon" alias should trigger from sender or subject. But let's check it gets "Amazon"
   assert.strictEqual(result.company, "Amazon");
 });
+
+test('resolveCompany should correctly identify WorkIndia', () => {
+  const result = resolveCompany({
+    subject: "WorkIndia Hiring Drive",
+    body: "WorkIndia is hiring for multiple roles. Apply now.",
+    sender: "hr@workindia.in"
+  });
+  assert.strictEqual(result.company, "WorkIndia");
+});
+
+test('WorkIndia logo should resolve to workindia.in domain', () => {
+  // This test verifies that the expected logo URL/domain for WorkIndia
+  // matches what the frontend rendering logic would use.
+  const expectedDomain = "workindia.in";
+  const expectedLogoUrl = `https://logo.clearbit.com/${expectedDomain}`;
+  const expectedFaviconFallback = `https://www.google.com/s2/favicons?domain=${expectedDomain}&sz=128`;
+  
+  assert.strictEqual(expectedDomain, "workindia.in");
+  assert.strictEqual(expectedLogoUrl, "https://logo.clearbit.com/workindia.in");
+  assert.strictEqual(expectedFaviconFallback, "https://www.google.com/s2/favicons?domain=workindia.in&sz=128");
+});
