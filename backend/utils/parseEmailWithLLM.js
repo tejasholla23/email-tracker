@@ -110,19 +110,44 @@ function extractFormLink(text = "") {
 }
 
 function companyFromSender(senderRaw = "") {
-  const domainMatch = (senderRaw || "").match(/@([a-zA-Z0-9-]+)\./);
+  const domainMatch = (senderRaw || "").match(/@([a-zA-Z0-9.-]+)/);
   if (!domainMatch) return null;
-  const domainName = domainMatch[1].toLowerCase();
-  const genericDomains = [
+
+  const fullDomain = domainMatch[1].toLowerCase();
+  const parts = fullDomain.split(".");
+  if (parts.length < 2) return null;
+
+  // Compound second-level domains like co.in, co.uk, com.au, ac.uk.
+  // When these appear, the company name is the label BEFORE the compound SLD.
+  const compoundSLDs = new Set(["co", "com", "net", "org", "gov", "edu", "ac"]);
+  const genericTLDs  = new Set(["com", "net", "org", "edu", "gov", "io", "ai",
+                                 "in", "uk", "us", "de", "fr", "jp", "au", "ca"]);
+
+  const tld = parts[parts.length - 1]; // e.g. "com"
+  const sld = parts[parts.length - 2]; // e.g. "abb", "pod", "co"
+
+  let companyPart;
+  // Compound TLD pattern: e.g. .co.in, .com.au → company is 3rd label from end
+  if (compoundSLDs.has(sld) && genericTLDs.has(tld) && parts.length >= 3) {
+    companyPart = parts[parts.length - 3]; // e.g. "abb" from "in.abb.co.in"
+  } else {
+    // Simple TLD: e.g. "abb" from "in.abb.com", "pod" from "pod.ai"
+    companyPart = sld;
+  }
+
+  const genericDomains = new Set([
     "gmail", "yahoo", "outlook", "hotmail", "noreply", "no-reply",
     "mail", "info", "notifications", "mailer", "msrit", "placement",
-    "dean", "career", "careers"
-  ];
-  if (genericDomains.includes(domainName)) return null;
-  return domainName
-    .split(/[-\.]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    "dean", "career", "careers", "support", "help", "admin", "hr",
+    "contact", "sales", "hello", "team"
+  ]);
+  if (genericDomains.has(companyPart)) return null;
+
+  // Capitalize each hyphen-separated segment for readability
+  // e.g. "some-generic-domain" → "Some Generic Domain"
+  return companyPart
+    .split("-")
+    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
     .join(" ");
 }
 
@@ -137,6 +162,7 @@ function isGenericCompanyName(raw = "") {
 }
 
 const KNOWN_COMPANY_ALIASES = {
+  // ── Established aliases ──────────────────────────────────────────────────
   tcs: "TCS",
   "tata consultancy services": "TCS",
   dentsu: "Dentsu",
@@ -146,6 +172,8 @@ const KNOWN_COMPANY_ALIASES = {
   nokia: "Nokia",
   haber: "Haber",
   amazon: "Amazon",
+  "amazon web services": "AWS",
+  aws: "AWS",
   google: "Google",
   microsoft: "Microsoft",
   infosys: "Infosys",
@@ -154,10 +182,42 @@ const KNOWN_COMPANY_ALIASES = {
   accenture: "Accenture",
   capgemini: "Capgemini",
   hcl: "HCL",
+  "hcl technologies": "HCL",
   flipkart: "Flipkart",
   ibm: "IBM",
   workindia: "WorkIndia",
   "tata technologies": "Tata Technologies",
+  // ── Additional placement-email companies ─────────────────────────────────
+  abb: "ABB",
+  "abb india": "ABB",
+  "abb business services": "ABB",
+  ericsson: "Ericsson",
+  "ericsson india": "Ericsson",
+  pod: "Pod.ai",
+  "pod.ai": "Pod.ai",
+  hirepro: "HirePro",
+  "hire pro": "HirePro",
+  bosch: "Bosch",
+  "robert bosch": "Bosch",
+  siemens: "Siemens",
+  dell: "Dell",
+  intel: "Intel",
+  qualcomm: "Qualcomm",
+  oracle: "Oracle",
+  samsung: "Samsung",
+  cisco: "Cisco",
+  deloitte: "Deloitte",
+  blackrock: "BlackRock",
+  uber: "Uber",
+  sap: "SAP",
+  thoughtworks: "Thoughtworks",
+  freshworks: "Freshworks",
+  razorpay: "Razorpay",
+  zoho: "Zoho",
+  mphasis: "Mphasis",
+  mindtree: "Mindtree",
+  lnt: "L&T",
+  "larsen and toubro": "L&T",
 };
 
 const INVALID_TITLE_FRAGMENTS = [
@@ -250,6 +310,18 @@ function stripPlatformReferences(text = "") {
   return cleaned;
 }
 
+/**
+ * Words that must never be treated as a company name even when they appear
+ * right after a sign-off word ("Regards, Seeking…" → reject "Seeking").
+ */
+const SIGNATURE_COMPANY_BLOCKLIST = new Set([
+  "seeking", "greetings", "please", "kindly", "noted", "reminder",
+  "regards", "sincerely", "best", "dear", "note", "invitation",
+  "hi", "hello", "thanks", "thank", "hope", "trust", "warm",
+  "enclosed", "attached", "forward", "forwarded", "partnership",
+  "students", "all", "sir", "madam", "team",
+]);
+
 function extractCompanyFromSignature(body = "") {
   const sigMatches = [
     /(?:regards|thanks|sincerely|best|greetings)\s*,?\s+(?:team\s+)?([A-Z][A-Za-z0-9&.\-\s]{2,40})/i,
@@ -260,11 +332,14 @@ function extractCompanyFromSignature(body = "") {
     const match = lastPart.match(regex);
     if (match && match[1]) {
       const candidate = sanitizeCompany(match[1]);
-      if (candidate && !isGenericCompanyName(candidate)) {
-        const lowerCand = candidate.toLowerCase();
-        if (lowerCand !== "here" && lowerCand !== "there" && lowerCand !== "this" && !lowerCand.startsWith("potential")) {
-          return candidate;
-        }
+      if (!candidate) continue;
+      const lowerCand = candidate.toLowerCase();
+      const firstWord = lowerCand.split(/\s+/)[0];
+      // Reject if the first captured word is a known generic/sentence-starting word
+      if (SIGNATURE_COMPANY_BLOCKLIST.has(firstWord)) continue;
+      if (lowerCand === "here" || lowerCand === "there" || lowerCand === "this") continue;
+      if (!lowerCand.startsWith("potential") && !isGenericCompanyName(candidate)) {
+        return candidate;
       }
     }
   }
@@ -313,6 +388,40 @@ function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }
   if (bodyCompany) return { company: bodyCompany, source: 'body', confidence: 0.6 };
 
   return { company: "", source: 'none', confidence: 0.0 };
+}
+
+// ---------------------------------------------------------------------------
+// Forwarding footer stripper
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip the forwarding footer appended by placement departments before
+ * running deterministic field extractors.  Common footer pattern:
+ *
+ *   "--\nRegards,\nPlacement Department\nRIT"
+ *
+ * Without stripping, extractVenue latches onto "Placement Department" →
+ * RIT and venue becomes "RIT" even when the real venue is "Bangalore".
+ */
+function stripForwardingFooter(body = "") {
+  if (!body) return "";
+  const footerPatterns = [
+    // "-- \n Regards, \n Placement Department \n RIT"
+    /[\r\n]+\s*[-_]{2,}\s*[\r\n]+\s*(?:regards|thanks|warm regards|best regards)[\s\S]{0,400}placement\s+department[\s\S]*/i,
+    // "\n Regards, \n Placement Department \n ..."
+    /[\r\n]+\s*regards,?\s*[\r\n]+\s*placement\s+department[\s\S]*/i,
+    // Trailing "-- \n Regards" without explicit placement text
+    /[\r\n]+\s*--\s*[\r\n]+\s*regards[\s\S]{0,300}$/i,
+  ];
+  let result = body;
+  for (const pattern of footerPatterns) {
+    const stripped = result.replace(pattern, "");
+    if (stripped.length < result.length) {
+      result = stripped;
+      break; // only strip the first matched footer
+    }
+  }
+  return result.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -800,6 +909,7 @@ const ALLOWED_FIELDS_BY_TYPE = {
  */
 const VALID_CLASSIFICATIONS = [
   "New Hiring Opportunity",
+  "Internship Opportunity",
   "Registration Link",
   "Application Reminder",
   "PPT Announcement",
@@ -811,6 +921,7 @@ const VALID_CLASSIFICATIONS = [
   "Generic Placement Notice",
   "Hackathon / Event Invitation",
   "Workshop / Webinar",
+  "Expert Talk Series",
   "Scholarship",
   "Non-Recruitment Email",
 ];
@@ -892,40 +1003,65 @@ function validateGeminiResponse(raw) {
 async function callGeminiStructured({ subject = "", sender = "", body = "" }) {
   const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
 
-  const prompt = `You are a precise email classifier for a job application tracker. Analyze the email below and return ONLY a valid JSON object — no markdown, no explanation.
+  const prompt = `You are a precise email classifier for a college placement tracking system. Analyze the email below and return ONLY a valid JSON object — no markdown, no explanation.
 
-TASK: Determine the email type and extract only the information explicitly stated in the email. Do NOT infer, guess, or hallucinate values. If a field is not clearly stated, return an empty string "".
+CONTEXT: These emails are typically forwarded from a campus placement department to students. The ACTUAL company is the ORIGINAL SENDER of the forwarded message, NOT the forwarding institution (e.g., MSRIT, RIT, Ramaiah Institute, Placement Department, Dean).
+
+TASK: Determine the email type and extract only information explicitly stated in the email. Do NOT infer, guess, or hallucinate values. If a field is not clearly stated, return an empty string "".
 
 Return this exact JSON schema:
 {
   "emailType": "<job | event | nonRecruitment>",
-  "classification": "<one of: New Hiring Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Scholarship | Non-Recruitment Email>",
-  "company": "<company or organization name, or empty string>",
-  "subtitle": "<for job emails: job role or classification label. For event emails: event name (e.g. InnoVent-27). For non-recruitment: empty string>",
-  "role": "<job role title if this is a job email and it is explicitly stated, else empty string>",
-  "eventName": "<event name if this is an event/hackathon email and it is explicitly stated, else empty string>",
-  "stipend": "<stipend or CTC only if explicitly stated as a compensation for work/internship, else empty string. Prize money for hackathons is NOT a stipend>",
-  "deadline": "<application/registration deadline text if explicitly stated, else empty string>",
-  "venue": "<physical or online venue if explicitly stated, else empty string>",
+  "classification": "<one of: New Hiring Opportunity | Internship Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Expert Talk Series | Scholarship | Non-Recruitment Email>",
+  "company": "<actual organizing company/entity — see COMPANY RULES below>",
+  "subtitle": "<see SUBTITLE RULES below>",
+  "role": "<specific job/internship role title only if explicitly stated, else empty string>",
+  "eventName": "<full event or series name if this is a hackathon/webinar/talk email, else empty string>",
+  "stipend": "<stipend or CTC only if explicitly stated as compensation for work/internship. Prize money for competitions is NOT a stipend>",
+  "deadline": "<registration/application deadline text if explicitly stated, else empty string>",
+  "venue": "<physical location only — city name, building, or campus. Do NOT include online platform URLs (Teams, Zoom, Google Meet). Empty if no physical venue stated>",
   "duration": "<internship or program duration if explicitly stated, else empty string>",
   "status": "<applied | interview | offer | rejected>",
   "type": "<internship | full-time | event | test | unknown>",
-  "link": "<primary application or registration URL if present, else empty string>",
-  "fieldsToDisplay": ["<include only field names from this list where the value is non-empty and genuinely applicable: role, stipend, deadline, duration, venue, eventName>"]
+  "link": "<primary registration/application URL if present, else empty string>",
+  "fieldsToDisplay": ["<include ONLY field names where the value is non-empty AND genuinely applicable: role, stipend, deadline, duration, venue, eventName>"]
 }
+
+CLASSIFICATION GUIDE:
+- "Internship Opportunity"  — paid or unpaid internship opening (e.g. ABB IS Team Internship, summer internship)
+- "New Hiring Opportunity"  — full-time job or campus recruitment drive
+- "Workshop / Webinar"      — single online session, webinar, online meeting (e.g. Ericsson Edge Academy)
+- "Expert Talk Series"      — multi-session webinar or expert talk series (e.g. POD Expert Talk Series)
+- "Hackathon / Event Invitation" — hackathon, coding contest, ideathon, innovation challenge
+- "Registration Link"       — email primarily asking students to register or fill a form
+- "Non-Recruitment Email"   — newsletters, announcements unrelated to placement
+
+SUBTITLE RULES:
+- "Internship Opportunity"  → program/team name (e.g. "IS Team Internship", "Data Science Internship")
+- "New Hiring Opportunity"  → role or program name
+- "Workshop / Webinar"      → webinar/program name (e.g. "Ericsson Edge Academy")
+- "Expert Talk Series"      → full series name (e.g. "POD Expert Talk Series on Databases & Data Management")
+- "Hackathon / Event Invitation" → hackathon/event name (e.g. "InnoVent-27", "HackVega 2.0")
+- "Registration Link" / "Application Reminder" → concise description of what to register for
+- "Non-Recruitment Email"   → empty string ""
+
+COMPANY RULES:
+1. The company is the ACTUAL ORGANIZING ENTITY sending the original opportunity email.
+2. For forwarded emails, use the original sender company (from "Forwarded message From:" or the signature of the original author).
+3. NEVER use: MSRIT, RIT, Ramaiah Institute, Placement Department, Dean, or any college/university.
+4. NEVER use generic sentence starters as company names: "Here", "Here is", "Seeking", "Potential opportunities", "Greetings".
+5. Ignore platform names (Microsoft Teams, Google Forms, Zoom, Unstop, Brazen) when identifying company.
+6. If the email is from ABB, Ericsson, Pod.ai, HirePro, etc. — use their proper brand name.
 
 RULES:
 1. emailType "job" — for hiring, internship, placement, or recruitment emails.
-2. emailType "event" — for hackathons, competitions, contests, workshops, bootcamps, webinars, scholarships, tech fests, or event invitations.
-3. emailType "nonRecruitment" — for newsletters, spam, or emails unrelated to jobs or events.
-4. "fieldsToDisplay" must only contain field names where the value is non-empty AND the information is explicitly present in the email.
-5. Prize money, cash prizes, or rewards in hackathons must NOT be placed in the "stipend" field.
-6. The "role" field must only be set for job/internship emails where a specific job title is stated.
-7. Ignore webinar and form platforms (Microsoft Teams, Google Forms, Zoom, Unstop, Brazen) when determining the company name.
-8. The "company" field must be the actual organizing company/entity. Do NOT treat generic starting/introductory phrases (e.g., "Here is...", "Here are...", "Potential opportunities...") as company names.
-9. For hackathons/events, prioritize the event name (e.g., HackVega 2.0) in the "subtitle" and "eventName" fields.
-10. Do NOT infer or assume job roles (such as "Internship") solely from soft phrases like "potential internship opportunities" unless the email is fundamentally a job opportunity/hiring email.
-11. If information is ambiguous, choose empty string over a guess.
+2. emailType "event" — for hackathons, webinars, workshops, expert talks, scholarships, or event invitations.
+3. emailType "nonRecruitment" — for newsletters or emails unrelated to jobs/events.
+4. "fieldsToDisplay" must only include fields where the value is non-empty AND relevant to the email type.
+5. "venue" is a physical location (city, building). Online meeting links are NOT venues.
+6. "role" is only for job/internship emails with an explicitly stated role title.
+7. Do NOT infer job roles from soft phrases like "potential internship opportunities".
+8. If ambiguous, return empty string over a guess.
 
 Subject: ${subject}
 Sender: ${sender}
@@ -1001,11 +1137,20 @@ async function callGeminiFallback({ subject = "", sender = "", body = "" }) {
 async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", referenceDate = new Date(), rawText = "") {
   const body = normalizeText(fullBodyText || rawText || "");
   const forwarded = parseForwardedEmail(body);
-  const sourceBody = forwarded.body || body;
+  const sourceBody   = forwarded.body || body;
   const sourceSubject = forwarded.subject || subject || "";
+  // Footer-stripped body is used for deterministic field extraction only —
+  // prevents the placement-department footer from polluting venue/body regex.
+  const footerStrippedBody = stripForwardingFooter(sourceBody);
   const linkInfo = extractFormLink(sourceBody);
 
-  // ── Step 1: Deterministic classification ───────────────────────────────
+  // ── Step 1: Gemini structured call (PRIMARY reasoning engine) ───────────
+  // Gemini is always called first.  It is the primary source for company,
+  // classification, subtitle, role, and event name.
+  const gemini = await callGeminiStructured({ subject: sourceSubject, sender, body: sourceBody });
+
+  // ── Step 2: Deterministic classification (FALLBACK) ─────────────────────
+  // Used only when Gemini fails or returns an invalid classification.
   const detClassification = classifyEmail({
     subject: sourceSubject,
     body: sourceBody,
@@ -1013,96 +1158,179 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     hasLink: !!linkInfo.primary,
   });
 
-  // ── Step 2: Company resolution (deterministic) ─────────────────────────
-  const companyObj = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
-  let company = companyObj.company;
-  let companyConfidence = companyObj.confidence;
-  let companySource = companyObj.source;
+  // ── Step 3: Company resolution — new three-tier precedence ──────────────
+  //
+  //   Tier 1 (confidence 1.0)  — Known alias resolved from the sender domain.
+  //                               e.g. @in.abb.com → "Abb" → alias → "ABB"
+  //   Tier 2 (confidence 0.85) — Gemini structured output.
+  //   Tier 3 (fallback)        — Deterministic heuristics (used ONLY when
+  //                               tiers 1 and 2 both return empty).
+  //
+  // Critically: deterministic results can NO LONGER block Gemini.
 
-  // ── Step 3: Gemini structured call (primary) ───────────────────────────
-  // Always call Gemini for every email — correctness is the priority.
-  let gemini = null;
-  gemini = await callGeminiStructured({ subject: sourceSubject, sender, body: sourceBody });
+  // Tier 1: check both the outer sender and the forwarded original sender.
+  const candidateSenders = [forwarded.from, sender].filter(Boolean);
+  let senderAliasCompany = "";
+  for (const snd of candidateSenders) {
+    const domainPart = companyFromSender(snd);
+    if (domainPart) {
+      const alias = matchKnownCompany(domainPart);
+      if (alias) { senderAliasCompany = alias; break; }
+    }
+    // Also try matching the full sender string itself (e.g. "ERICSSON" in display name)
+    const directAlias = matchKnownCompany(snd);
+    if (directAlias) { senderAliasCompany = directAlias; break; }
+  }
+  // If no sender alias yet, check the forwarded From: + subject for known aliases
+  // (e.g., "ERICSSON India Private Limited" in the forwarded body header)
+  if (!senderAliasCompany) {
+    const aliasHint = `${forwarded.from || ""} ${sourceSubject}`;
+    const subjectAlias = matchKnownCompany(aliasHint);
+    if (subjectAlias) senderAliasCompany = subjectAlias;
+  }
 
-  // ── Step 4: Merge Gemini + deterministic results ───────────────────────
-  // Gemini result takes priority; deterministic is the authoritative fallback.
+  // Always compute deterministic result for tracing / Tier-3 fallback.
+  const detCompanyObj = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
 
+  let company, companySource, companyConfidence;
+
+  if (senderAliasCompany) {
+    // Tier 1 — known alias (most reliable, unambiguous)
+    company           = senderAliasCompany;
+    companySource     = "sender_alias";
+    companyConfidence = 1.0;
+  } else if (gemini?.company && sanitizeCompany(gemini.company)) {
+    // Tier 2 — Gemini (primary reasoning; never blocked by deterministic confidence)
+    company           = sanitizeCompany(gemini.company);
+    companySource     = "gemini";
+    companyConfidence = 0.85;
+  } else {
+    // Tier 3 — deterministic fallback (only reached when Gemini returned empty)
+    company           = detCompanyObj.company;
+    companySource     = detCompanyObj.source;
+    companyConfidence = detCompanyObj.confidence;
+  }
+
+  const resolvedCompany = company ? (sanitizeCompany(company) || "") : "";
+  if (!resolvedCompany) {
+    companySource     = "none";
+    companyConfidence = 0;
+  }
+
+  // ── Step 4: Email type and classification ────────────────────────────────
   const emailType = gemini?.emailType ?? (
     detClassification.category === "hackathonEvent" ? "event" :
     detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job"
   );
 
-  const finalClassification = gemini?.classification
-    ?? detClassification.classification;
-
-  const finalCategory = gemini?.classification
-    ? normalizeKey(gemini.classification).replace(/\s+/g, "")
-    : detClassification.category;
-
+  const finalClassification = gemini?.classification ?? detClassification.classification;
   const finalStatus = gemini?.status
     ? normalizeStatus(gemini.status)
     : normalizeStatus(detClassification.status);
-
   const finalType = gemini?.type ?? detClassification.type;
 
-  // Company: prefer Gemini if it found one with proper sanitization, else keep deterministic result
-  if (gemini?.company && sanitizeCompany(gemini.company)) {
-    if (!company || companyConfidence <= 0.7) {
-      company = sanitizeCompany(gemini.company);
-      companyConfidence = 0.85;
-      companySource = "gemini";
-    }
-  }
-
-  const resolvedCompany = company ? (sanitizeCompany(company) || "") : "";
-  if (!resolvedCompany) {
-    companySource = "none";
-    companyConfidence = 0;
-  }
-
-  // ── Step 5: Field extraction gated by emailType ────────────────────────
-  // For event and non-recruitment emails, skip all job-specific extractors
-  // to prevent garbage values from appearing on cards.
+  // ── Step 5: Field extraction gated by emailType ──────────────────────────
+  // Use the footer-stripped body for deterministic extractors to prevent the
+  // placement-department footer ("Placement Department\nRIT") from injecting
+  // false venue/body values.
   const isJobEmail = emailType === "job";
+  const extractionBody = footerStrippedBody || sourceBody;
 
-  const eventDate      = extractEventDate(sourceBody, referenceDate);
-  const deadlineInfo   = isJobEmail ? extractDeadlineDetails(sourceBody, referenceDate) : { deadline: "", iso: "", raw: "" };
-  const reportingTime  = isJobEmail ? extractReportingTime(sourceBody) : "";
-  const venue          = isJobEmail ? extractVenue(sourceBody) : "";
-  const durationText   = isJobEmail ? extractDuration(sourceBody) : "";
-  const salaryText     = isJobEmail ? extractSalary(sourceBody) : "";
-  const programRoles   = isJobEmail ? extractProgramRoles(sourceBody) : "";
-  const programStipend = isJobEmail ? extractProgramStipend(sourceBody) : "";
-  const programDuration = isJobEmail ? extractProgramDuration(sourceBody) : "";
-  const deadlineText   = isJobEmail ? extractDeadlineText(sourceBody) : "";
+  const eventDate       = extractEventDate(sourceBody, referenceDate);
+  const deadlineInfo    = isJobEmail ? extractDeadlineDetails(extractionBody, referenceDate) : { deadline: "", iso: "", raw: "" };
+  const reportingTime   = isJobEmail ? extractReportingTime(extractionBody) : "";
+  const detVenue        = isJobEmail ? extractVenue(extractionBody) : "";
+  const durationText    = isJobEmail ? extractDuration(extractionBody) : "";
+  const salaryText      = isJobEmail ? extractSalary(extractionBody) : "";
+  const programRoles    = isJobEmail ? extractProgramRoles(extractionBody) : "";
+  const programStipend  = isJobEmail ? extractProgramStipend(extractionBody) : "";
+  const programDuration = isJobEmail ? extractProgramDuration(extractionBody) : "";
+  const deadlineText    = isJobEmail ? extractDeadlineText(extractionBody) : "";
 
-  const jobRole = programRoles || keywordRoleFallback(sourceBody);
+  // Venue: deterministic result (regex) wins for job emails; Gemini fills the gap.
+  const venue = detVenue || gemini?.venue || "";
 
-  // ── Step 6: Subtitle — what shows under the company name on the card ───
-  // For events: event name (from Gemini, then subject heuristics)
-  // For jobs: Gemini-provided subtitle or the generated title
-  let detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, isJobEmail ? jobRole : "", sourceBody);
-  const subtitle = gemini?.subtitle
-    || (emailType === "event" ? (gemini?.eventName || extractEventName(sourceSubject, sourceBody) || "Event") : "")
-    || (isJobEmail ? detTitle : "");
+  // ── Step 6: Subtitle — what shows under the company name on the card ─────
+  // Gemini is the primary source.  Deterministic title is only a fallback for
+  // job emails when Gemini returns an empty subtitle.
+  const jobRole = programRoles || gemini?.role || (isJobEmail ? keywordRoleFallback(extractionBody) : "");
+  const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, isJobEmail ? jobRole : "", sourceBody);
 
-  // ── Step 7: fieldsToDisplay ────────────────────────────────────────────
-  // Prefer Gemini-validated list; compute deterministic fallback for jobs.
+  let subtitle;
+  if (gemini?.subtitle) {
+    subtitle = gemini.subtitle;
+  } else if (emailType === "event") {
+    subtitle = gemini?.eventName || extractEventName(sourceSubject, sourceBody) || "Event";
+  } else if (isJobEmail) {
+    subtitle = detTitle;
+  } else {
+    subtitle = "";
+  }
+
+  // ── Step 7: role field — stores the actual job role, NOT the subtitle ────
+  //
+  // Previously this field received the subtitle string (e.g. "In Registration")
+  // which was then rendered in the subtitle position on cards.  That was wrong.
+  //
+  // The `role` field in the DB is `required: true`.  For job emails it holds
+  // the actual role (e.g. "Internship", "Software Engineer").  For event emails
+  // it holds "Event" as a neutral placeholder.
+  const roleField = isJobEmail
+    ? (programRoles || gemini?.role || keywordRoleFallback(extractionBody) || "Unknown Role")
+    : (emailType === "event" ? "Event" : "Unknown Role");
+
+  // ── Step 8: fieldsToDisplay ──────────────────────────────────────────────
   let fieldsToDisplay = gemini?.fieldsToDisplay ?? null;
-
   if (!fieldsToDisplay) {
     // Deterministic fallback: only include fields that are actually non-empty
     fieldsToDisplay = [];
     if (isJobEmail) {
-      if (programRoles) fieldsToDisplay.push("role");
-      if (programStipend) fieldsToDisplay.push("stipend");
-      if (deadlineText) fieldsToDisplay.push("deadline");
+      if (programRoles)    fieldsToDisplay.push("role");
+      if (programStipend)  fieldsToDisplay.push("stipend");
+      if (deadlineText)    fieldsToDisplay.push("deadline");
       if (programDuration) fieldsToDisplay.push("duration");
-      if (venue) fieldsToDisplay.push("venue");
+      if (venue)           fieldsToDisplay.push("venue");
     }
   }
 
-  // ── Step 8: Build parsed output ───────────────────────────────────────
+  // ── Step 9: Dev-mode parser trace ────────────────────────────────────────
+  // Enabled only when NODE_ENV !== "production".  Logs a structured object
+  // explaining every company-resolution decision for easy debugging.
+  const isDev = process.env.NODE_ENV !== "production";
+  const parseTrace = isDev ? {
+    gemini: {
+      company:        gemini?.company        ?? null,
+      classification: gemini?.classification ?? null,
+      emailType:      gemini?.emailType      ?? null,
+      subtitle:       gemini?.subtitle       ?? null,
+      role:           gemini?.role           ?? null,
+      eventName:      gemini?.eventName      ?? null,
+      venue:          gemini?.venue          ?? null,
+    },
+    deterministic: {
+      company:        detCompanyObj.company  || null,
+      source:         detCompanyObj.source,
+      confidence:     detCompanyObj.confidence,
+      classification: detClassification.classification,
+      senderAlias:    senderAliasCompany     || null,
+    },
+    chosen: {
+      company:          resolvedCompany       || null,
+      companySource,
+      companyConfidence,
+      subtitle,
+      roleField,
+      classification:   finalClassification,
+      reason:
+        companySource === "sender_alias"
+          ? `Known alias from sender domain (confidence 1.0): "${senderAliasCompany}"`
+          : companySource === "gemini"
+          ? "Gemini primary source — no alias match found in sender domain"
+          : `Deterministic fallback (source: ${companySource}, confidence: ${companyConfidence})`,
+    },
+  } : undefined;
+
+  // ── Step 10: Build final parsed output ───────────────────────────────────
   const processId = buildProcessId(resolvedCompany);
 
   const parsed = {
@@ -1115,65 +1343,73 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     confidenceScore: Math.min(1, detClassification.confidence + (resolvedCompany ? 0.05 : 0)),
 
     // Identity
-    company: resolvedCompany,
+    company:     resolvedCompany,
     subtitle,
-    jobRole: isJobEmail ? (programRoles || gemini?.role || "Unknown Role") : "",
-    title: subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
-    role: subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
-    processId: processId || buildProcessId(resolvedCompany),
+    jobRole:     isJobEmail ? jobRole : "",
+    title:       subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
+
+    // role field: actual job role — NEVER the subtitle string
+    role: roleField,
+
+    processId:   processId || buildProcessId(resolvedCompany),
     processName: `${resolvedCompany || "Unknown Company"} hiring process`,
 
-    // Display control — the frontend uses this to decide which sections to render
+    // Display control — frontend uses this to decide which sections to render
     fieldsToDisplay,
 
     // Date / time
-    eventDate: eventDate || null,
-    eventTime: sourceBody.match(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i)?.[0]?.toUpperCase() || "",
+    eventDate:     eventDate || null,
+    eventTime:     sourceBody.match(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i)?.[0]?.toUpperCase() || "",
     reportingTime: reportingTime || "",
 
     // Location
-    venue: venue || gemini?.venue || "",
+    venue: venue || "",
 
     // Duration
     durationText: durationText || gemini?.duration || "",
 
     // Compensation — only for job emails
-    salaryText: isJobEmail ? (salaryText || "") : "",
+    salaryText:    isJobEmail ? (salaryText    || "")                    : "",
     programStipend: isJobEmail ? (programStipend || gemini?.stipend || "") : "",
 
     // Deadlines — only for job emails
-    deadline: deadlineInfo.deadline || "",
-    deadlineISO: deadlineInfo.iso || "",
-    deadlineText: isJobEmail ? (deadlineText || gemini?.deadline || "") : "",
+    deadline:     deadlineInfo.deadline || "",
+    deadlineISO:  deadlineInfo.iso      || "",
+    deadlineText: isJobEmail ? (deadlineText || gemini?.deadline || "")  : "",
 
     // Links
-    link: linkInfo.primary || gemini?.link || "",
-    links: linkInfo.all.length ? linkInfo.all : gemini?.link ? [gemini.link] : [],
+    link:       linkInfo.primary || gemini?.link || "",
+    links:      linkInfo.all.length ? linkInfo.all : gemini?.link ? [gemini.link] : [],
     isFormLink: linkInfo.isForm || /docs\.google\.com\/forms|forms\.gle/.test(linkInfo.primary || gemini?.link || ""),
 
     // Program details — only for job emails
-    programRoles: isJobEmail ? (programRoles || gemini?.role || "") : "",
+    programRoles:    isJobEmail ? (programRoles    || gemini?.role     || "") : "",
     programDuration: isJobEmail ? (programDuration || gemini?.duration || "") : "",
 
     // Parse metadata (for debugging)
     parseMeta: {
       sourceSubject,
-      forwarded: forwarded.isForwarded,
+      forwarded:            forwarded.isForwarded,
       sender,
       classificationSource: detClassification.classification,
       companySource,
       companyConfidence,
-      hasLink: !!linkInfo.primary,
+      hasLink:              !!linkInfo.primary,
       detTitle,
-      geminiUsed: !!gemini,
-      geminiEmailType: gemini?.emailType ?? null,
+      geminiUsed:           !!gemini,
+      geminiEmailType:      gemini?.emailType      ?? null,
       geminiClassification: gemini?.classification ?? null,
+      ...(parseTrace ? { trace: parseTrace } : {}),
     },
   };
 
   console.log(
-    `[PARSER_SUMMARY] Company: ${parsed.company || "None"} | emailType: ${emailType} | Classification: ${parsed.classification} | subtitle: "${parsed.subtitle}" | fieldsToDisplay: ${JSON.stringify(parsed.fieldsToDisplay)}`
+    `[PARSER_SUMMARY] Company: ${parsed.company || "None"} (via ${companySource}) | emailType: ${emailType} | Classification: ${parsed.classification} | subtitle: "${parsed.subtitle}" | role: "${parsed.role}" | fieldsToDisplay: ${JSON.stringify(parsed.fieldsToDisplay)}`
   );
+
+  if (isDev && parseTrace) {
+    console.log("[PARSER_TRACE]", JSON.stringify(parseTrace, null, 2));
+  }
 
   return parsed;
 }
