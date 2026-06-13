@@ -1195,6 +1195,9 @@ export default function JobTrackerDashboard() {
                         ── */}
                         {(() => {
                           // NEW flexible format — [{label, value}]
+                          // DEV DEBUG: Log display fields
+                          console.log("CARD_DISPLAY_FIELDS", app.displayFields);
+
                           const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
                             ? app.displayFields.filter(f => f && f.label && f.value)
                             : null;

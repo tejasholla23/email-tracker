@@ -1,4 +1,4 @@
-﻿const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenAI } = require("@google/genai");
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -1065,6 +1065,8 @@ Body: ${truncatedBody}`;
 
     const rawParsed = JSON.parse(jsonText);
     console.log("[GEMINI_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
+    console.log("RAW_DISPLAY_FIELDS", rawParsed.displayFields);
+    
     const validated = validateGeminiResponse(rawParsed);
 
     if (!validated) {
@@ -1072,6 +1074,7 @@ Body: ${truncatedBody}`;
       return null;
     }
 
+    console.log("VALIDATED_DISPLAY_FIELDS", validated.displayFields);
     console.log(`[GEMINI_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
     return validated;
 
@@ -1222,16 +1225,16 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     // Identity
     company:  resolvedCompany,
     subtitle,
-    role:     roleField,  // DB required field â€” actual role placeholder
+    role:     roleField,  // DB required field — actual role placeholder
     title:    subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
     processId:   buildProcessId(resolvedCompany),
     processName: `${resolvedCompany || "Unknown Company"} hiring process`,
 
-    // â”€â”€ NEW: flexible display fields from Gemini â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── NEW: flexible display fields from Gemini ─────────────────────────
     // This is the primary source of card details for new records.
     displayFields,
 
-    // â”€â”€ LEGACY: empty for new records â€” legacy records keep their own values
+    // ————————————————— LEGACY: empty for new records — legacy records keep their own values
     // in MongoDB and the frontend falls back to them automatically.
     fieldsToDisplay: [],
     programRoles:    "",
@@ -1274,6 +1277,8 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   console.log(
     `[PARSER_SUMMARY] Company: ${parsed.company || "None"} (via ${companySource}) | emailType: ${emailType} | Classification: ${parsed.classification} | subtitle: "${parsed.subtitle}" | displayFields: ${parsed.displayFields.length} fields`
   );
+  console.log("PARSED_DISPLAY_FIELDS", parsed.displayFields);
+
   if (isDev && parseTrace) {
     console.log("[PARSER_TRACE]", JSON.stringify(parseTrace, null, 2));
   }

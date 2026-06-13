@@ -410,6 +410,8 @@ async function fetchAndProcessEmails() {
               if (missingDetails) {
                 console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
                 const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+                // NEW: Sleep for 4.5s to respect Gemini 15 RPM free tier limit
+                await new Promise(r => setTimeout(r, 4500));
                 if (parsed && parsed.isRelevant) {
                   const updatePayload = {};
                   const ov = exists.manualOverrides || [];
@@ -458,6 +460,8 @@ async function fetchAndProcessEmails() {
 
             console.log(`[PARSE_START] ${id}`);
             const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+            // NEW: Sleep for 4.5s to respect Gemini 15 RPM free tier limit
+            await new Promise(r => setTimeout(r, 4500));
             console.log(`[PARSE_RESULT] ${id}`, parsed);
             
             if (!parsed) {
