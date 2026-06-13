@@ -192,7 +192,12 @@ function extractCompanyFromText(text = "") {
     const match = cleanedText.match(pattern);
     if (match && match[1]) {
       const candidate = sanitizeCompany(match[1]);
-      if (candidate && !isGenericCompanyName(candidate)) return candidate;
+      if (candidate && !isGenericCompanyName(candidate)) {
+        const lowerCand = candidate.toLowerCase();
+        if (lowerCand !== "here" && lowerCand !== "there" && lowerCand !== "this" && !lowerCand.startsWith("potential")) {
+          return candidate;
+        }
+      }
     }
   }
   return "";
@@ -245,26 +250,62 @@ function stripPlatformReferences(text = "") {
   return cleaned;
 }
 
+function extractCompanyFromSignature(body = "") {
+  const sigMatches = [
+    /(?:regards|thanks|sincerely|best|greetings)\s*,?\s+(?:team\s+)?([A-Z][A-Za-z0-9&.\-\s]{2,40})/i,
+    /\bteam\s+([A-Z][A-Za-z0-9&.\-\s]{2,40})/i
+  ];
+  const lastPart = body.slice(-1000);
+  for (const regex of sigMatches) {
+    const match = lastPart.match(regex);
+    if (match && match[1]) {
+      const candidate = sanitizeCompany(match[1]);
+      if (candidate && !isGenericCompanyName(candidate)) {
+        const lowerCand = candidate.toLowerCase();
+        if (lowerCand !== "here" && lowerCand !== "there" && lowerCand !== "this" && !lowerCand.startsWith("potential")) {
+          return candidate;
+        }
+      }
+    }
+  }
+  return "";
+}
+
 function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }) {
   const cleanSubject = stripPlatformReferences(subject);
   const cleanBody = stripPlatformReferences(body);
   const cleanFwdSubject = stripPlatformReferences(forwarded.subject);
   const cleanFwdBody = stripPlatformReferences(forwarded.body);
 
+  // 1. Explicit company information from sender/domain (including forwarded sender!)
+  if (sender) {
+    const senderCompany = companyFromSender(sender);
+    if (senderCompany && !isGenericCompanyName(senderCompany)) {
+      const alias = matchKnownCompany(senderCompany);
+      return { company: alias || senderCompany, source: 'sender', confidence: 0.95 };
+    }
+  }
+  if (forwarded.from) {
+    const fwdSenderCompany = companyFromSender(forwarded.from);
+    if (fwdSenderCompany && !isGenericCompanyName(fwdSenderCompany)) {
+      const alias = matchKnownCompany(fwdSenderCompany);
+      return { company: alias || fwdSenderCompany, source: 'sender', confidence: 0.95 };
+    }
+  }
+
+  // 2. Verified sender/signature information / aliases
   const candidates = [cleanFwdSubject, forwarded.from, cleanSubject, cleanBody, sender].filter(Boolean);
   for (const candidate of candidates) {
     const known = matchKnownCompany(candidate);
     if (known) return { company: known, source: 'alias', confidence: 1.0 };
   }
 
-  if (sender) {
-    const senderCompany = companyFromSender(sender);
-    if (senderCompany && !isGenericCompanyName(senderCompany)) {
-      const alias = matchKnownCompany(senderCompany);
-      return { company: alias || senderCompany, source: 'sender', confidence: 0.9 };
-    }
+  const signatureCompany = extractCompanyFromSignature(cleanBody || cleanFwdBody);
+  if (signatureCompany) {
+    return { company: signatureCompany, source: 'signature', confidence: 0.9 };
   }
 
+  // 3/4. Regex fallbacks
   const subjectCompany = extractCompanyFromText(cleanSubject || cleanFwdSubject);
   if (subjectCompany) return { company: subjectCompany, source: 'subject', confidence: 0.7 };
 
@@ -679,6 +720,35 @@ function extractDeadlineText(text = "") {
   return "";
 }
 
+function extractEventName(subject = "", body = "") {
+  const cleanSubject = stripPlatformReferences(subject);
+  const subjectMatch = cleanSubject.match(/(?:InnoVent[-\s]?\d{2,4}|[A-Z][A-Za-z0-9\-\.]{2,}\s+(?:Challenge|Contest|Fest|Ideathon|Datathon|Bootcamp|Hackathon)\b(?:\s+\d+\.\d+|\s+\d{4})?|\b[A-Za-z0-9]+Vega\s+\d+\.\d+)/i)
+    || cleanSubject.match(/\b([A-Z][A-Za-z0-9\-\.]{2,}(?:\s+[A-Z0-9][A-Za-z0-9\-\.]*){0,3})\b(?=\s*(?:\||\-|–))/i)
+    || cleanSubject.match(/(?:at|for|in)\s+([A-Z][A-Za-z0-9\-\.\s]{2,40})/i);
+    
+  if (subjectMatch) {
+    const candidate = cleanProgramValue(subjectMatch[1] || subjectMatch[0]);
+    if (candidate && candidate.toLowerCase() !== "students" && candidate.toLowerCase() !== "campus") {
+      return candidate;
+    }
+  }
+
+  const bodyPatterns = [
+    /\b(InnoVent[-\s]?\d{2,4}|[A-Za-z0-9]+Vega\s+\d+\.\d+|[A-Z][A-Za-z0-9\-\.]{2,}\s+(?:Challenge|Contest|Fest|Ideathon|Datathon|Bootcamp|Hackathon)\b(?:\s+\d+\.\d+|\s+\d{4})?)/i,
+    /(?:launch|presents?|announces?|introduces?|participate in|register for|welcome to)\s+([A-Z][A-Za-z0-9\s\-\.]{2,40})/i
+  ];
+  
+  for (const pattern of bodyPatterns) {
+    const match = body.match(pattern);
+    if (match && (match[1] || match[0])) {
+      const candidate = cleanProgramValue(match[1] || match[0]);
+      if (candidate) return candidate;
+    }
+  }
+  
+  return "";
+}
+
 function isInvalidTitle(title = "") {
   const normalized = normalizeKey(title);
   if (!normalized || normalized.length < 3) return true;
@@ -852,7 +922,10 @@ RULES:
 5. Prize money, cash prizes, or rewards in hackathons must NOT be placed in the "stipend" field.
 6. The "role" field must only be set for job/internship emails where a specific job title is stated.
 7. Ignore webinar and form platforms (Microsoft Teams, Google Forms, Zoom, Unstop, Brazen) when determining the company name.
-8. If information is ambiguous, choose empty string over a guess.
+8. The "company" field must be the actual organizing company/entity. Do NOT treat generic starting/introductory phrases (e.g., "Here is...", "Here are...", "Potential opportunities...") as company names.
+9. For hackathons/events, prioritize the event name (e.g., HackVega 2.0) in the "subtitle" and "eventName" fields.
+10. Do NOT infer or assume job roles (such as "Internship") solely from soft phrases like "potential internship opportunities" unless the email is fundamentally a job opportunity/hiring email.
+11. If information is ambiguous, choose empty string over a guess.
 
 Subject: ${subject}
 Sender: ${sender}
@@ -877,6 +950,7 @@ Body: ${truncatedBody}`;
       .trim();
 
     const rawParsed = JSON.parse(jsonText);
+    console.log("[GEMINI_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
     const validated = validateGeminiResponse(rawParsed);
 
     if (!validated) {
@@ -1009,7 +1083,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   // For jobs: Gemini-provided subtitle or the generated title
   let detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, isJobEmail ? jobRole : "", sourceBody);
   const subtitle = gemini?.subtitle
-    || (emailType === "event" ? (gemini?.eventName || "") : "")
+    || (emailType === "event" ? (gemini?.eventName || extractEventName(sourceSubject, sourceBody) || "Event") : "")
     || (isJobEmail ? detTitle : "");
 
   // ── Step 7: fieldsToDisplay ────────────────────────────────────────────

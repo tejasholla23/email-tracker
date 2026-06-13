@@ -1343,7 +1343,7 @@ export default function JobTrackerDashboard() {
                               setShowEditModal(true);
                             }}
                           >
-                            ✏️ Edit
+                            Edit
                           </button>
                           {app.link && (
                             <a
@@ -1358,7 +1358,7 @@ export default function JobTrackerDashboard() {
                                 handleApply(app._id);
                               }}
                             >
-                              {app.isFormLink ? "📋 Apply (Form)" : "🔗 Open Link"}
+                              {app.isFormLink ? "📋 Apply (Form)" : "Open Link"}
                             </a>
                           )}
                           <button
@@ -1366,13 +1366,13 @@ export default function JobTrackerDashboard() {
                             onClick={() => handleMarkDone(app._id)}
                             disabled={isDone}
                           >
-                            {isDone ? "✓ Done" : "✓ Mark Done"}
+                            {isDone ? "Done" : "Mark Done"}
                           </button>
                           <button
                             className="card-btn card-btn-remove"
                             onClick={() => handleDeleteOne(app._id)}
                           >
-                            🗑 Remove
+                            Remove
                           </button>
                         </div>
                       </div>
