@@ -112,14 +112,53 @@ app.get("/", (req, res) => {
 });
 
 // ==========================
-// 🧹 CLEAR DATABASE (IMPORTANT)
+// 🧹 CLEAR DATABASE
 // ==========================
+
+// GET /clear-applications — legacy convenience endpoint (browser-accessible)
 app.get("/clear-applications", async (req, res) => {
   try {
     await Application.deleteMany({});
     res.send("All applications deleted");
   } catch (err) {
     res.status(500).send(err.message);
+  }
+});
+
+// DELETE /clear-all-applications — used by the frontend "Clear All" button.
+// Sets a flag that aborts any in-progress sync, waits briefly, then wipes the DB.
+app.delete("/clear-all-applications", async (req, res) => {
+  const email = req.headers["x-user-email"];
+  if (email !== "1ms23ci126@msrit.edu") {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  console.log("[CLEAR_ALL] Requested — setting clearRequested flag");
+  clearRequested = true;
+
+  // Give the sync loop up to 3 s to notice the flag and break out of the current email
+  if (isProcessing) {
+    console.log("[CLEAR_ALL] Sync in progress — waiting up to 3 s for it to abort...");
+    await new Promise((resolve) => {
+      const deadline = Date.now() + 3000;
+      const poll = setInterval(() => {
+        if (!isProcessing || Date.now() >= deadline) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 200);
+    });
+  }
+
+  try {
+    const result = await Application.deleteMany({});
+    console.log(`[CLEAR_ALL] Deleted ${result.deletedCount} application(s)`);
+    clearRequested = false;
+    isProcessing = false; // Reset in case sync was stuck
+    res.json({ message: "All applications permanently cleared", deletedCount: result.deletedCount });
+  } catch (err) {
+    clearRequested = false;
+    res.status(500).json({ message: "Failed to clear applications: " + err.message });
   }
 });
 
@@ -189,6 +228,7 @@ app.get("/logout", async (req, res) => {
 });
 
 let isProcessing = false;
+let clearRequested = false; // Set to true to abort an in-progress sync during Clear All
 
 function appendApplicationEvent(application, parsed, emailMetadata) {
   const { messageId, date, subject } = emailMetadata;
@@ -300,6 +340,11 @@ async function fetchAndProcessEmails() {
         console.log(`\n--- STARTING SYNC FOR ${acc.email} ---`);
 
         for (let msg of messages) {
+          // Abort the loop immediately if a Clear All was requested while sync was running
+          if (clearRequested) {
+            console.log("[SYNC_ABORTED] Clear All requested — aborting sync loop");
+            break;
+          }
           const id = msg.id;
           try {
             const getController = new AbortController();

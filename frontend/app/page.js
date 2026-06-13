@@ -147,12 +147,13 @@ export default function JobTrackerDashboard() {
 
     setClearing(true);
     try {
-      const response = await fetch(`${BASE_URL}/applications/clear`, {
+      const response = await fetch(`${BASE_URL}/clear-all-applications`, {
         method: "DELETE",
         headers: { "x-user-email": userEmail }
       });
       if (!response.ok) throw new Error("Clear failed");
-      alert("All applications cleared.");
+      const data = await response.json();
+      alert(`All applications cleared. (${data.deletedCount ?? "?"} records removed)`);
       await fetchApplications();
     } catch (error) {
       console.error("Clear all failed:", error);
