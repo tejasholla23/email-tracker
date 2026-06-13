@@ -361,7 +361,7 @@ async function fetchAndProcessEmails() {
                 eventAdded = true;
               }
 
-              const missingDetails = !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
+              const missingDetails = !exists.displayFields?.length || !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
               if (missingDetails) {
                 console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
                 const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
@@ -392,6 +392,7 @@ async function fetchAndProcessEmails() {
                   if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
                   if (!ov.includes("emailType") && parsed.emailType && exists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
                   if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
+                  if (!ov.includes("displayFields") && (!exists.displayFields || exists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
                   if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
 
                   if (eventAdded) updatePayload.events = exists.events;
@@ -487,6 +488,7 @@ async function fetchAndProcessEmails() {
               if (!ov.includes("parseMeta") && !contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
               if (!ov.includes("emailType") && parsed.emailType && contentExists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
               if (!ov.includes("subtitle") && !contentExists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
+              if (!ov.includes("displayFields") && (!contentExists.displayFields || contentExists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
               if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
 
               const incStatus = classificationToStatus(parsed.classification);
@@ -523,6 +525,7 @@ async function fetchAndProcessEmails() {
               companyKey,
               emailType: parsed.emailType || "job",
               subtitle: parsed.subtitle || "",
+              displayFields: parsed.displayFields || [],
               fieldsToDisplay: parsed.fieldsToDisplay || [],
               role: finalRole,
               type: parsed.type || "",

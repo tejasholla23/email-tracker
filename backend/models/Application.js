@@ -5,7 +5,14 @@ const applicationSchema = new mongoose.Schema(
     company: { type: String, required: true },
     emailType: { type: String, enum: ["job", "event", "nonRecruitment"], default: "job" },
     subtitle: { type: String, default: "" },
+    // Legacy: old string-array field display list. Kept for backward compat with pre-redesign records.
     fieldsToDisplay: { type: [String], default: [] },
+    // New: flexible [{label, value}] display fields returned by Gemini.
+    // Frontend checks this first; falls back to fieldsToDisplay for legacy records.
+    displayFields: {
+      type: [{ label: { type: String }, value: { type: String } }],
+      default: [],
+    },
     companyKey: { type: String, default: "" }, // normalized key for company-level dedup
     role: { type: String, required: true },
     type: { type: String },

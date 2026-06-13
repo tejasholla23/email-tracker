@@ -1170,9 +1170,12 @@ export default function JobTrackerDashboard() {
                             </div>
                             <div className="role-company">
                               <div className="role-title">{app.company || "Unknown Company"}</div>
-                              {app.role && app.role.toLowerCase() !== "unknown role" && (
-                                <div className="company-name">{app.role}</div>
-                              )}
+                              {/* Show subtitle (new records) or fall back to role (legacy records) */}
+                              {(() => {
+                                const sub = app.subtitle
+                                  || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
+                                return sub ? <div className="company-name">{sub}</div> : null;
+                              })()}
                             </div>
                           </div>
                           <div className="status-badge-container">
@@ -1184,27 +1187,42 @@ export default function JobTrackerDashboard() {
 
 
 
-                        {/* Event type badge — shown for hackathon / event emails */}
-                        {app.emailType === "event" && app.classification && (
-                          <div className="event-type-badge">
-                            🏆 {app.classification}
-                          </div>
-                        )}
-
-                        {/* Program details — driven entirely by fieldsToDisplay from the parser.
-                             The frontend never decides which fields are applicable;
-                             that decision lives in the backend structured output. */}
+                        {/* ── Display fields ─────────────────────────────────────────────────────
+                             NEW records: app.displayFields = [{label, value}] — rendered directly.
+                             LEGACY records: app.fieldsToDisplay = ["role","stipend",...] — rendered
+                             using FIELD_CONFIG lookup from individual programRoles/programStipend etc.
+                        ── */}
                         {(() => {
-                          let displayFields = app.fieldsToDisplay;
-                          if ((!Array.isArray(displayFields) || displayFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
-                            displayFields = [];
-                            if (app.programRoles) displayFields.push("role");
-                            if (app.programStipend) displayFields.push("stipend");
-                            if (app.deadlineText) displayFields.push("deadline");
-                            if (app.programDuration) displayFields.push("duration");
-                            if (app.venue) displayFields.push("venue");
+                          // NEW flexible format — [{label, value}]
+                          const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
+                            ? app.displayFields.filter(f => f && f.label && f.value)
+                            : null;
+
+                          if (flexFields && flexFields.length > 0) {
+                            return (
+                              <div className="program-details">
+                                {flexFields.map(({ label, value }) => (
+                                  <div key={label} className="program-detail">
+                                    <span className="program-detail-label">{label}</span>
+                                    <span className="program-detail-value">{value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
                           }
-                          if (!Array.isArray(displayFields) || displayFields.length === 0) return null;
+
+                          // LEGACY format — string array + fixed FIELD_CONFIG lookup
+                          let legacyFields = app.fieldsToDisplay;
+                          if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
+                            legacyFields = [];
+                            if (app.programRoles)    legacyFields.push("role");
+                            if (app.programStipend)  legacyFields.push("stipend");
+                            if (app.deadlineText)    legacyFields.push("deadline");
+                            if (app.programDuration) legacyFields.push("duration");
+                            if (app.venue)           legacyFields.push("venue");
+                          }
+                          if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
+
                           const FIELD_CONFIG = {
                             role:      { label: "Roles",    value: app.programRoles },
                             stipend:   { label: "Stipend",  value: app.programStipend },
@@ -1213,7 +1231,7 @@ export default function JobTrackerDashboard() {
                             venue:     { label: "Venue",    value: app.venue },
                             eventName: { label: "Event",    value: app.subtitle },
                           };
-                          const rows = displayFields
+                          const rows = legacyFields
                             .map(f => FIELD_CONFIG[f])
                             .filter(r => r && r.value && r.value.trim().length > 0);
                           if (rows.length === 0) return null;
@@ -1291,7 +1309,7 @@ export default function JobTrackerDashboard() {
                                 handleApply(app._id);
                               }}
                             >
-                              {app.isFormLink ? "Apply (Form)" : "Open Link"}
+                              {app.isFormLink ? "Apply" : "Open Link"}
                             </a>
                           )}
                           <button
