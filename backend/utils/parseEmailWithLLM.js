@@ -1088,6 +1088,45 @@ Body: ${truncatedBody}`;
   }
 }
 
+/**
+ * Deterministic fallback to extract displayFields when Gemini fails (e.g. rate limits).
+ * Uses lightweight regexes to pull out standard slots if present.
+ */
+function extractFallbackDisplayFields(body) {
+  const fields = [];
+  
+  const extract = (regex, label) => {
+    const match = body.match(regex);
+    if (match && match[1]) {
+      // Clean and trim, taking at most 60 chars to avoid run-on sentences
+      let val = match[1].trim();
+      val = val.replace(/\s+/g, " ");
+      if (val.length > 60) val = val.substring(0, 60).trim() + "...";
+      if (val) fields.push({ label, value: val });
+    }
+  };
+
+  // Match until the next separator: dash, pipe, bullet, star, or newline
+  extract(/(?:stipend|compensation)[\s:]*([^-|•*\n\r]+)/i, "Stipend");
+  extract(/(?:ctc|package|salary)[\s:]*([^-|•*\n\r]+)/i, "CTC");
+  extract(/(?:duration|period)[\s:]*([^-|•*\n\r]+)/i, "Duration");
+  extract(/(?:location|job location|venue)[\s:]*([^-|•*\n\r]+)/i, "Location");
+  extract(/(?:deadline|last date(?: to apply| for registration)?|register before)[\s:]*([^-|•*\n\r]+)/i, "Deadline");
+  extract(/(?:role|designation|position)[\s:]*([^-|•*\n\r]+)/i, "Role");
+  extract(/(?:joining(?: date)?)[\s:]*([^-|•*\n\r]+)/i, "Joining");
+
+  // Deduplicate by label (just in case) and return top 5
+  const uniqueFields = [];
+  const seenLabels = new Set();
+  for (const f of fields) {
+    if (!seenLabels.has(f.label)) {
+      seenLabels.add(f.label);
+      uniqueFields.push(f);
+    }
+  }
+  return uniqueFields.slice(0, 5);
+}
+
 async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", referenceDate = new Date(), rawText = "") {
   const body = normalizeText(fullBodyText || rawText || "");
   const forwarded = parseForwardedEmail(body);
@@ -1171,16 +1210,21 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   }
 
   // â”€â”€ Step 6: role field (DB required: true) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ──── Step 6: role field (DB required: true) ────────────────────────────────
   // For job emails: the classification or "Unknown Role" (never the subtitle).
   // For event emails: "Event" as a neutral placeholder.
   const isJobEmail = emailType === "job";
   const roleField = isJobEmail ? "Unknown Role" : (emailType === "event" ? "Event" : "Unknown Role");
 
-  // â”€â”€ Step 7: displayFields â€” flexible [{label,value}] from Gemini â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // This is the ONLY source of display fields. No deterministic merging.
-  const displayFields = gemini?.displayFields || [];
+  // ──── Step 7: displayFields — flexible [{label,value}] from Gemini ──────────
+  // This is the ONLY source of display fields. No deterministic merging unless Gemini fails.
+  let displayFields = gemini?.displayFields || [];
+  if (displayFields.length === 0) {
+    // Safety net: If Gemini failed (e.g. Quota Exceeded) or returned no fields, use regex extractors.
+    displayFields = extractFallbackDisplayFields(fullBodyText || rawText || "");
+  }
 
-  // â”€â”€ Step 8: Dev-mode trace â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ──── Step 8: Dev-mode trace ────────────────────────────────────────────────
   const isDev = process.env.NODE_ENV !== "production";
   const parseTrace = isDev ? {
     gemini: {
