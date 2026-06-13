@@ -110,12 +110,10 @@ export default function JobTrackerDashboard() {
         return;
       }
       const data = await response.json();
-      console.debug("[FETCH_APPLICATIONS] count=", data.length, "companyInfoCount=", data.filter((a) => !!a.companyInfo).length);
+      console.debug("[FETCH_APPLICATIONS] count=", data.length);
       if (data.length > 0) {
         console.debug("[FETCH_APPLICATIONS_SAMPLE]", {
           company: data[0].company,
-          hasCompanyInfo: !!data[0].companyInfo,
-          shortDescription: data[0].companyInfo?.shortDescription,
         });
       }
       setApplications(data);
@@ -827,21 +825,7 @@ export default function JobTrackerDashboard() {
         }
 
         /* Company Info Styles */
-        .company-short-desc {
-          font-size: 13px;
-          color: #64748b;
-          line-height: 1.5;
-          margin-top: -8px;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          cursor: pointer;
-          transition: color 0.2s;
-        }
-        .company-short-desc:hover {
-          color: #0d9488;
-        }
+
         .program-details {
           margin-top: 14px;
           border-left: 2px solid #0d9488;
@@ -865,12 +849,7 @@ export default function JobTrackerDashboard() {
           color: #1e293b;
           font-weight: 500;
         }
-        .dark .company-short-desc {
-          color: #94a3b8;
-        }
-        .dark .company-short-desc:hover {
-          color: #2dd4bf;
-        }
+
         .dark .program-details {
           border-left-color: #0d9488;
           color: #94a3b8;
@@ -907,42 +886,7 @@ export default function JobTrackerDashboard() {
         .info-modal-content {
           max-width: 550px;
         }
-        .info-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-          margin-top: 20px;
-          padding-top: 20px;
-          border-top: 1px solid #eaefed;
-        }
-        .dark .info-grid {
-          border-color: #334155;
-        }
-        .info-item-label {
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: #94a3b8;
-          margin-bottom: 4px;
-        }
-        .info-item-value {
-          font-size: 14px;
-          font-weight: 500;
-          color: #1e293b;
-        }
-        .dark .info-item-value {
-          color: #f1f5f9;
-        }
-        .info-description {
-          font-size: 15px;
-          line-height: 1.6;
-          color: #475569;
-          margin-bottom: 20px;
-        }
-        .dark .info-description {
-          color: #cbd5e1;
-        }
+
         
         /* Sync Warning Banner */
         .sync-warning-banner {
@@ -1238,18 +1182,7 @@ export default function JobTrackerDashboard() {
                           </div>
                         </div>
 
-                        {app.companyInfo?.shortDescription && (
-                          <p 
-                            className="company-short-desc"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedApp(app);
-                              setShowInfoModal(true);
-                            }}
-                          >
-                            {app.companyInfo.shortDescription}
-                          </p>
-                        )}
+
 
                         {/* Event type badge — shown for hackathon / event emails */}
                         {app.emailType === "event" && app.classification && (
@@ -1358,7 +1291,7 @@ export default function JobTrackerDashboard() {
                                 handleApply(app._id);
                               }}
                             >
-                              {app.isFormLink ? "📋 Apply (Form)" : "Open Link"}
+                              {app.isFormLink ? "Apply (Form)" : "Open Link"}
                             </a>
                           )}
                           <button
@@ -1518,13 +1451,9 @@ export default function JobTrackerDashboard() {
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">{selectedApp.company}</h3>
-                <p style={{ fontSize: '14px', color: '#64748b' }}>Company Details</p>
+                <p style={{ fontSize: '14px', color: '#64748b' }}>Application Details</p>
               </div>
               <button className="modal-close" onClick={() => setShowInfoModal(false)}>&times;</button>
-            </div>
-
-            <div className="info-description">
-              {selectedApp.companyInfo?.fullDescription || "No detailed description available."}
             </div>
 
             {/* Info modal details — also driven by fieldsToDisplay */}
@@ -1562,21 +1491,6 @@ export default function JobTrackerDashboard() {
                 </div>
               );
             })()}
-
-            <div className="info-grid">
-              <div>
-                <div className="info-item-label">Industry</div>
-                <div className="info-item-value">{selectedApp.companyInfo?.industry || "N/A"}</div>
-              </div>
-              <div>
-                <div className="info-item-label">Type</div>
-                <div className="info-item-value">{selectedApp.companyInfo?.companyType || "N/A"}</div>
-              </div>
-              <div style={{ gridColumn: 'span 2' }}>
-                <div className="info-item-label">Headquarters</div>
-                <div className="info-item-value">{selectedApp.companyInfo?.headquarters || "N/A"}</div>
-              </div>
-            </div>
 
             {selectedApp.events && selectedApp.events.length > 0 && (
               <div className="event-timeline" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
