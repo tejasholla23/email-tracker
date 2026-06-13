@@ -195,7 +195,11 @@ app.get("/auth/google/callback", async (req, res) => {
 
     await Account.findOneAndUpdate(
       { email },
-      { tokens },
+      { 
+        tokens,
+        syncStatus: "idle",
+        syncError: ""
+      },
       { upsert: true }
     );
 
