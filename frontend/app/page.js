@@ -1119,8 +1119,8 @@ export default function JobTrackerDashboard() {
                     return matchesSearch && matchesFilter;
                   })
                   .sort((a, b) => {
-                    const dateA = new Date(a.deadlineISO || a.date || a.createdAt || 0);
-                    const dateB = new Date(b.deadlineISO || b.date || b.createdAt || 0);
+                    const dateA = new Date(a.date || a.createdAt || 0);
+                    const dateB = new Date(b.date || b.createdAt || 0);
                     return dateB - dateA;
                   })
                   .map((app) => {
