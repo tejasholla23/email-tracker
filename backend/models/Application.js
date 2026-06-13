@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 const applicationSchema = new mongoose.Schema(
   {
     company: { type: String, required: true },
+    emailType: { type: String, enum: ["job", "event", "nonRecruitment"], default: "job" },
+    subtitle: { type: String, default: "" },
+    fieldsToDisplay: { type: [String], default: [] },
     companyKey: { type: String, default: "" }, // normalized key for company-level dedup
     role: { type: String, required: true },
     type: { type: String },

@@ -882,6 +882,28 @@ export default function JobTrackerDashboard() {
           color: #f1f5f9;
         }
 
+        /* Event / Hackathon type badge */
+        .event-type-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #0f766e;
+          background: #f0fdfa;
+          border: 1px solid #99f6e4;
+          padding: 3px 10px;
+          border-radius: 6px;
+          width: fit-content;
+          margin-top: 2px;
+          letter-spacing: 0.01em;
+        }
+        .dark .event-type-badge {
+          background: #022c22;
+          border-color: #065f46;
+          color: #2dd4bf;
+        }
+
         .info-modal-content {
           max-width: 550px;
         }
@@ -1229,43 +1251,55 @@ export default function JobTrackerDashboard() {
                           </p>
                         )}
 
+                        {/* Event type badge — shown for hackathon / event emails */}
+                        {app.emailType === "event" && app.classification && (
+                          <div className="event-type-badge">
+                            🏆 {app.classification}
+                          </div>
+                        )}
+
+                        {/* Program details — driven entirely by fieldsToDisplay from the parser.
+                             The frontend never decides which fields are applicable;
+                             that decision lives in the backend structured output. */}
                         {(() => {
-                          const hasDetails = [app.programRoles, app.programDuration, app.programStipend, app.deadlineText].some(v => v && v.trim().length > 0);
-                          if (!hasDetails) return null;
-                          
+                          let displayFields = app.fieldsToDisplay;
+                          if ((!Array.isArray(displayFields) || displayFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
+                            displayFields = [];
+                            if (app.programRoles) displayFields.push("role");
+                            if (app.programStipend) displayFields.push("stipend");
+                            if (app.deadlineText) displayFields.push("deadline");
+                            if (app.programDuration) displayFields.push("duration");
+                            if (app.venue) displayFields.push("venue");
+                          }
+                          if (!Array.isArray(displayFields) || displayFields.length === 0) return null;
+                          const FIELD_CONFIG = {
+                            role:      { label: "Roles",    value: app.programRoles },
+                            stipend:   { label: "Stipend",  value: app.programStipend },
+                            deadline:  { label: "Deadline", value: app.deadlineText },
+                            duration:  { label: "Duration", value: app.programDuration },
+                            venue:     { label: "Venue",    value: app.venue },
+                            eventName: { label: "Event",    value: app.subtitle },
+                          };
+                          const rows = displayFields
+                            .map(f => FIELD_CONFIG[f])
+                            .filter(r => r && r.value && r.value.trim().length > 0);
+                          if (rows.length === 0) return null;
                           return (
                             <div className="program-details">
-                              {app.programRoles && (
-                                <div className="program-detail">
-                                  <span className="program-detail-label">Roles</span>
-                                  <span className="program-detail-value">{app.programRoles}</span>
+                              {rows.map(({ label, value }) => (
+                                <div key={label} className="program-detail">
+                                  <span className="program-detail-label">{label}</span>
+                                  <span className="program-detail-value">{value}</span>
                                 </div>
-                              )}
-                              {app.programDuration && (
-                                <div className="program-detail">
-                                  <span className="program-detail-label">Duration</span>
-                                  <span className="program-detail-value">{app.programDuration}</span>
-                                </div>
-                              )}
-                              {app.programStipend && (
-                                <div className="program-detail">
-                                  <span className="program-detail-label">Stipend</span>
-                                  <span className="program-detail-value">{app.programStipend}</span>
-                                </div>
-                              )}
-                              {app.deadlineText && (
-                                <div className="program-detail">
-                                  <span className="program-detail-label">Deadline</span>
-                                  <span className="program-detail-value">{app.deadlineText}</span>
-                                </div>
-                              )}
+                              ))}
                             </div>
                           );
                         })()}
-                        
-                        {app.deadline && !app.deadlineText && (
+
+                        {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
+                        {app.deadline && !app.deadlineText && (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && (
                           <div className={`deadline-badge ${
-                            app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() 
+                            app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
                             ? 'urgent' : ''
                           }`}>
                             Deadline: {app.deadline}
@@ -1493,34 +1527,41 @@ export default function JobTrackerDashboard() {
               {selectedApp.companyInfo?.fullDescription || "No detailed description available."}
             </div>
 
-            {(selectedApp.programRoles || selectedApp.programDuration || selectedApp.programStipend || selectedApp.deadlineText) && (
-              <div className="program-details" style={{ marginBottom: '20px' }}>
-                {selectedApp.programRoles && (
-                  <div className="program-detail">
-                    <span className="program-detail-label">Roles:</span>
-                    <span>{selectedApp.programRoles}</span>
-                  </div>
-                )}
-                {selectedApp.programDuration && (
-                  <div className="program-detail">
-                    <span className="program-detail-label">Duration:</span>
-                    <span>{selectedApp.programDuration}</span>
-                  </div>
-                )}
-                {selectedApp.programStipend && (
-                  <div className="program-detail">
-                    <span className="program-detail-label">Stipend:</span>
-                    <span>{selectedApp.programStipend}</span>
-                  </div>
-                )}
-                {selectedApp.deadlineText && (
-                  <div className="program-detail">
-                    <span className="program-detail-label">Deadline:</span>
-                    <span>{selectedApp.deadlineText}</span>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Info modal details — also driven by fieldsToDisplay */}
+            {(() => {
+              let displayFields = selectedApp.fieldsToDisplay;
+              if ((!Array.isArray(displayFields) || displayFields.length === 0) && selectedApp.emailType !== "event" && selectedApp.emailType !== "nonRecruitment") {
+                displayFields = [];
+                if (selectedApp.programRoles) displayFields.push("role");
+                if (selectedApp.programStipend) displayFields.push("stipend");
+                if (selectedApp.deadlineText) displayFields.push("deadline");
+                if (selectedApp.programDuration) displayFields.push("duration");
+                if (selectedApp.venue) displayFields.push("venue");
+              }
+              if (!Array.isArray(displayFields) || displayFields.length === 0) return null;
+              const FIELD_CONFIG = {
+                role:      { label: "Roles",    value: selectedApp.programRoles },
+                stipend:   { label: "Stipend",  value: selectedApp.programStipend },
+                deadline:  { label: "Deadline", value: selectedApp.deadlineText },
+                duration:  { label: "Duration", value: selectedApp.programDuration },
+                venue:     { label: "Venue",    value: selectedApp.venue },
+                eventName: { label: "Event",    value: selectedApp.subtitle },
+              };
+              const rows = displayFields
+                .map(f => FIELD_CONFIG[f])
+                .filter(r => r && r.value && r.value.trim().length > 0);
+              if (rows.length === 0) return null;
+              return (
+                <div className="program-details" style={{ marginBottom: '20px' }}>
+                  {rows.map(({ label, value }) => (
+                    <div key={label} className="program-detail">
+                      <span className="program-detail-label">{label}:</span>
+                      <span>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             <div className="info-grid">
               <div>

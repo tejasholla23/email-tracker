@@ -4,6 +4,10 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+// ---------------------------------------------------------------------------
+// Text utilities
+// ---------------------------------------------------------------------------
+
 function normalizeText(raw = "") {
   return (raw || "")
     .toString()
@@ -57,7 +61,6 @@ function keywordRoleFallback(text = "") {
   const lower = (text || "").toLowerCase();
   const match = lower.match(/\b(software engineer|data analyst|intern|developer|analyst|associate|consultant|manager|trainee|apprentice|engineer)\b/i);
   if (match) {
-    // Capitalize each word for neatness
     return match[1].split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
   return "";
@@ -69,7 +72,7 @@ function normalizeStatus(status = "") {
   if (validStatuses.includes(lower)) return lower;
   if (lower === "selected" || lower === "shortlisted") return "offer";
   if (lower === "test" || lower === "assessment") return "interview";
-  return "new"; // Safe fallback
+  return "new";
 }
 
 function parseForwardedEmail(body = "") {
@@ -91,22 +94,18 @@ function parseForwardedEmail(body = "") {
 }
 
 function extractFormLink(text = "") {
-  // Extract URLs starting with http or https, stopping at whitespace, quotes, or angle brackets
   const urlRegex = /https?:\/\/[^\s<>"']+/gi;
   const rawAll = (text || "").match(urlRegex) || [];
-  
-  // Clean trailing punctuation (e.g. commas, dots, closing parentheses) and remove duplicates
   const cleanedAll = rawAll.map(url => url.replace(/[.,;)]+$/, ""));
   const uniqueUrls = [...new Set(cleanedAll)];
 
-  // Select the most relevant application URL
   const formsGle = uniqueUrls.find((u) => /forms\.gle\//i.test(u));
   const docsForms = uniqueUrls.find((u) => /docs\.google\.com\/forms\//i.test(u));
   const unstop = uniqueUrls.find((u) => /unstop\.com\//i.test(u));
   const brazen = uniqueUrls.find((u) => /brazenconnect\.com\//i.test(u));
-  
+
   const primary = formsGle || docsForms || unstop || brazen || uniqueUrls[0] || "";
-  
+
   return { primary, all: uniqueUrls, isForm: !!(formsGle || docsForms) };
 }
 
@@ -158,6 +157,7 @@ const KNOWN_COMPANY_ALIASES = {
   flipkart: "Flipkart",
   ibm: "IBM",
   workindia: "WorkIndia",
+  "tata technologies": "Tata Technologies",
 };
 
 const INVALID_TITLE_FRAGMENTS = [
@@ -201,7 +201,7 @@ function extractCompanyFromText(text = "") {
 function sanitizeCompany(raw = "") {
   const trimmed = (raw || "").trim();
   const lower = trimmed.toLowerCase();
-  
+
   const wordCount = trimmed.split(/\s+/).length;
   if (wordCount > 5) return null;
 
@@ -218,7 +218,7 @@ function sanitizeCompany(raw = "") {
   if (invalid.includes(lower)) return null;
   if (rejectIfContains.some((term) => lower.includes(term))) return null;
   if (/\b(your|our|this|the)\s+(institution|college|university|institute)\b/.test(lower)) return null;
-  
+
   if (/[.!?][\sA-Za-z]/.test(trimmed)) return null;
 
   return trimmed;
@@ -237,10 +237,7 @@ const PLATFORM_TERMS = [
 
 function stripPlatformReferences(text = "") {
   let cleaned = text;
-  // Remove all URLs so domains don't trigger alias matches
   cleaned = cleaned.replace(/https?:\/\/[^\s<>"']+/gi, "");
-  
-  // Remove generic platform names
   for (const term of PLATFORM_TERMS) {
     const regex = new RegExp(`\\b${term}\\b`, 'gi');
     cleaned = cleaned.replace(regex, "");
@@ -277,15 +274,33 @@ function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }
   return { company: "", source: 'none', confidence: 0.0 };
 }
 
+// ---------------------------------------------------------------------------
+// Email classification (deterministic pre-filter)
+// Order matters: higher-priority rules first.
+// ---------------------------------------------------------------------------
+
 function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = false }) {
   const text = `${subject} ${body}`.toLowerCase();
   const rules = [
+    // ── HACKATHON / EVENT ─────────────────────────────────────────────────
+    // Checked FIRST so event-invitation keywords never fall through to
+    // registrationLink / deadlineReminder and produce garbage field values.
+    {
+      category: "hackathonEvent",
+      classification: "Hackathon / Event Invitation",
+      status: "applied",
+      type: "event",
+      regex: /\b(hackathon|innovent|innovation\s+challenge|ideathon|datathon|bootcamp|competition|coding\s+contest|tech\s+fest|techfest|code\s*fest|codathon|makeathon|designathon|project\s+submission|submission\s+window|team\s+size|hackathon\s+themes|event\s+invitation|workshop\s+invitation|webinar\s+invitation|scholarship\s+program|open\s+for\s+registration)\b/i,
+      confidence: 0.92,
+    },
+
+    // ── JOB / RECRUITMENT ─────────────────────────────────────────────────
     {
       category: "interviewResult",
       classification: "Interview Result",
       status: "offer",
       type: "unknown",
-      regex: /\b(offer|congratulations|selected|shortlisted|happy to inform|pleased to inform)\b/i,
+      regex: /\b(offer\s+letter|congratulations|selected|shortlisted|happy to inform|pleased to inform)\b/i,
       confidence: 0.95,
     },
     {
@@ -395,6 +410,10 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
   };
 }
 
+// ---------------------------------------------------------------------------
+// Date / time helpers
+// ---------------------------------------------------------------------------
+
 function parseDateString(input = "", referenceDate = new Date()) {
   const text = normalizeText(input);
   if (!text) return null;
@@ -432,7 +451,7 @@ function parseDateString(input = "", referenceDate = new Date()) {
     if (!Number.isNaN(date.getTime())) return date;
   }
 
-  const numericMatch = text.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+  const numericMatch = text.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
   if (numericMatch) {
     const day = parseInt(numericMatch[1], 10);
     const month = parseInt(numericMatch[2], 10);
@@ -518,18 +537,15 @@ function extractSalary(text = "") {
       const cleanedValue = cleanProgramValue(value);
       const numericOnly = /^[0-9]+(?:\.[0-9]+)?$/;
       const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(cleanedValue);
-      
-      // Reject if it's just a number without context, or just "rs."
+
       if (numericOnly.test(cleanedValue) && !hasCurrencyOrUnit) continue;
       if (/^(?:rs\.?|inr|₹|usd)\s*$/i.test(cleanedValue)) continue;
 
-      // Extract raw number value to ensure precision
       const numMatch = cleanedValue.match(/([0-9,]+(?:\.\d+)?)/);
       if (numMatch) {
         const numVal = parseFloat(numMatch[1].replace(/,/g, ""));
-        // If number is very low (e.g. 1 or 2), it MUST have a modifier like Lakhs or LPA to be valid
         if (numVal < 100 && !/\b(?:lpa|lakhs|k|thousands|crores)\b/i.test(cleanedValue)) {
-           continue; // Reject low precision trash
+          continue;
         }
       }
 
@@ -582,7 +598,7 @@ function extractProgramDuration(text = "") {
     const extracted = cleanProgramValue(minDurationMatch[1]);
     if (extracted.length < 30) return extracted;
   }
-  
+
   if (/\bdaylong\b/i.test(cleanedText)) return "Daylong";
   if (/\bfull day\b/i.test(cleanedText)) return "Full day";
 
@@ -608,7 +624,7 @@ function extractProgramStipend(text = "") {
       const cleaned = cleanProgramValue(value);
       const numericOnly = /^[0-9]+(?:\.[0-9]+)?$/;
       const hasCurrencyOrUnit = /\b(?:₹|Rs\.?|INR|LPA|lakhs|K|k|per\s*month|pm|\/month|p\.m\.|pa|\/yr)\b/i.test(cleaned);
-      
+
       if (numericOnly.test(cleaned) && !hasCurrencyOrUnit) continue;
       if (/^(?:rs\.?|inr|₹|usd)\s*$/i.test(cleaned)) continue;
 
@@ -616,7 +632,7 @@ function extractProgramStipend(text = "") {
       if (numMatch) {
         const numVal = parseFloat(numMatch[1].replace(/,/g, ""));
         if (numVal < 100 && !/\b(?:lpa|lakhs|k|thousands|crores)\b/i.test(cleaned)) {
-           continue; 
+          continue;
         }
       }
 
@@ -627,23 +643,21 @@ function extractProgramStipend(text = "") {
 }
 
 function extractDeadlineText(text = "") {
-  // We only operate on the clean lines (not stripped of newlines yet, but trimmed)
   const lines = (text || "").split(/[\r\n]+/);
-  
+
   const patterns = [
     /(?:register|apply|submit|last date|deadline).*?\b(?:on or before|before|by|is)\b\s*([^\r\n]+)/i,
     /(?:last date|deadline|register|apply)\s*[:\-]\s*([^\r\n]+)/i,
     /\b(?:apply|submit)\s*(?:by|before)\s*([^\r\n]+)/i,
   ];
-  
+
   for (const line of lines) {
     const cleanedLine = cleanMarkdown(line);
     for (const pattern of patterns) {
       const match = cleanedLine.match(pattern);
       if (match && match[1]) {
         let rawDeadline = match[1].trim();
-        
-        // Stop at sentence boundaries and common separators
+
         const boundaries = [". ", " - ", " | ", " Dear ", " Greetings ", " Please ", " Note: "];
         for (const boundary of boundaries) {
           const idx = rawDeadline.toLowerCase().indexOf(boundary.toLowerCase());
@@ -651,13 +665,12 @@ function extractDeadlineText(text = "") {
             rawDeadline = rawDeadline.substring(0, idx);
           }
         }
-        
+
         rawDeadline = rawDeadline.trim();
-        
-        // Reject multi-line, obvious paragraphs, or highly suspicious long strings
+
         if (rawDeadline.length > 40) return "";
         if (/\b(dear|greetings|sincerely|thanks|regards|sir|madam)\b/i.test(rawDeadline)) return "";
-        
+
         if (!/^(before|by|deadline)/i.test(rawDeadline)) rawDeadline = `Before ${rawDeadline}`;
         return rawDeadline;
       }
@@ -684,6 +697,7 @@ function generateTitle(company = "", classification = "newOpportunity", subject 
   if (classification === "deadlineReminder") return `${base} Deadline Reminder`;
   if (classification === "genericPlacementNotice") return `${base} Recruitment Drive`;
   if (classification === "interviewResult") return `${base} Interview Result`;
+  if (classification === "hackathonEvent") return `${base} Event`;
   if (classification === "newOpportunity") return `${base} Opportunity`;
   if (roleCandidate && roleCandidate !== "Unknown Role") return `${base} ${roleCandidate}`;
   return `${base} Opportunity`;
@@ -693,13 +707,206 @@ function buildProcessId(company = "") {
   return normalizeKey(company) || "unknown-process";
 }
 
+// ---------------------------------------------------------------------------
+// Gemini structured call — primary LLM integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Valid email types returned by Gemini.
+ */
+const VALID_EMAIL_TYPES = ["job", "event", "nonRecruitment"];
+
+/**
+ * Fields that may appear in fieldsToDisplay, keyed by emailType.
+ */
+const ALLOWED_FIELDS_BY_TYPE = {
+  job: ["role", "stipend", "deadline", "duration", "venue"],
+  event: ["eventName", "deadline", "venue"],
+  nonRecruitment: [],
+};
+
+/**
+ * Strict allowlist of classification strings the model may return.
+ */
+const VALID_CLASSIFICATIONS = [
+  "New Hiring Opportunity",
+  "Registration Link",
+  "Application Reminder",
+  "PPT Announcement",
+  "Assessment Announcement",
+  "Interview Schedule",
+  "Interview Result",
+  "Venue Update",
+  "Deadline Reminder",
+  "Generic Placement Notice",
+  "Hackathon / Event Invitation",
+  "Workshop / Webinar",
+  "Scholarship",
+  "Non-Recruitment Email",
+];
+
+/**
+ * Validate and sanitize the raw JSON object returned by Gemini.
+ * Returns a clean, schema-conformant object, or null if fatally invalid.
+ */
+function validateGeminiResponse(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  // emailType — must be one of the allowed values
+  const emailType = VALID_EMAIL_TYPES.includes(raw.emailType) ? raw.emailType : null;
+  if (!emailType) return null; // Cannot proceed without a valid emailType
+
+  // classification — must be from the allowlist
+  const classification = VALID_CLASSIFICATIONS.includes(raw.classification)
+    ? raw.classification
+    : null;
+
+  // Helper: sanitize a short text field — strip to plain string, max 200 chars
+  const sanitizeTextField = (v, maxLen = 200) => {
+    if (!v || typeof v !== "string") return "";
+    const cleaned = cleanProgramValue(v.substring(0, maxLen));
+    // Reject suspiciously long or multi-sentence values that are likely hallucinations
+    if (cleaned.split(/[.!?]/).filter(Boolean).length > 2) return "";
+    return cleaned;
+  };
+
+  const subtitle    = sanitizeTextField(raw.subtitle, 120);
+  const role        = sanitizeTextField(raw.role, 120);
+  const stipend     = sanitizeTextField(raw.stipend, 80);
+  const deadline    = sanitizeTextField(raw.deadline, 80);
+  const venue       = sanitizeTextField(raw.venue, 120);
+  const duration    = sanitizeTextField(raw.duration, 80);
+  const eventName   = sanitizeTextField(raw.eventName, 120);
+  const company     = sanitizeTextField(raw.company, 100);
+
+  // fieldsToDisplay — array of strings from the allowed set for this emailType
+  const allowedFields = ALLOWED_FIELDS_BY_TYPE[emailType] || [];
+  let fieldsToDisplay = [];
+  if (Array.isArray(raw.fieldsToDisplay)) {
+    fieldsToDisplay = raw.fieldsToDisplay.filter(
+      (f) => typeof f === "string" && allowedFields.includes(f)
+    );
+  }
+
+  // status — must be from the valid set
+  const validStatuses = ["applied", "interview", "offer", "rejected", "new"];
+  const status = validStatuses.includes(raw.status) ? raw.status : null;
+
+  // type — must be from the valid set
+  const validTypes = ["internship", "full-time", "event", "test", "unknown"];
+  const type = validTypes.includes(raw.type) ? raw.type : null;
+
+  return {
+    emailType,
+    classification,
+    subtitle,
+    role,
+    stipend,
+    deadline,
+    venue,
+    duration,
+    eventName,
+    company,
+    fieldsToDisplay,
+    status,
+    type,
+    link: typeof raw.link === "string" && raw.link.startsWith("http") ? raw.link : "",
+  };
+}
+
+/**
+ * Call Gemini with a structured prompt that returns enough information for
+ * the frontend to render cards correctly — including emailType, subtitle,
+ * and an explicit fieldsToDisplay list. Falls back to {} on any error.
+ */
+async function callGeminiStructured({ subject = "", sender = "", body = "" }) {
+  const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
+
+  const prompt = `You are a precise email classifier for a job application tracker. Analyze the email below and return ONLY a valid JSON object — no markdown, no explanation.
+
+TASK: Determine the email type and extract only the information explicitly stated in the email. Do NOT infer, guess, or hallucinate values. If a field is not clearly stated, return an empty string "".
+
+Return this exact JSON schema:
+{
+  "emailType": "<job | event | nonRecruitment>",
+  "classification": "<one of: New Hiring Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Scholarship | Non-Recruitment Email>",
+  "company": "<company or organization name, or empty string>",
+  "subtitle": "<for job emails: job role or classification label. For event emails: event name (e.g. InnoVent-27). For non-recruitment: empty string>",
+  "role": "<job role title if this is a job email and it is explicitly stated, else empty string>",
+  "eventName": "<event name if this is an event/hackathon email and it is explicitly stated, else empty string>",
+  "stipend": "<stipend or CTC only if explicitly stated as a compensation for work/internship, else empty string. Prize money for hackathons is NOT a stipend>",
+  "deadline": "<application/registration deadline text if explicitly stated, else empty string>",
+  "venue": "<physical or online venue if explicitly stated, else empty string>",
+  "duration": "<internship or program duration if explicitly stated, else empty string>",
+  "status": "<applied | interview | offer | rejected>",
+  "type": "<internship | full-time | event | test | unknown>",
+  "link": "<primary application or registration URL if present, else empty string>",
+  "fieldsToDisplay": ["<include only field names from this list where the value is non-empty and genuinely applicable: role, stipend, deadline, duration, venue, eventName>"]
+}
+
+RULES:
+1. emailType "job" — for hiring, internship, placement, or recruitment emails.
+2. emailType "event" — for hackathons, competitions, contests, workshops, bootcamps, webinars, scholarships, tech fests, or event invitations.
+3. emailType "nonRecruitment" — for newsletters, spam, or emails unrelated to jobs or events.
+4. "fieldsToDisplay" must only contain field names where the value is non-empty AND the information is explicitly present in the email.
+5. Prize money, cash prizes, or rewards in hackathons must NOT be placed in the "stipend" field.
+6. The "role" field must only be set for job/internship emails where a specific job title is stated.
+7. Ignore webinar and form platforms (Microsoft Teams, Google Forms, Zoom, Unstop, Brazen) when determining the company name.
+8. If information is ambiguous, choose empty string over a guess.
+
+Subject: ${subject}
+Sender: ${sender}
+Body: ${truncatedBody}`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: prompt,
+      config: { abortSignal: controller.signal }
+    });
+    clearTimeout(timeoutId);
+
+    let jsonText = (response.text || "").trim();
+    // Strip markdown code fences if present
+    jsonText = jsonText
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
+
+    const rawParsed = JSON.parse(jsonText);
+    const validated = validateGeminiResponse(rawParsed);
+
+    if (!validated) {
+      console.warn("[GEMINI_STRUCTURED] Response failed schema validation, discarding.");
+      return null;
+    }
+
+    console.log(`[GEMINI_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", fieldsToDisplay=${JSON.stringify(validated.fieldsToDisplay)}`);
+    return validated;
+
+  } catch (err) {
+    if (err.name === "AbortError") {
+      console.error("[GEMINI_STRUCTURED] Request timed out.");
+    } else {
+      console.error("[GEMINI_STRUCTURED] Failed:", err?.message || err);
+    }
+    return null; // Signal caller to use deterministic fallback
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy fallback (kept for backwards-compat; used only when Gemini is down)
+// ---------------------------------------------------------------------------
 async function callGeminiFallback({ subject = "", sender = "", body = "" }) {
   const prompt = `You are a structured parser.\nReturn only JSON.\n{\n  "company": "<company name or empty>",\n  "role": "<role or event title or empty>",\n  "classification": "<New Hiring Opportunity|Registration Link|Application Reminder|PPT Announcement|Assessment Announcement|Interview Schedule|Interview Result|Venue Update|Deadline Reminder|Generic Placement Notice|Non-Recruitment Email>",\n  "type": "<internship|full-time|test|unknown>",\n  "status": "<applied|interview|offer|rejected>",\n  "link": "<URL or empty>",\n  "eventDate": "<YYYY-MM-DD or empty>",\n  "deadlineISO": "<YYYY-MM-DDTHH:MM:SS.sssZ or empty>",\n  "venue": "<venue or empty>",\n  "durationText": "<duration or empty>",\n  "salaryText": "<salary or empty>"\n}\nIMPORTANT: Ignore webinar and form platforms (e.g., Microsoft Teams, Google Forms, Zoom, Unstop, Brazen) when determining the company name. The company is the actual employer/recruiter.\nSubject: ${subject}\nSender: ${sender}\nBody: ${body}`;
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000);
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: { abortSignal: controller.signal }
     });
@@ -713,45 +920,63 @@ async function callGeminiFallback({ subject = "", sender = "", body = "" }) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
+
 async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", referenceDate = new Date(), rawText = "") {
   const body = normalizeText(fullBodyText || rawText || "");
   const forwarded = parseForwardedEmail(body);
   const sourceBody = forwarded.body || body;
   const sourceSubject = forwarded.subject || subject || "";
   const linkInfo = extractFormLink(sourceBody);
-  const classification = classifyEmail({
+
+  // ── Step 1: Deterministic classification ───────────────────────────────
+  const detClassification = classifyEmail({
     subject: sourceSubject,
     body: sourceBody,
     forwarded,
     hasLink: !!linkInfo.primary,
   });
+
+  // ── Step 2: Company resolution (deterministic) ─────────────────────────
   const companyObj = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
   let company = companyObj.company;
   let companyConfidence = companyObj.confidence;
   let companySource = companyObj.source;
-  const eventDate = extractEventDate(sourceBody, referenceDate);
-  const deadlineInfo = extractDeadlineDetails(sourceBody, referenceDate);
-  const reportingTime = extractReportingTime(sourceBody);
-  const venue = extractVenue(sourceBody);
-  const durationText = extractDuration(sourceBody);
-  const salaryText = extractSalary(sourceBody);
-  const programRoles = extractProgramRoles(sourceBody);
-  const jobRole = programRoles || keywordRoleFallback(sourceBody);
-  let title = generateTitle(company, classification.category, sourceSubject, jobRole, sourceBody);
-  const processId = buildProcessId(company);
 
-  let llmFallback = {};
-  if ((!company || companyConfidence <= 0.6 || classification.confidence < 0.5) && /\b(apply|registration|interview|assessment|deadline|aptitude|profile|seminar|ppt|placement|recruitment)\b/i.test(`${sourceSubject} ${sourceBody}`)) {
-    llmFallback = await callGeminiFallback({ subject: sourceSubject, sender, body: sourceBody });
-    if (llmFallback.company && sanitizeCompany(llmFallback.company)) {
-      if (!company || companyConfidence <= 0.6) {
-        company = sanitizeCompany(llmFallback.company);
-        companyConfidence = 0.8;
-        companySource = "llm-fallback";
-      }
-    }
-    if (llmFallback.role && !title) {
-      title = llmFallback.role;
+  // ── Step 3: Gemini structured call (primary) ───────────────────────────
+  // Always call Gemini for every email — correctness is the priority.
+  let gemini = null;
+  gemini = await callGeminiStructured({ subject: sourceSubject, sender, body: sourceBody });
+
+  // ── Step 4: Merge Gemini + deterministic results ───────────────────────
+  // Gemini result takes priority; deterministic is the authoritative fallback.
+
+  const emailType = gemini?.emailType ?? (
+    detClassification.category === "hackathonEvent" ? "event" :
+    detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job"
+  );
+
+  const finalClassification = gemini?.classification
+    ?? detClassification.classification;
+
+  const finalCategory = gemini?.classification
+    ? normalizeKey(gemini.classification).replace(/\s+/g, "")
+    : detClassification.category;
+
+  const finalStatus = gemini?.status
+    ? normalizeStatus(gemini.status)
+    : normalizeStatus(detClassification.status);
+
+  const finalType = gemini?.type ?? detClassification.type;
+
+  // Company: prefer Gemini if it found one with proper sanitization, else keep deterministic result
+  if (gemini?.company && sanitizeCompany(gemini.company)) {
+    if (!company || companyConfidence <= 0.7) {
+      company = sanitizeCompany(gemini.company);
+      companyConfidence = 0.85;
+      companySource = "gemini";
     }
   }
 
@@ -760,56 +985,121 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     companySource = "none";
     companyConfidence = 0;
   }
-  const finalClassification = llmFallback.classification && llmFallback.classification !== "Non-Recruitment Email"
-    ? llmFallback.classification
-    : classification.classification;
-  const finalCategory = llmFallback.classification && llmFallback.classification !== "Non-Recruitment Email"
-    ? normalizeKey(llmFallback.classification).replace(/\s+/g, "")
-    : classification.category;
-  const finalStatus = llmFallback.status ? normalizeStatus(llmFallback.status) : normalizeStatus(classification.status);
-  const finalType = llmFallback.type || classification.type;
+
+  // ── Step 5: Field extraction gated by emailType ────────────────────────
+  // For event and non-recruitment emails, skip all job-specific extractors
+  // to prevent garbage values from appearing on cards.
+  const isJobEmail = emailType === "job";
+
+  const eventDate      = extractEventDate(sourceBody, referenceDate);
+  const deadlineInfo   = isJobEmail ? extractDeadlineDetails(sourceBody, referenceDate) : { deadline: "", iso: "", raw: "" };
+  const reportingTime  = isJobEmail ? extractReportingTime(sourceBody) : "";
+  const venue          = isJobEmail ? extractVenue(sourceBody) : "";
+  const durationText   = isJobEmail ? extractDuration(sourceBody) : "";
+  const salaryText     = isJobEmail ? extractSalary(sourceBody) : "";
+  const programRoles   = isJobEmail ? extractProgramRoles(sourceBody) : "";
+  const programStipend = isJobEmail ? extractProgramStipend(sourceBody) : "";
+  const programDuration = isJobEmail ? extractProgramDuration(sourceBody) : "";
+  const deadlineText   = isJobEmail ? extractDeadlineText(sourceBody) : "";
+
+  const jobRole = programRoles || keywordRoleFallback(sourceBody);
+
+  // ── Step 6: Subtitle — what shows under the company name on the card ───
+  // For events: event name (from Gemini, then subject heuristics)
+  // For jobs: Gemini-provided subtitle or the generated title
+  let detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, isJobEmail ? jobRole : "", sourceBody);
+  const subtitle = gemini?.subtitle
+    || (emailType === "event" ? (gemini?.eventName || "") : "")
+    || (isJobEmail ? detTitle : "");
+
+  // ── Step 7: fieldsToDisplay ────────────────────────────────────────────
+  // Prefer Gemini-validated list; compute deterministic fallback for jobs.
+  let fieldsToDisplay = gemini?.fieldsToDisplay ?? null;
+
+  if (!fieldsToDisplay) {
+    // Deterministic fallback: only include fields that are actually non-empty
+    fieldsToDisplay = [];
+    if (isJobEmail) {
+      if (programRoles) fieldsToDisplay.push("role");
+      if (programStipend) fieldsToDisplay.push("stipend");
+      if (deadlineText) fieldsToDisplay.push("deadline");
+      if (programDuration) fieldsToDisplay.push("duration");
+      if (venue) fieldsToDisplay.push("venue");
+    }
+  }
+
+  // ── Step 8: Build parsed output ───────────────────────────────────────
+  const processId = buildProcessId(resolvedCompany);
 
   const parsed = {
-    isRelevant: finalCategory !== "nonRecruitment",
+    // Core classification
+    emailType,
+    isRelevant: emailType !== "nonRecruitment",
     classification: finalClassification,
     type: finalType,
     status: finalStatus,
-    confidenceScore: Math.min(1, classification.confidence + (resolvedCompany ? 0.05 : 0)),
+    confidenceScore: Math.min(1, detClassification.confidence + (resolvedCompany ? 0.05 : 0)),
+
+    // Identity
     company: resolvedCompany,
-    jobRole: jobRole || llmFallback.role || "Unknown Role",
-    title: title || llmFallback.role || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
-    role: title || llmFallback.role || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
+    subtitle,
+    jobRole: isJobEmail ? (programRoles || gemini?.role || "Unknown Role") : "",
+    title: subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
+    role: subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
     processId: processId || buildProcessId(resolvedCompany),
     processName: `${resolvedCompany || "Unknown Company"} hiring process`,
+
+    // Display control — the frontend uses this to decide which sections to render
+    fieldsToDisplay,
+
+    // Date / time
     eventDate: eventDate || null,
     eventTime: sourceBody.match(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i)?.[0]?.toUpperCase() || "",
     reportingTime: reportingTime || "",
-    venue: venue || llmFallback.venue || "",
-    durationText: durationText || llmFallback.durationText || "",
-    salaryText: salaryText || llmFallback.salaryText || "",
+
+    // Location
+    venue: venue || gemini?.venue || "",
+
+    // Duration
+    durationText: durationText || gemini?.duration || "",
+
+    // Compensation — only for job emails
+    salaryText: isJobEmail ? (salaryText || "") : "",
+    programStipend: isJobEmail ? (programStipend || gemini?.stipend || "") : "",
+
+    // Deadlines — only for job emails
     deadline: deadlineInfo.deadline || "",
-    deadlineISO: deadlineInfo.iso || llmFallback.deadlineISO || "",
-    deadlineText: extractDeadlineText(sourceBody),
-    link: linkInfo.primary || llmFallback.link || "",
-    links: linkInfo.all.length ? linkInfo.all : llmFallback.link ? [llmFallback.link] : [],
-    isFormLink: linkInfo.isForm || /docs\.google\.com\/forms|forms\.gle/.test(linkInfo.primary || llmFallback.link || ""),
-    programRoles: programRoles || llmFallback.role || "",
-    programDuration: extractProgramDuration(sourceBody) || llmFallback.durationText || "",
-    programStipend: extractProgramStipend(sourceBody) || llmFallback.salaryText || "",
+    deadlineISO: deadlineInfo.iso || "",
+    deadlineText: isJobEmail ? (deadlineText || gemini?.deadline || "") : "",
+
+    // Links
+    link: linkInfo.primary || gemini?.link || "",
+    links: linkInfo.all.length ? linkInfo.all : gemini?.link ? [gemini.link] : [],
+    isFormLink: linkInfo.isForm || /docs\.google\.com\/forms|forms\.gle/.test(linkInfo.primary || gemini?.link || ""),
+
+    // Program details — only for job emails
+    programRoles: isJobEmail ? (programRoles || gemini?.role || "") : "",
+    programDuration: isJobEmail ? (programDuration || gemini?.duration || "") : "",
+
+    // Parse metadata (for debugging)
     parseMeta: {
-      sourceSubject: sourceSubject,
+      sourceSubject,
       forwarded: forwarded.isForwarded,
       sender,
-      classificationSource: classification.classification,
-      companySource: companySource,
-      companyConfidence: companyConfidence,
+      classificationSource: detClassification.classification,
+      companySource,
+      companyConfidence,
       hasLink: !!linkInfo.primary,
-      rawTitle: title,
-      fallback: llmFallback,
+      detTitle,
+      geminiUsed: !!gemini,
+      geminiEmailType: gemini?.emailType ?? null,
+      geminiClassification: gemini?.classification ?? null,
     },
   };
 
-  console.log(`[PARSER_SUMMARY] Company: ${parsed.company || 'None'}, JobRole: ${parsed.jobRole || 'None'}, Classification: ${parsed.classification} (Confidence: ${parsed.confidenceScore})`);
+  console.log(
+    `[PARSER_SUMMARY] Company: ${parsed.company || "None"} | emailType: ${emailType} | Classification: ${parsed.classification} | subtitle: "${parsed.subtitle}" | fieldsToDisplay: ${JSON.stringify(parsed.fieldsToDisplay)}`
+  );
 
   return parsed;
 }

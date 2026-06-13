@@ -390,6 +390,9 @@ async function fetchAndProcessEmails() {
                   if (!ov.includes("durationText") && !exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
                   if (!ov.includes("salaryText") && !exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
                   if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+                  if (!ov.includes("emailType") && parsed.emailType && exists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
+                  if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
+                  if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
 
                   if (eventAdded) updatePayload.events = exists.events;
 
@@ -482,6 +485,9 @@ async function fetchAndProcessEmails() {
               if (!ov.includes("durationText") && !contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
               if (!ov.includes("salaryText") && !contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
               if (!ov.includes("parseMeta") && !contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+              if (!ov.includes("emailType") && parsed.emailType && contentExists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
+              if (!ov.includes("subtitle") && !contentExists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
+              if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
 
               const incStatus = classificationToStatus(parsed.classification);
               const advancedStatus = advanceStatus(contentExists.status, incStatus);
@@ -515,6 +521,9 @@ async function fetchAndProcessEmails() {
             const newApp = new Application({
               company: parsed.company,
               companyKey,
+              emailType: parsed.emailType || "job",
+              subtitle: parsed.subtitle || "",
+              fieldsToDisplay: parsed.fieldsToDisplay || [],
               role: finalRole,
               type: parsed.type || "",
               status: normalizedStatus,
