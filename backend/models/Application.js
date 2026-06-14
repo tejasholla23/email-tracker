@@ -39,6 +39,7 @@ const applicationSchema = new mongoose.Schema(
     messageId: { type: String, unique: true, sparse: true },
     classification: { type: String },
     confidenceScore: { type: Number },
+    parserVersion: { type: String, default: "v2" },
     jobRole: { type: String },
     title: { type: String },
     processId: { type: String },

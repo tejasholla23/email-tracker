@@ -362,7 +362,7 @@ export default function JobTrackerDashboard() {
   }).length;
 
   const unmarkedCount = applications.filter(
-    (a) => (a.status || "").toLowerCase() !== "done"
+    (a) => (a.status || "").toLowerCase() === "new"
   ).length;
 
 
@@ -1133,6 +1133,17 @@ export default function JobTrackerDashboard() {
                     const statusKey = (app.status || "new").toLowerCase();
                     const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
                     const isDone = statusKey === "done";
+                    
+                    const getDeterministicColor = (str) => {
+                      let hash = 0;
+                      for (let i = 0; i < str.length; i++) {
+                        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                      }
+                      const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                      return "00000".substring(0, 6 - c.length) + c;
+                    };
+                    const fallbackColor = getDeterministicColor(app.company || "Unknown");
+                    const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
 
                     return (
                       <div 
@@ -1150,13 +1161,12 @@ export default function JobTrackerDashboard() {
                             <div className="company-logo-container">
                               {app.companyInfo?.logo || app.companyInfo?.domain ? (
                                 <img 
-                                  src={app.companyInfo?.logo || `https://www.google.com/s2/favicons?domain=${app.companyInfo?.domain}&sz=128`} 
+                                  src={app.companyInfo?.logo || uiAvatarUrl} 
                                   alt={app.company}
                                   className="company-logo-img"
                                   onError={(e) => {
-                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
-                                    if (!e.target.src.includes('google.com')) {
-                                      e.target.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                    if (!e.target.src.includes('ui-avatars.com')) {
+                                      e.target.src = uiAvatarUrl;
                                     } else {
                                       e.target.onerror = null;
                                       e.target.style.display = 'none';
@@ -1300,7 +1310,7 @@ export default function JobTrackerDashboard() {
                           >
                             Edit
                           </button>
-                          {app.link && (
+                          {app.link && !isDone && (
                             <a
                               className="card-btn card-btn-apply"
                               href={app.link}
@@ -1310,10 +1320,12 @@ export default function JobTrackerDashboard() {
                                 console.log("[DEBUG_LINK] Clicked app ID:", app._id);
                                 console.log("[DEBUG_LINK] Original app.link value:", app.link);
                                 console.log("[DEBUG_LINK] Rendered href on click:", e.currentTarget.href);
-                                handleApply(app._id);
+                                if (app.status === "new") {
+                                  handleApply(app._id);
+                                }
                               }}
                             >
-                              {app.isFormLink ? "Apply" : "Open Link"}
+                              {(app.status === "new" && app.isFormLink) ? "Apply" : "Open Link"}
                             </a>
                           )}
                           <button

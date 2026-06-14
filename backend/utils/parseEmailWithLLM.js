@@ -907,6 +907,8 @@ const VALID_CLASSIFICATIONS = [
   "Internship Opportunity",
   "Registration Link",
   "Application Reminder",
+  "Application Submitted",
+  "Registration Confirmation",
   "PPT Announcement",
   "Assessment Announcement",
   "Interview Schedule",
@@ -1124,7 +1126,19 @@ function extractFallbackDisplayFields(body) {
       uniqueFields.push(f);
     }
   }
-  return uniqueFields.slice(0, 5);
+  return uniqueFields.slice(0, 5)
+    .map(f => {
+      let val = (f.value || "").trim().replace(/\s+/g, " ");
+      val = val.replace(/^[-:;.,*•]+|[-:;.,*•]+$/g, "").trim();
+      return { ...f, value: val };
+    })
+    .filter(f => {
+      const valLower = f.value.toLowerCase();
+      if (f.value.length < 3) return false;
+      if (/^details?$/i.test(valLower)) return false;
+      if (valLower.includes("will be") || valLower.includes("is as follows")) return false;
+      return true;
+    });
 }
 
 async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", referenceDate = new Date(), rawText = "") {
@@ -1223,6 +1237,21 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     // Safety net: If Gemini failed (e.g. Quota Exceeded) or returned no fields, use regex extractors.
     displayFields = extractFallbackDisplayFields(fullBodyText || rawText || "");
   }
+
+  // Sanitize and validate all display fields
+  displayFields = displayFields
+    .map(f => {
+      let val = (f.value || "").trim().replace(/\s+/g, " ");
+      val = val.replace(/^[-:;.,*•]+|[-:;.,*•]+$/g, "").trim(); // strip trailing/leading punctuation
+      return { ...f, value: val };
+    })
+    .filter(f => {
+      const valLower = f.value.toLowerCase();
+      if (f.value.length < 3) return false; // Too short
+      if (/^details?$/i.test(valLower)) return false; // Garbage label
+      if (valLower.includes("will be") || valLower.includes("is as follows")) return false; // Partial run-on sentences
+      return true;
+    });
 
   // ──── Step 8: Dev-mode trace ────────────────────────────────────────────────
   const isDev = process.env.NODE_ENV !== "production";
@@ -1330,4 +1359,9 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   return parsed;
 }
 
-module.exports = { parseEmailWithLLM, extractFormLink, resolveCompany };
+module.exports = {
+  parseEmailWithLLM,
+  extractFormLink,
+  resolveCompany,
+  extractFallbackDisplayFields
+};

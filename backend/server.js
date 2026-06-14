@@ -410,7 +410,7 @@ async function fetchAndProcessEmails() {
                 eventAdded = true;
               }
 
-              const missingDetails = !exists.displayFields?.length || !exists.programRoles || !exists.programDuration || !exists.programStipend || !exists.deadlineText || !exists.link;
+              const missingDetails = exists.parserVersion !== "v2";
               if (missingDetails) {
                 console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
                 const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
@@ -445,6 +445,8 @@ async function fetchAndProcessEmails() {
                   if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
                   if (!ov.includes("displayFields") && (!exists.displayFields || exists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
                   if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+
+                  updatePayload.parserVersion = "v2";
 
                   if (eventAdded) updatePayload.events = exists.events;
 
@@ -544,10 +546,12 @@ async function fetchAndProcessEmails() {
               if (!ov.includes("displayFields") && (!contentExists.displayFields || contentExists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
               if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
 
-              const incStatus = classificationToStatus(parsed.classification);
-              const advancedStatus = advanceStatus(contentExists.status, incStatus);
-              if (advancedStatus !== contentExists.status) {
-                updatePayload.status = advancedStatus;
+              if (!ov.includes("status")) {
+                const incStatus = classificationToStatus(parsed.classification);
+                const advancedStatus = advanceStatus(contentExists.status, incStatus);
+                if (advancedStatus !== contentExists.status) {
+                  updatePayload.status = advancedStatus;
+                }
               }
 
               const eventAdded = appendApplicationEvent(contentExists, parsed, {
@@ -619,6 +623,7 @@ async function fetchAndProcessEmails() {
               source: "Gmail",
               email: acc.email,
               date: new Date(parseInt(email.data.internalDate)),
+              parserVersion: "v2",
             });
 
             await newApp.save();
