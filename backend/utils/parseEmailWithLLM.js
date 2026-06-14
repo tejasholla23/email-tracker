@@ -432,24 +432,21 @@ function stripForwardingFooter(body = "") {
 function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = false }) {
   const text = `${subject} ${body}`.toLowerCase();
   const rules = [
-    // â”€â”€ HACKATHON / EVENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Checked FIRST so event-invitation keywords never fall through to
-    // registrationLink / deadlineReminder and produce garbage field values.
     {
       category: "hackathonEvent",
       classification: "Hackathon / Event Invitation",
       status: "applied",
       type: "event",
-      regex: /\b(hackathon|innovent|innovation\s+challenge|ideathon|datathon|bootcamp|competition|coding\s+contest|tech\s+fest|techfest|code\s*fest|codathon|makeathon|designathon|project\s+submission|submission\s+window|team\s+size|hackathon\s+themes|event\s+invitation|workshop\s+invitation|webinar\s+invitation|scholarship\s+program|open\s+for\s+registration)\b/i,
+      opportunityType: "HACKATHON",
+      regex: /\b(hack\w*|innovent|innovation\s+challenge|ideathon|datathon|bootcamp|competition|coding\s+contest|tech\s+fest|techfest|code\s*fest|codathon|makeathon|designathon|project\s+submission|submission\s+window|team\s+size|event\s+invitation|scholarship\s+program|open\s+for\s+registration)\b/i,
       confidence: 0.92,
     },
-
-    // â”€â”€ JOB / RECRUITMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
       category: "interviewResult",
       classification: "Interview Result",
       status: "offer",
       type: "unknown",
+      opportunityType: "JOB_APPLICATION",
       regex: /\b(offer\s+letter|congratulations|selected|shortlisted|happy to inform|pleased to inform)\b/i,
       confidence: 0.95,
     },
@@ -458,6 +455,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Interview Schedule",
       status: "interview",
       type: "interview",
+      opportunityType: "JOB_APPLICATION",
       regex: /\b(interview.*schedule|scheduled for|interview date|slot|panel interview|telephonic interview|interview schedule)\b/i,
       confidence: 0.92,
     },
@@ -466,6 +464,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Assessment Announcement",
       status: "interview",
       type: "test",
+      opportunityType: "JOB_APPLICATION",
       regex: /\b(aptitude test|assessment|online test|exam|fcat|coding test|technical test)\b/i,
       confidence: 0.9,
     },
@@ -474,6 +473,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Registration Link",
       status: "applied",
       type: "application",
+      opportunityType: "JOB_APPLICATION",
       regex: /\b(register|registration|complete your profile|profile completion|forms\.gle|docs\.google\.com\/forms)\b/i,
       confidence: 0.9,
     },
@@ -482,6 +482,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Application Reminder",
       status: "applied",
       type: "application",
+      opportunityType: "JOB_APPLICATION",
       regex: /\b(reminder|remind|register.*by|submit.*by|last date|deadline)\b/i,
       confidence: 0.9,
     },
@@ -490,7 +491,8 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "PPT Announcement",
       status: "applied",
       type: "unknown",
-      regex: /\b(pre[-\s]*placement talk|ppt|seminar|placement talk|info session|guest lecture)\b/i,
+      opportunityType: "WEBINAR",
+      regex: /\b(pre[-\s]*placement talk|ppt|seminar|placement talk|info session|guest lecture|workshop\s+invitation|webinar\s+invitation|webinar|workshop|expert talk)\b/i,
       confidence: 0.88,
     },
     {
@@ -498,6 +500,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Venue Update",
       status: "applied",
       type: "unknown",
+      opportunityType: "OTHER_PLACEMENT_EVENT",
       regex: /\b(venue|hall|room|auditorium|seminar hall|location|place)\b/i,
       confidence: 0.88,
     },
@@ -506,6 +509,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Deadline Reminder",
       status: "applied",
       type: "unknown",
+      opportunityType: "JOB_APPLICATION",
       regex: /\b(deadline|last date|apply by|register by|submission deadline|before .* today|before .* tomorrow)\b/i,
       confidence: 0.9,
     },
@@ -514,6 +518,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Generic Placement Notice",
       status: "applied",
       type: "unknown",
+      opportunityType: "JOB_APPLICATION",
       regex: /\b(campus recruitment|placement notice|hiring process|recruitment drive|opportunity|drive)\b/i,
       confidence: 0.75,
     },
@@ -526,6 +531,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
         classification: rule.classification,
         type: rule.type,
         status: rule.status,
+        opportunityType: rule.opportunityType,
         confidence: rule.confidence,
       };
     }
@@ -537,6 +543,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "Registration Link",
       type: "application",
       status: "applied",
+      opportunityType: "JOB_APPLICATION",
       confidence: 0.7,
     };
   }
@@ -547,6 +554,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "New Hiring Opportunity",
       type: "unknown",
       status: "applied",
+      opportunityType: "JOB_APPLICATION",
       confidence: 0.55,
     };
   }
@@ -556,6 +564,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
     classification: "Non-Recruitment Email",
     type: "unknown",
     status: "applied",
+    opportunityType: "OTHER_PLACEMENT_EVENT",
     confidence: 0.25,
   };
 }
@@ -972,6 +981,7 @@ function validateGeminiResponse(raw) {
 
   return {
     emailType,
+    opportunityType: raw.opportunityType || "JOB_APPLICATION",
     classification,
     company,
     subtitle,
@@ -988,7 +998,7 @@ function validateGeminiResponse(raw) {
  * subtitle, and a flexible displayFields array of {label, value} pairs.
  * Falls back to null on any error.
  */
-async function callGeminiStructured({ subject = "", sender = "", body = "" }) {
+async function callGeminiStructured({ subject = "", sender = "", body = "", opportunityType = "JOB_APPLICATION" }) {
   const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
 
   const prompt = `You are a smart placement-email parser for a college student dashboard. Analyze the email and return ONLY valid JSON â€” no markdown, no explanation.
@@ -998,6 +1008,7 @@ CONTEXT: Emails are forwarded from a campus placement department (MSRIT/RIT). Th
 Return exactly this JSON schema:
 {
   "emailType": "<job | event | nonRecruitment>",
+  "opportunityType": "<JOB_APPLICATION | HACKATHON | WEBINAR | OTHER_PLACEMENT_EVENT>",
   "classification": "<one of: New Hiring Opportunity | Internship Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Expert Talk Series | Scholarship | Non-Recruitment Email>",
   "company": "<actual organizing company â€” see COMPANY RULES>",
   "subtitle": "<program/event/role name shown below the company name on the card â€” see SUBTITLE RULES>",
@@ -1014,14 +1025,12 @@ DISPLAY FIELDS RULES:
 - Do NOT include empty, vague, or inferred values.
 - Choose labels a student would want to see immediately on a card.
 - Ignore forwarding footers entirely. NEVER use RIT, MSRIT, Placement Department, or Dean's name as a venue, location, or company.
-- Use labels and context appropriate to the email type:
+- CRITICAL: Strongly prioritize fields based on the provided Opportunity Type (${opportunityType}):
 
-  Internship:  Role/Designation, Stipend, Location, Duration, Joining
-  Full-time:   Designation, CTC, Location, Branches, Deadline
-  Hackathon:   Prize Pool, Registration Deadline, Team Size, Mode
-  Webinar:     Date, Time, Mode (Online/Offline), Speaker, Topic
-  Assessment:  Date, Time, Platform, Duration
-  Workshop:    Date, Venue, Registration Deadline
+  If JOB_APPLICATION: Extract Role, CTC, Stipend, Deadline, Duration, Location, Joining, Eligibility.
+  If HACKATHON: Extract Event Name, Registration Deadline, Timeline, Prize Amount, Eligibility, Team Size, Mode, Organizer, Benefits.
+  If WEBINAR: Extract Event Title, Date, Time, Speaker/Company, Eligibility.
+  If OTHER_PLACEMENT_EVENT: Extract Event Title, Important Dates, Organizer, Mode.
 
 SUBTITLE RULES (what shows as the tagline below the company name):
   Internship Opportunity    â†’ program/team name (e.g. "IS Team Internship")
@@ -1094,7 +1103,7 @@ Body: ${truncatedBody}`;
  * Deterministic fallback to extract displayFields when Gemini fails (e.g. rate limits).
  * Uses lightweight regexes to pull out standard slots if present.
  */
-function extractFallbackDisplayFields(body) {
+function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION") {
   const fields = [];
   
   const extract = (regex, label) => {
@@ -1108,14 +1117,29 @@ function extractFallbackDisplayFields(body) {
     }
   };
 
-  // Match until the next separator: dash, pipe, bullet, star, or newline
-  extract(/(?:stipend|compensation)[\s:]*([^-|•*\n\r]+)/i, "Stipend");
-  extract(/(?:ctc|package|salary)[\s:]*([^-|•*\n\r]+)/i, "CTC");
-  extract(/(?:duration|period)[\s:]*([^-|•*\n\r]+)/i, "Duration");
-  extract(/(?:location|job location|venue)[\s:]*([^-|•*\n\r]+)/i, "Location");
-  extract(/(?:deadline|last date(?: to apply| for registration)?|register before)[\s:]*([^-|•*\n\r]+)/i, "Deadline");
-  extract(/(?:role|designation|position)[\s:]*([^-|•*\n\r]+)/i, "Role");
-  extract(/(?:joining(?: date)?)[\s:]*([^-|•*\n\r]+)/i, "Joining");
+  if (opportunityType === "HACKATHON") {
+    extract(/(?:prize pool|cash prizes|total prize|win up to|rewards|prize)[\s:]*([^|•*\n\r]+)/i, "Prize");
+    extract(/(?:team format|team size)[\s:]*([^|•*\n\r]+)/i, "Team Size");
+    extract(/(?:who can participate|who can apply|eligibility|eligible)[\s:]*([^|•*\n\r]+)/i, "Eligibility");
+    extract(/(?:registration deadline|registration closes|register by|last date|apply by)[\s:]*([^|•*\n\r]+)/i, "Deadline");
+    extract(/(?:hackathon|challenge|datathon|competition|event)[\s:]*([^-|•*\n\r]+)/i, "Event");
+  } else if (opportunityType === "WEBINAR" || opportunityType === "OTHER_PLACEMENT_EVENT") {
+    extract(/(?:date|scheduled on)[\s:]*([^-|•*\n\r]+)/i, "Date");
+    extract(/(?:time)[\s:]*([^-|•*\n\r]+)/i, "Time");
+    extract(/(?:speaker|speaker profile|resource person)[\s:]*([^-|•*\n\r]+)/i, "Speaker");
+    extract(/(?:eligibility|eligible|who can apply)[\s:]*([^-|•*\n\r]+)/i, "Eligibility");
+    extract(/(?:topic|agenda|session on)[\s:]*([^-|•*\n\r]+)/i, "Topic");
+    extract(/(?:registration closes|registration deadline|last date|register by)[\s:]*([^-|•*\n\r]+)/i, "Deadline");
+  } else {
+    // Default JOB_APPLICATION
+    extract(/(?:stipend|compensation)[\s:]*([^-|•*\n\r]+)/i, "Stipend");
+    extract(/(?:ctc|package|salary)[\s:]*([^-|•*\n\r]+)/i, "CTC");
+    extract(/(?:duration|period)[\s:]*([^-|•*\n\r]+)/i, "Duration");
+    extract(/(?:location|job location|venue)[\s:]*([^-|•*\n\r]+)/i, "Location");
+    extract(/(?:deadline|last date(?: to apply| for registration)?|register before)[\s:]*([^-|•*\n\r]+)/i, "Deadline");
+    extract(/(?:role|designation|position)[\s:]*([^-|•*\n\r]+)/i, "Role");
+    extract(/(?:joining(?: date)?)[\s:]*([^-|•*\n\r]+)/i, "Joining");
+  }
 
   // Deduplicate by label (just in case) and return top 5
   const uniqueFields = [];
@@ -1151,19 +1175,20 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   const footerStrippedBody = stripForwardingFooter(sourceBody);
   const linkInfo = extractFormLink(sourceBody);
 
-  // â”€â”€ Step 1: Gemini (PRIMARY â€” single source of all display fields) â”€â”€â”€â”€â”€â”€â”€â”€
-  const gemini = await callGeminiStructured({
-    subject: sourceSubject,
-    sender,
-    body: footerStrippedBody || sourceBody,
-  });
-
-  // â”€â”€ Step 2: Deterministic classification fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Step 1: Deterministic classification (PRIMARY) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const detClassification = classifyEmail({
     subject: sourceSubject,
     body: sourceBody,
     forwarded,
     hasLink: !!linkInfo.primary,
+  });
+
+  // â”€â”€ Step 2: Gemini LLM Extraction â”€â”€â”€â”€â”€â”€â”€â”€
+  const gemini = await callGeminiStructured({
+    subject: sourceSubject,
+    sender,
+    body: footerStrippedBody || sourceBody,
+    opportunityType: detClassification.opportunityType || "JOB_APPLICATION",
   });
 
   // â”€â”€ Step 3: Three-tier company resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1235,7 +1260,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   let displayFields = gemini?.displayFields || [];
   if (displayFields.length === 0) {
     // Safety net: If Gemini failed (e.g. Quota Exceeded) or returned no fields, use regex extractors.
-    displayFields = extractFallbackDisplayFields(fullBodyText || rawText || "");
+    displayFields = extractFallbackDisplayFields(fullBodyText || rawText || "", detClassification.opportunityType);
   }
 
   // Sanitize and validate all display fields
@@ -1289,6 +1314,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   const parsed = {
     // Core
     emailType,
+    opportunityType: gemini?.opportunityType || detClassification.opportunityType || "JOB_APPLICATION",
     isRelevant:     emailType !== "nonRecruitment",
     classification: finalClassification,
     type:           finalType,
