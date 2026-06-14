@@ -1165,7 +1165,11 @@ export default function JobTrackerDashboard() {
                                   alt={app.company}
                                   className="company-logo-img"
                                   onError={(e) => {
-                                    if (!e.target.src.includes('ui-avatars.com')) {
+                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                                    const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                    if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
+                                      e.target.src = googleFallback;
+                                    } else if (!e.target.src.includes('ui-avatars.com')) {
                                       e.target.src = uiAvatarUrl;
                                     } else {
                                       e.target.onerror = null;

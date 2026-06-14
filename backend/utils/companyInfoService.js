@@ -20,14 +20,55 @@ async function getCompanyInfo(companyName) {
       return cachedInfo;
     }
 
-    // Generate domain/logo deterministically
+    // Generate deterministic fallback URLs
     const domain = `${normalizedName.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
-    const logo = `https://logo.clearbit.com/${domain}`;
+    const clearbitUrl = `https://logo.clearbit.com/${domain}`;
+    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    
+    let hash = 0;
+    const str = normalizedName || "U";
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    const fallbackColor = "00000".substring(0, 6 - c.length) + c;
+    const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(str)}&background=${fallbackColor}&color=fff&size=128&bold=true`;
+
+    let finalLogo = uiAvatarUrl;
+
+    try {
+      // 1. Attempt Clearbit
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const clearbitRes = await fetch(clearbitUrl, { method: 'HEAD', signal: controller.signal });
+      clearTimeout(timeout);
+      
+      if (clearbitRes.ok) {
+        finalLogo = clearbitUrl;
+      } else {
+        throw new Error('Clearbit failed or 404');
+      }
+    } catch (clearbitErr) {
+      // 2. If Clearbit fails, attempt Google Favicons
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        // GET instead of HEAD because Google might reject HEAD
+        const googleRes = await fetch(googleFaviconUrl, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeout);
+        
+        if (googleRes.ok || googleRes.status === 301 || googleRes.status === 302) {
+          finalLogo = googleFaviconUrl;
+        }
+      } catch (googleErr) {
+        // 3. Keep deterministic uiAvatarUrl as final finalLogo
+      }
+    }
 
     const newCompanyInfo = await CompanyInfo.create({
       name: normalizedName,
       domain: domain,
-      logo: logo
+      logo: finalLogo
     });
 
     return newCompanyInfo;
