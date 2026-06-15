@@ -1057,46 +1057,67 @@ Subject: ${subject}
 Sender: ${sender}
 Body: ${truncatedBody}`;
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-      config: { abortSignal: controller.signal }
-    });
-    clearTimeout(timeoutId);
+  let retries = 3;
+  let delayMs = 6000;
 
-    let jsonText = (response.text || "").trim();
-    jsonText = jsonText
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
+  while (retries > 0) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+        config: { abortSignal: controller.signal }
+      });
+      clearTimeout(timeoutId);
 
-    const rawParsed = JSON.parse(jsonText);
-    console.log("[GEMINI_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
-    console.log("RAW_DISPLAY_FIELDS", rawParsed.displayFields);
-    
-    const validated = validateGeminiResponse(rawParsed);
+      let jsonText = (response.text || "").trim();
+      jsonText = jsonText
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```$/i, "")
+        .trim();
 
-    if (!validated) {
-      console.warn("[GEMINI_STRUCTURED] Response failed schema validation, discarding.");
-      return null;
+      const rawParsed = JSON.parse(jsonText);
+      console.log("[GEMINI_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
+      console.log("RAW_DISPLAY_FIELDS", rawParsed.displayFields);
+      
+      const validated = validateGeminiResponse(rawParsed);
+
+      if (!validated) {
+        console.warn("[GEMINI_STRUCTURED] Response failed schema validation, discarding.");
+        return null;
+      }
+
+      console.log("VALIDATED_DISPLAY_FIELDS", validated.displayFields);
+      console.log(`[GEMINI_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+      return validated;
+
+    } catch (err) {
+      retries--;
+      const errorMsg = err?.message || err;
+      
+      if (err.name === "AbortError") {
+        console.warn(`[GEMINI_STRUCTURED] Request timed out. Retries left: ${retries}`);
+      } else if (errorMsg.toString().includes("429") || errorMsg.toString().toLowerCase().includes("quota") || errorMsg.toString().toLowerCase().includes("rate")) {
+        console.warn(`[GEMINI_STRUCTURED] Rate limit hit (429). Retries left: ${retries}. Waiting ${delayMs}ms...`);
+      } else if (errorMsg.toString().includes("503") || errorMsg.toString().toLowerCase().includes("overloaded")) {
+        console.warn(`[GEMINI_STRUCTURED] Service unavailable (503). Retries left: ${retries}. Waiting ${delayMs}ms...`);
+      } else {
+        console.error("[GEMINI_STRUCTURED] Failed with unrecoverable error:", errorMsg);
+        return null;
+      }
+
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, delayMs));
+        delayMs += 4000; // Increase backoff penalty
+      } else {
+        console.error("[GEMINI_STRUCTURED] Final failure after all retries.");
+        return null;
+      }
     }
-
-    console.log("VALIDATED_DISPLAY_FIELDS", validated.displayFields);
-    console.log(`[GEMINI_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
-    return validated;
-
-  } catch (err) {
-    if (err.name === "AbortError") {
-      console.error("[GEMINI_STRUCTURED] Request timed out.");
-    } else {
-      console.error("[GEMINI_STRUCTURED] Failed:", err?.message || err);
-    }
-    return null;
   }
+  return null;
 }
 
 /**
