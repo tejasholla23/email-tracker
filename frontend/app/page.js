@@ -93,6 +93,18 @@ export default function JobTrackerDashboard() {
     }
   }, [userEmail]);
 
+  // Auto-refresh when syncing in background
+  useEffect(() => {
+    let intervalId;
+    if (syncStatus === "pending") {
+      intervalId = setInterval(() => {
+        fetchSyncStatus();
+        fetchApplicationsSilent();
+      }, 5000);
+    }
+    return () => clearInterval(intervalId);
+  }, [syncStatus, userEmail]);
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
     localStorage.setItem("darkMode", !isDarkMode);
@@ -121,6 +133,23 @@ export default function JobTrackerDashboard() {
       console.error("Failed to fetch applications:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchApplicationsSilent = async () => {
+    if (!userEmail) return;
+    try {
+      const response = await fetch(`${BASE_URL}/applications`, {
+        headers: { "x-user-email": userEmail }
+      });
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+      const data = await response.json();
+      setApplications(data);
+    } catch (error) {
+      console.error("Failed to fetch applications silently:", error);
     }
   };
 
@@ -965,8 +994,8 @@ export default function JobTrackerDashboard() {
           </nav>
 
           <div className="sidebar-bottom">
-            <button className="sync-btn" onClick={handleSync} disabled={syncing}>
-              {syncing ? "Syncing..." : "Sync Emails"}
+            <button className="sync-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
+              {(syncing || syncStatus === "pending") ? "Syncing (Background)..." : "Sync Emails"}
             </button>
             {lastSyncTime && (
               <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '-12px', marginBottom: '16px' }}>
@@ -1012,8 +1041,8 @@ export default function JobTrackerDashboard() {
               <button className="btn-primary" onClick={() => setShowAddModal(true)}>
                 + Add Application
               </button>
-              <button className="outline-btn" onClick={handleSync} disabled={syncing}>
-                {syncing ? "Syncing..." : "Sync Emails"}
+              <button className="outline-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
+                {(syncing || syncStatus === "pending") ? "Syncing (Background)..." : "Sync Emails"}
               </button>
               <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
                 {clearing ? "Clearing..." : "Clear All"}
@@ -1353,7 +1382,11 @@ export default function JobTrackerDashboard() {
             )}
 
             {!loading && applications.length === 0 && (
-              <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>No applications found. Try syncing emails.</p>
+              <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
+                {syncStatus === "pending" 
+                  ? "Emails are being synced in the background. Please wait..." 
+                  : "No applications found. Try syncing emails."}
+              </p>
             )}
           </main>
         </div>
