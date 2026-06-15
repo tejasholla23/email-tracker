@@ -435,7 +435,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
     {
       category: "hackathonEvent",
       classification: "Hackathon / Event Invitation",
-      status: "applied",
+      status: "new",
       type: "event",
       opportunityType: "HACKATHON",
       regex: /\b(hack\w*|innovent|innovation\s+challenge|ideathon|datathon|bootcamp|competition|coding\s+contest|tech\s+fest|techfest|code\s*fest|codathon|makeathon|designathon|project\s+submission|submission\s+window|team\s+size|event\s+invitation|scholarship\s+program|open\s+for\s+registration)\b/i,
@@ -469,9 +469,18 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       confidence: 0.9,
     },
     {
+      category: "pptAnnouncement",
+      classification: "PPT Announcement",
+      status: "new",
+      type: "unknown",
+      opportunityType: "WEBINAR",
+      regex: /\b(pre[-\s]*placement talk|ppt|seminar|placement talk|info session|guest lecture|workshop\s+invitation|webinar\s+invitation|webinar|workshop|expert talk)\b/i,
+      confidence: 0.88,
+    },
+    {
       category: "registrationLink",
       classification: "Registration Link",
-      status: "applied",
+      status: "new",
       type: "application",
       opportunityType: "JOB_APPLICATION",
       regex: /\b(register|registration|complete your profile|profile completion|forms\.gle|docs\.google\.com\/forms)\b/i,
@@ -480,20 +489,11 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
     {
       category: "applicationReminder",
       classification: "Application Reminder",
-      status: "applied",
+      status: "new",
       type: "application",
       opportunityType: "JOB_APPLICATION",
       regex: /\b(reminder|remind|register.*by|submit.*by|last date|deadline)\b/i,
       confidence: 0.9,
-    },
-    {
-      category: "pptAnnouncement",
-      classification: "PPT Announcement",
-      status: "applied",
-      type: "unknown",
-      opportunityType: "WEBINAR",
-      regex: /\b(pre[-\s]*placement talk|ppt|seminar|placement talk|info session|guest lecture|workshop\s+invitation|webinar\s+invitation|webinar|workshop|expert talk)\b/i,
-      confidence: 0.88,
     },
     {
       category: "venueUpdate",
@@ -507,7 +507,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
     {
       category: "deadlineReminder",
       classification: "Deadline Reminder",
-      status: "applied",
+      status: "new",
       type: "unknown",
       opportunityType: "JOB_APPLICATION",
       regex: /\b(deadline|last date|apply by|register by|submission deadline|before .* today|before .* tomorrow)\b/i,
@@ -1118,27 +1118,26 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
   };
 
   if (opportunityType === "HACKATHON") {
-    extract(/(?:prize pool|cash prizes|total prize|win up to|rewards|prize)[\s:]*([^|•*\n\r]+)/i, "Prize");
-    extract(/(?:team format|team size)[\s:]*([^|•*\n\r]+)/i, "Team Size");
-    extract(/(?:who can participate|who can apply|eligibility|eligible)[\s:]*([^|•*\n\r]+)/i, "Eligibility");
-    extract(/(?:registration deadline|registration closes|register by|last date|apply by)[\s:]*([^|•*\n\r]+)/i, "Deadline");
-    extract(/(?:hackathon|challenge|datathon|competition|event)[\s:]*([^-|•*\n\r]+)/i, "Event");
+    extract(/(?:prize pool|cash prizes|total prize|win up to|rewards|prize)[ \t:]*([^•*\n\r]+)/i, "Prize");
+    extract(/(?:team format|team size)[ \t:]*([^•*\n\r]+)/i, "Team Size");
+    extract(/(?:who can participate|who can apply|eligibility(?: criteria(?: for participation)?)?)[ \t:]*[\n\r]*[ \t]*([^•*\n\r]+)/i, "Eligibility");
+    extract(/(?:registration deadline|registration & submission window|registration closes|register by|last date|apply by|submission window)[ \t:]*([^•*\n\r]+)/i, "Deadline");
   } else if (opportunityType === "WEBINAR" || opportunityType === "OTHER_PLACEMENT_EVENT") {
-    extract(/(?:date|scheduled on)[\s:]*([^-|•*\n\r]+)/i, "Date");
-    extract(/(?:time)[\s:]*([^-|•*\n\r]+)/i, "Time");
-    extract(/(?:speaker|speaker profile|resource person)[\s:]*([^-|•*\n\r]+)/i, "Speaker");
-    extract(/(?:eligibility|eligible|who can apply)[\s:]*([^-|•*\n\r]+)/i, "Eligibility");
-    extract(/(?:topic|agenda|session on)[\s:]*([^-|•*\n\r]+)/i, "Topic");
-    extract(/(?:registration closes|registration deadline|last date|register by)[\s:]*([^-|•*\n\r]+)/i, "Deadline");
+    extract(/(?:date|scheduled on)[ \t:]*([^•*\n\r]+)/i, "Date");
+    extract(/(?:time)[ \t:]*([^•*\n\r]+)/i, "Time");
+    extract(/(?:speaker|speaker profile|resource person)[ \t:]*([^•*\n\r]+)/i, "Speaker");
+    extract(/(?:eligibility|eligible|who can apply(?: criteria(?: for participation)?)?)[ \t:]*[\n\r]*[ \t]*([^•*\n\r]+)/i, "Eligibility");
+    extract(/(?:topic|agenda)[ \t:]*([^•*\n\r]+)/i, "Topic");
+    extract(/(?:registration closes|registration deadline|last date|register by)[ \t:]*([^•*\n\r]+)/i, "Deadline");
   } else {
     // Default JOB_APPLICATION
-    extract(/(?:stipend|compensation)[\s:]*([^-|•*\n\r]+)/i, "Stipend");
-    extract(/(?:ctc|package|salary)[\s:]*([^-|•*\n\r]+)/i, "CTC");
-    extract(/(?:duration|period)[\s:]*([^-|•*\n\r]+)/i, "Duration");
-    extract(/(?:location|job location|venue)[\s:]*([^-|•*\n\r]+)/i, "Location");
-    extract(/(?:deadline|last date(?: to apply| for registration)?|register before)[\s:]*([^-|•*\n\r]+)/i, "Deadline");
-    extract(/(?:role|designation|position)[\s:]*([^-|•*\n\r]+)/i, "Role");
-    extract(/(?:joining(?: date)?)[\s:]*([^-|•*\n\r]+)/i, "Joining");
+    extract(/(?:stipend|compensation)[ \t:]*([^-|•*\n\r]+)/i, "Stipend");
+    extract(/(?:ctc|package|salary)[ \t:]*([^-|•*\n\r]+)/i, "CTC");
+    extract(/(?:duration|period)[ \t:]*([^-|•*\n\r]+)/i, "Duration");
+    extract(/(?:location|job location|venue)[ \t:]*([^-|•*\n\r]+)/i, "Location");
+    extract(/(?:deadline|last date(?: to apply| for registration)?|register before)[ \t:]*([^-|•*\n\r]+)/i, "Deadline");
+    extract(/(?:role|designation|position)[ \t:]*([^-|•*\n\r]+)/i, "Role");
+    extract(/(?:joining(?: date)?)[ \t:]*([^-|•*\n\r]+)/i, "Joining");
   }
 
   // Deduplicate by label (just in case) and return top 5

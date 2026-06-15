@@ -23,7 +23,6 @@ async function getCompanyInfo(companyName) {
     // Generate deterministic fallback URLs
     const domain = `${normalizedName.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
     const clearbitUrl = `https://logo.clearbit.com/${domain}`;
-    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
     
     let hash = 0;
     const str = normalizedName || "U";
@@ -49,20 +48,7 @@ async function getCompanyInfo(companyName) {
         throw new Error('Clearbit failed or 404');
       }
     } catch (clearbitErr) {
-      // 2. If Clearbit fails, attempt Google Favicons
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        // GET instead of HEAD because Google might reject HEAD
-        const googleRes = await fetch(googleFaviconUrl, { method: 'GET', signal: controller.signal });
-        clearTimeout(timeout);
-        
-        if (googleRes.ok || googleRes.status === 301 || googleRes.status === 302) {
-          finalLogo = googleFaviconUrl;
-        }
-      } catch (googleErr) {
-        // 3. Keep deterministic uiAvatarUrl as final finalLogo
-      }
+      // 2. Keep deterministic uiAvatarUrl as final finalLogo
     }
 
     const newCompanyInfo = await CompanyInfo.create({
