@@ -450,9 +450,9 @@ export default function JobTrackerDashboard() {
     const raw = app.date || app.createdAt;
     if (!raw) return false;
     const appDate = new Date(raw);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    return appDate >= todayStart;
+    const now = new Date();
+    const oneDayInMs = 24 * 60 * 60 * 1000;
+    return (now - appDate) <= oneDayInMs && (now - appDate) >= 0;
   };
 
   if (!userEmail) {
@@ -1117,23 +1117,24 @@ export default function JobTrackerDashboard() {
 
           <div className="sidebar-bottom">
             <div className="nav-item" style={{ marginTop: 0 }}>
-              <span>Support</span>
+              <span>Support ⚙️</span>
             </div>
           </div>
         </aside>
 
         <div className="main-wrapper">
           <header className="topbar">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, marginRight: '24px' }}>
               <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
-              <div className="search-container">
+              <div className="search-container" style={{ flex: 1, maxWidth: '800px' }}>
                 <input
                   type="text"
                   placeholder="Search applications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: '100%' }}
                 />
               </div>
             </div>
