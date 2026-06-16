@@ -485,18 +485,28 @@ async function fetchAndProcessEmails() {
             await new Promise(r => setTimeout(r, 6500));
             console.log(`[PARSE_RESULT] ${id}`, parsed);
             
-            if (!parsed) {
-              console.log(`[SKIP] ${id} | Reason: Parsing failed`);
-              skippedCount++;
-              continue;
-            }
-            if (!parsed.isRelevant) {
-              console.log(`[SKIP] ${id} | Reason: Marked not relevant`);
-              skippedCount++;
-              continue;
-            }
-            if (!parsed.company) {
-              console.log(`[SKIP] ${id} | Reason: Missing company`);
+            if (!parsed || !parsed.isRelevant || !parsed.company) {
+              const reason = !parsed ? "Parsing failed" : (!parsed.isRelevant ? "Marked not relevant" : "Missing company");
+              console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored to prevent re-parsing.`);
+              
+              try {
+                const ignoredApp = new Application({
+                  company: "IGNORED",
+                  role: "IGNORED",
+                  messageId: id,
+                  source: "Gmail",
+                  email: acc.email,
+                  date: new Date(parseInt(email.data.internalDate)),
+                  parserVersion: "v2",
+                  isDeleted: true
+                });
+                await ignoredApp.save();
+              } catch (e) {
+                if (e.code !== 11000) {
+                  console.error(`[IGNORE_SAVE_ERROR] ${id}`, e.message);
+                }
+              }
+
               skippedCount++;
               continue;
             }

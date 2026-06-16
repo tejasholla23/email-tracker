@@ -1042,7 +1042,7 @@ export default function JobTrackerDashboard() {
                 + Add Application
               </button>
               <button className="outline-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
-                {(syncing || syncStatus === "pending") ? "Syncing (Background)..." : "Sync Emails"}
+                {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
               </button>
               <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
                 {clearing ? "Clearing..." : "Clear All"}
