@@ -19,17 +19,23 @@ export default function JobTrackerDashboard() {
   const [formData, setFormData] = useState({
     company: "",
     role: "",
-    email: "",
-    date: ""
+    stipend: "",
+    ctc: "",
+    duration: "",
+    location: "",
+    joining: "",
+    deadline: "",
+    date: "",
+    link: ""
   });
-  
+
   // Edit Application Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingApp, setEditingApp] = useState(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editFormError, setEditFormError] = useState("");
   const [editFormData, setEditFormData] = useState({});
-  
+
   // Company Info Modal State
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
@@ -40,7 +46,7 @@ export default function JobTrackerDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showThemeSubmenu, setShowThemeSubmenu] = useState(false);
-  
+
   const [userEmail, setUserEmail] = useState(null);
   //test comment
   useEffect(() => {
@@ -198,7 +204,7 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "x-user-email": userEmail
         },
@@ -260,7 +266,7 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "x-user-email": userEmail
         },
@@ -287,20 +293,43 @@ export default function JobTrackerDashboard() {
     e.preventDefault();
     setFormError("");
 
-    if (!formData.company || !formData.role) {
-      setFormError("Company and Role are required.");
+    if (!formData.company) {
+      setFormError("Company is required.");
       return;
     }
 
     setSubmitting(true);
     try {
+      const displayFields = [];
+      if (formData.ctc) displayFields.push({ label: "CTC", value: formData.ctc });
+      if (formData.joining) displayFields.push({ label: "Joining", value: formData.joining });
+      if (formData.stipend) displayFields.push({ label: "Stipend", value: formData.stipend });
+      if (formData.duration) displayFields.push({ label: "Duration", value: formData.duration });
+      if (formData.deadline) displayFields.push({ label: "Deadline", value: formData.deadline });
+      if (formData.location) displayFields.push({ label: "Location", value: formData.location });
+
+      const payload = {
+        company: formData.company,
+        role: formData.role || "Not Specified",
+        programStipend: formData.stipend,
+        salaryText: formData.ctc,
+        programDuration: formData.duration,
+        venue: formData.location,
+        deadlineText: formData.deadline,
+        date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString(),
+        link: formData.link,
+        displayFields: displayFields,
+        source: "Manual Addition",
+        status: "new"
+      };
+
       const response = await fetch(`${BASE_URL}/applications`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "x-user-email": userEmail
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -308,7 +337,7 @@ export default function JobTrackerDashboard() {
       }
 
       setShowAddModal(false);
-      setFormData({ company: "", role: "", email: "", date: "" });
+      setFormData({ company: "", role: "", stipend: "", ctc: "", duration: "", location: "", joining: "", deadline: "", date: "", link: "" });
       await fetchApplications();
     } catch (error) {
       console.error(error);
@@ -322,10 +351,10 @@ export default function JobTrackerDashboard() {
     e.preventDefault();
     setEditFormError("");
     setEditSubmitting(true);
-    
+
     const manualEdits = {};
     const original = editingApp;
-    
+
     if (editFormData.company !== (original.company || "")) manualEdits.company = editFormData.company;
     if (editFormData.jobRole !== (original.role || "")) manualEdits.role = editFormData.jobRole;
     if (editFormData.deadlineText !== (original.deadlineText || "")) manualEdits.deadlineText = editFormData.deadlineText;
@@ -333,7 +362,7 @@ export default function JobTrackerDashboard() {
     if (editFormData.programDuration !== (original.programDuration || "")) manualEdits.programDuration = editFormData.programDuration;
     if (editFormData.venue !== (original.venue || "")) manualEdits.venue = editFormData.venue;
     if (editFormData.type !== (original.type || "")) manualEdits.type = editFormData.type;
-    
+
     if (editFormData.eventDate) {
       const fd = new Date(editFormData.eventDate).toISOString();
       const od = original.eventDate ? new Date(original.eventDate).toISOString() : null;
@@ -351,7 +380,7 @@ export default function JobTrackerDashboard() {
     try {
       const response = await fetch(`${BASE_URL}/applications/${editingApp._id}`, {
         method: "PATCH",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "x-user-email": userEmail
         },
@@ -380,7 +409,7 @@ export default function JobTrackerDashboard() {
   const total = applications.length;
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  
+
   const newThisWeek = applications.filter(a => {
     const d = new Date(a.date || a.createdAt);
     return d >= weekAgo;
@@ -447,7 +476,7 @@ export default function JobTrackerDashboard() {
         .layout { display: flex; min-height: 100vh; }
         
         /* Sidebar */
-        .sidebar { width: 280px; background-color: #f3f4f6; border-right: 1px solid #e5e7eb; padding: 24px 16px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 50; }
+        .sidebar { width: 280px; background-color: #f3f4f6a6; border-right: 1px solid #e5e7eb; padding: 24px 16px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 50; }
         .sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; padding: 0 8px; }
         .logo-box { width: 40px; height: 40px; background: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 700; font-size: 16px; }
         .logo-text { font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 700; color: #0d9488; line-height: 1.2; }
@@ -1041,10 +1070,10 @@ export default function JobTrackerDashboard() {
 
         <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <div className="sidebar-header">
-            <div className="logo-box">ET</div>
+            <div className="logo-box">📧</div>
             <div>
               <div className="logo-text">Email Tracker</div>
-              <div className="logo-sub">Dashboard</div>
+              <div className="logo-sub">Placement Department Mails</div>
             </div>
           </div>
 
@@ -1057,9 +1086,9 @@ export default function JobTrackerDashboard() {
               { label: "Done", value: "done" },
               { label: "Unmarked", value: "unmarked" },
             ].map(({ label, value }) => (
-              <div 
+              <div
                 key={value}
-                className={`nav-item ${activeFilter === value ? 'active' : ''}`} 
+                className={`nav-item ${activeFilter === value ? 'active' : ''}`}
                 onClick={() => setActiveFilter(value)}
               >
                 {label}
@@ -1096,9 +1125,9 @@ export default function JobTrackerDashboard() {
               <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
                 {clearing ? "Clearing..." : "Clear All"}
               </button>
-              
+
               <div className="user-dropdown-container">
-                <button 
+                <button
                   className="user-avatar-btn"
                   onClick={() => { setShowUserDropdown(!showUserDropdown); setShowThemeSubmenu(false); }}
                 >
@@ -1109,7 +1138,7 @@ export default function JobTrackerDashboard() {
                     <div className="user-dropdown-header">
                       <span className="user-dropdown-email">{userEmail}</span>
                     </div>
-                    
+
                     {!showThemeSubmenu ? (
                       <>
                         <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
@@ -1156,7 +1185,7 @@ export default function JobTrackerDashboard() {
             <div className="page-header">
               <div>
                 <h2 className="page-title">Applications Overview</h2>
-                <p className="page-subtitle">Track and manage your active job pursuits.</p>
+                <p className="page-subtitle">Track and manage emails from placement@msrit.edu</p>
               </div>
             </div>
 
@@ -1171,7 +1200,7 @@ export default function JobTrackerDashboard() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="stat-card urgent">
                 <div className="stat-icon">🔔</div>
                 <div className="stat-content">
@@ -1232,7 +1261,7 @@ export default function JobTrackerDashboard() {
                     const statusKey = (app.status || "new").toLowerCase();
                     const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
                     const isDone = statusKey === "done";
-                    
+
                     const getDeterministicColor = (str) => {
                       let hash = 0;
                       for (let i = 0; i < str.length; i++) {
@@ -1245,8 +1274,8 @@ export default function JobTrackerDashboard() {
                     const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
 
                     return (
-                      <div 
-                        key={app._id} 
+                      <div
+                        key={app._id}
                         className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
                         style={{ cursor: "pointer" }}
                         onClick={(e) => {
@@ -1259,8 +1288,8 @@ export default function JobTrackerDashboard() {
                           <div className="app-info">
                             <div className="company-logo-container">
                               {app.companyInfo?.logo || app.companyInfo?.domain ? (
-                                <img 
-                                  src={app.companyInfo?.logo || uiAvatarUrl} 
+                                <img
+                                  src={app.companyInfo?.logo || uiAvatarUrl}
                                   alt={app.company}
                                   className="company-logo-img"
                                   onError={(e) => {
@@ -1332,21 +1361,21 @@ export default function JobTrackerDashboard() {
                           let legacyFields = app.fieldsToDisplay;
                           if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
                             legacyFields = [];
-                            if (app.programRoles)    legacyFields.push("role");
-                            if (app.programStipend)  legacyFields.push("stipend");
-                            if (app.deadlineText)    legacyFields.push("deadline");
+                            if (app.programRoles) legacyFields.push("role");
+                            if (app.programStipend) legacyFields.push("stipend");
+                            if (app.deadlineText) legacyFields.push("deadline");
                             if (app.programDuration) legacyFields.push("duration");
-                            if (app.venue)           legacyFields.push("venue");
+                            if (app.venue) legacyFields.push("venue");
                           }
                           if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
 
                           const FIELD_CONFIG = {
-                            role:      { label: "Roles",    value: app.programRoles },
-                            stipend:   { label: "Stipend",  value: app.programStipend },
-                            deadline:  { label: "Deadline", value: app.deadlineText },
-                            duration:  { label: "Duration", value: app.programDuration },
-                            venue:     { label: "Venue",    value: app.venue },
-                            eventName: { label: "Event",    value: app.subtitle },
+                            role: { label: "Roles", value: app.programRoles },
+                            stipend: { label: "Stipend", value: app.programStipend },
+                            deadline: { label: "Deadline", value: app.deadlineText },
+                            duration: { label: "Duration", value: app.programDuration },
+                            venue: { label: "Venue", value: app.venue },
+                            eventName: { label: "Event", value: app.subtitle },
                           };
                           const rows = legacyFields
                             .map(f => FIELD_CONFIG[f])
@@ -1366,10 +1395,9 @@ export default function JobTrackerDashboard() {
 
                         {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
                         {app.deadline && !app.deadlineText && (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && (
-                          <div className={`deadline-badge ${
-                            app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
-                            ? 'urgent' : ''
-                          }`}>
+                          <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
+                              ? 'urgent' : ''
+                            }`}>
                             Deadline: {app.deadline}
                           </div>
                         )}
@@ -1453,14 +1481,14 @@ export default function JobTrackerDashboard() {
 
             {!loading && applications.length === 0 && (
               <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
-                {syncStatus === "pending" 
-                  ? "Emails are being synced in the background. Please wait..." 
+                {syncStatus === "pending"
+                  ? "Emails are being synced in the background. Please wait..."
                   : "No applications found. Try syncing emails."}
               </p>
             )}
           </main>
-          
-          <button 
+
+          <button
             className="floating-add-btn"
             onClick={() => setShowAddModal(true)}
             title="Add Application"
@@ -1492,35 +1520,96 @@ export default function JobTrackerDashboard() {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Role *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Software Engineer"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Role</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Software Engineer"
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Stipend</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. 50k / month"
+                    value={formData.stipend}
+                    onChange={(e) => setFormData({ ...formData, stipend: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">CTC</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. 15 LPA"
+                    value={formData.ctc}
+                    onChange={(e) => setFormData({ ...formData, ctc: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Duration</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. 6 Months"
+                    value={formData.duration}
+                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Location</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Bangalore"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Joining</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Jan 2025"
+                    value={formData.joining}
+                    onChange={(e) => setFormData({ ...formData, joining: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Deadline</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Oct 15"
+                    value={formData.deadline}
+                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Email (Optional)</label>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label className="form-label">Link (Google Form, etc.)</label>
                 <input
-                  type="email"
+                  type="url"
                   className="form-input"
-                  placeholder="e.g. user@gmail.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Date (Optional)</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  placeholder="https://..."
+                  value={formData.link}
+                  onChange={(e) => setFormData({ ...formData, link: e.target.value })}
                 />
               </div>
 
@@ -1618,12 +1707,12 @@ export default function JobTrackerDashboard() {
               }
               if (!Array.isArray(displayFields) || displayFields.length === 0) return null;
               const FIELD_CONFIG = {
-                role:      { label: "Roles",    value: selectedApp.programRoles },
-                stipend:   { label: "Stipend",  value: selectedApp.programStipend },
-                deadline:  { label: "Deadline", value: selectedApp.deadlineText },
-                duration:  { label: "Duration", value: selectedApp.programDuration },
-                venue:     { label: "Venue",    value: selectedApp.venue },
-                eventName: { label: "Event",    value: selectedApp.subtitle },
+                role: { label: "Roles", value: selectedApp.programRoles },
+                stipend: { label: "Stipend", value: selectedApp.programStipend },
+                deadline: { label: "Deadline", value: selectedApp.deadlineText },
+                duration: { label: "Duration", value: selectedApp.programDuration },
+                venue: { label: "Venue", value: selectedApp.venue },
+                eventName: { label: "Event", value: selectedApp.subtitle },
               };
               const rows = displayFields
                 .map(f => FIELD_CONFIG[f])
