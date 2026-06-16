@@ -1250,7 +1250,6 @@ export default function JobTrackerDashboard() {
                                 />
                               )}
                             </div>
-                            </div>
                             <div className="role-company">
                               <div className="role-title">{app.company || "Unknown Company"}</div>
                               {/* Show subtitle (new records) or fall back to role (legacy records) */}
