@@ -488,8 +488,8 @@ export default function JobTrackerDashboard() {
         .btn-outline-primary:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; filter: none; }
         .btn-outline-primary:active:not(:disabled) { transform: scale(0.98); }
         .btn-outline-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-        .dark .btn-outline-primary { border-color: rgba(59, 130, 246, 0.4); color: #60a5fa; }
-        .dark .btn-outline-primary:hover:not(:disabled) { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; }
+        .dark .btn-outline-primary { background: transparent; border-color: rgba(59, 130, 246, 0.4); color: #60a5fa; }
+        .dark .btn-outline-primary:hover:not(:disabled) { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; filter: none; }
         
         /* Content */
         .content { padding: 32px; max-width: 1400px; margin: 0 auto; width: 100%; }
@@ -801,12 +801,12 @@ export default function JobTrackerDashboard() {
 
         /* Dark Mode */
         .dark { 
-          --bg-color: #09090b;
-          --surface-color: #18181b;
-          --text-primary: #f8fafc;
+          --bg-color: #030712;
+          --surface-color: #1f2937;
+          --text-primary: #f9fafb;
           --text-heading: #ffffff;
-          --text-secondary: #94a3b8;
-          --border-color: #27272a;
+          --text-secondary: #9ca3af;
+          --border-color: #374151;
           --brand-primary: #3b82f6;
           --brand-primary-hover: #60a5fa;
 
@@ -814,20 +814,20 @@ export default function JobTrackerDashboard() {
           color: var(--text-primary); 
           min-height: 100vh; 
         }
-        .dark .sidebar { background-color: #111827; border-color: #334155; }
+        .dark .sidebar { background-color: #111827; border-color: #1f2937; }
         .dark .logo-box { background: #0f766e; color: #ccfbf1; }
         .dark .logo-text { color: #2dd4bf; }
-        .dark .nav-item { color: #94a3b8; }
-        .dark .nav-item:hover { background: #334155; color: #2dd4bf; }
-        .dark .nav-item.active { background: #0f172a; border-color: #2dd4bf; color: #2dd4bf; }
-        .dark .sidebar-bottom { border-color: #334155; }
+        .dark .nav-item { color: #9ca3af; }
+        .dark .nav-item:hover { background: #1f2937; color: #f9fafb; }
+        .dark .nav-item.active { background: #374151; border-color: #2dd4bf; color: #2dd4bf; }
+        .dark .sidebar-bottom { border-color: #1f2937; }
         
-        .dark .topbar { background: rgba(24, 24, 27, 0.8); border-color: var(--border-color); }
-        .dark .search-container input { background-color: var(--surface-color); border-color: var(--border-color); color: var(--text-primary); }
-        .dark .search-container input:focus { border-color: var(--brand-primary); background-color: var(--surface-color); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .dark .topbar { background: rgba(3, 7, 18, 0.8); border-color: var(--border-color); }
+        .dark .search-container input { background-color: #111827; border-color: var(--border-color); color: var(--text-primary); }
+        .dark .search-container input:focus { border-color: var(--brand-primary); background-color: #111827; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .dark .search-container input::placeholder { color: var(--text-secondary); }
         .dark .outline-btn { background: var(--surface-color); border-color: var(--border-color); color: var(--text-primary); }
-        .dark .outline-btn:hover { background: #27272a; border-color: #3f3f46; color: #ffffff; }
+        .dark .outline-btn:hover { background: #374151; border-color: #4b5563; color: #ffffff; }
         
         .dark .page-title { color: #f8fafc; }
         .dark .page-subtitle { color: #cbd5e1; }
