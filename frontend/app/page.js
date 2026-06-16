@@ -377,7 +377,7 @@ export default function JobTrackerDashboard() {
     if (editFormData.duration) displayFields.push({ label: "Duration", value: editFormData.duration });
     if (editFormData.deadline) displayFields.push({ label: "Deadline", value: editFormData.deadline });
     if (editFormData.location) displayFields.push({ label: "Location", value: editFormData.location });
-    
+
     if (editFormData.dynamicFields && editFormData.dynamicFields.length > 0) {
       editFormData.dynamicFields.forEach(df => {
         if (df.value) displayFields.push({ label: df.label, value: df.value });
@@ -1128,7 +1128,7 @@ export default function JobTrackerDashboard() {
               <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
-              <div className="search-container" style={{ flex: 1, maxWidth: '800px' }}>
+              <div className="search-container" style={{ flex: 1, maxWidth: '900px' }}>
                 <input
                   type="text"
                   placeholder="Search applications..."
@@ -1416,7 +1416,7 @@ export default function JobTrackerDashboard() {
                         {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
                         {app.deadline && !app.deadlineText && (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && (
                           <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
-                              ? 'urgent' : ''
+                            ? 'urgent' : ''
                             }`}>
                             Deadline: {app.deadline}
                           </div>
@@ -1446,7 +1446,7 @@ export default function JobTrackerDashboard() {
                             className="card-btn card-btn-edit"
                             onClick={() => {
                               setEditingApp(app);
-                              
+
                               const getField = (label, dbField) => {
                                 if (app.displayFields && app.displayFields.length > 0) {
                                   const f = app.displayFields.find(df => df.label === label);
