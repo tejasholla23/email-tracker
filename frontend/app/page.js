@@ -378,8 +378,16 @@ export default function JobTrackerDashboard() {
     if (editFormData.deadline) displayFields.push({ label: "Deadline", value: editFormData.deadline });
     if (editFormData.location) displayFields.push({ label: "Location", value: editFormData.location });
     
+    if (editFormData.dynamicFields && editFormData.dynamicFields.length > 0) {
+      editFormData.dynamicFields.forEach(df => {
+        if (df.value) displayFields.push({ label: df.label, value: df.value });
+      });
+    }
+
     if (displayFields.length > 0) {
       manualEdits.displayFields = displayFields;
+    } else {
+      manualEdits.displayFields = [];
     }
 
     if (Object.keys(manualEdits).length === 0) {
@@ -1446,6 +1454,16 @@ export default function JobTrackerDashboard() {
                                 return dbField || "";
                               };
 
+                              const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline"];
+                              const dynamicFields = [];
+                              if (app.displayFields && app.displayFields.length > 0) {
+                                app.displayFields.forEach(df => {
+                                  if (!standardLabels.includes(df.label)) {
+                                    dynamicFields.push({ label: df.label, value: df.value });
+                                  }
+                                });
+                              }
+
                               setEditFormData({
                                 company: app.company || "",
                                 role: app.role || "",
@@ -1457,6 +1475,7 @@ export default function JobTrackerDashboard() {
                                 deadline: getField("Deadline", app.deadlineText),
                                 date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
                                 link: app.link || "",
+                                dynamicFields: dynamicFields
                               });
                               setShowEditModal(true);
                             }}
@@ -1697,6 +1716,16 @@ export default function JobTrackerDashboard() {
                   <label className="form-label">Date</label>
                   <input type="date" className="form-input" value={editFormData.date || ""} onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })} />
                 </div>
+                {editFormData.dynamicFields && editFormData.dynamicFields.map((df, index) => (
+                  <div className="form-group" style={{ marginBottom: 0 }} key={df.label}>
+                    <label className="form-label">{df.label}</label>
+                    <input type="text" className="form-input" value={df.value || ""} onChange={(e) => {
+                      const newDynamicFields = [...editFormData.dynamicFields];
+                      newDynamicFields[index].value = e.target.value;
+                      setEditFormData({ ...editFormData, dynamicFields: newDynamicFields });
+                    }} />
+                  </div>
+                ))}
               </div>
 
               <div className="form-group" style={{ marginTop: '16px' }}>
