@@ -479,8 +479,8 @@ export default function JobTrackerDashboard() {
         .user-dropdown-item:hover { background: var(--bg-color); }
         .user-dropdown-item.text-danger { color: #dc2626; }
         .dark .user-dropdown-item.text-danger { color: #ef4444; }
-        .floating-add-btn { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); z-index: 50; padding: 0; }
-        .floating-add-btn:hover { transform: scale(1.05); box-shadow: 0 12px 28px -5px rgba(37, 99, 235, 0.5); }
+        .floating-add-btn { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); z-index: 50; padding: 0; background: var(--brand-primary); color: white; border: none; cursor: pointer; transition: all 0.2s ease-out; }
+        .floating-add-btn:hover { transform: scale(1.05); box-shadow: 0 12px 28px -5px rgba(37, 99, 235, 0.5); filter: brightness(1.05); }
         .outline-btn { padding: 8px 16px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease; }
         .outline-btn:hover { background: var(--bg-color); border-color: #cbd5e1; }
         .btn-outline-primary { padding: 8px 16px; border: 1px solid rgba(37, 99, 235, 0.3); background: transparent; color: var(--brand-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease-out; }
@@ -639,6 +639,11 @@ export default function JobTrackerDashboard() {
           height: 100%;
           object-fit: contain;
           padding: 4px;
+        }
+        .company-logo-fallback {
+          font-weight: 700;
+          font-size: 18px;
+          color: #64748b;
         }
         .company-logo-fallback {
           font-weight: 700;
@@ -1256,17 +1261,29 @@ export default function JobTrackerDashboard() {
                         <div className="app-header">
                           <div className="app-info">
                             <div className="company-logo-container">
-                              <img 
-                                src={app.companyInfo?.logo || `https://logo.clearbit.com/${app.companyInfo?.domain || app.company.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com'}`} 
-                                alt={app.company}
-                                className="company-logo-img"
-                                onError={(e) => {
-                                  if (!e.target.src.includes('ui-avatars.com')) {
-                                    e.target.onerror = null;
-                                    e.target.src = uiAvatarUrl;
-                                  }
-                                }}
-                              />
+                              {app.companyInfo?.logo || app.companyInfo?.domain ? (
+                                <img 
+                                  src={app.companyInfo?.logo || uiAvatarUrl} 
+                                  alt={app.company}
+                                  className="company-logo-img"
+                                  onError={(e) => {
+                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                                    const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                    if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
+                                      e.target.src = googleFallback;
+                                    } else if (!e.target.src.includes('ui-avatars.com')) {
+                                      e.target.src = uiAvatarUrl;
+                                    } else {
+                                      e.target.onerror = null;
+                                      e.target.style.display = 'none';
+                                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                              ) : null}
+                              <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
+                                {companyInitials}
+                              </div>
                             </div>
                             <div className="role-company">
                               <div className="role-title">{app.company || "Unknown Company"}</div>
@@ -1447,7 +1464,7 @@ export default function JobTrackerDashboard() {
           </main>
           
           <button 
-            className="floating-add-btn btn-primary"
+            className="floating-add-btn"
             onClick={() => setShowAddModal(true)}
             title="Add Application"
           >
