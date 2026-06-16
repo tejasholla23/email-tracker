@@ -38,6 +38,7 @@ export default function JobTrackerDashboard() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   
   const [userEmail, setUserEmail] = useState(null);
   //test comment
@@ -468,7 +469,17 @@ export default function JobTrackerDashboard() {
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: var(--surface-color); }
         .search-container input::placeholder { color: var(--text-secondary); }
         .topbar-actions { display: flex; align-items: center; gap: 16px; }
-        .user-badge { padding: 6px 14px; border-radius: 999px; background: #f3f4f6; border: 1px solid var(--border-color); font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+        .user-dropdown-container { position: relative; }
+        .user-avatar-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-primary); color: white; border: none; font-weight: 600; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease-out; }
+        .user-avatar-btn:hover { filter: brightness(1.1); transform: scale(1.05); }
+        .user-dropdown-menu { position: absolute; top: 100%; right: 0; margin-top: 8px; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); width: 200px; overflow: hidden; z-index: 100; animation: scaleUp 0.15s ease-out; }
+        .user-dropdown-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); font-size: 13px; color: var(--text-secondary); word-break: break-all; }
+        .user-dropdown-item { width: 100%; text-align: left; padding: 10px 16px; background: transparent; border: none; font-size: 13px; color: var(--text-primary); cursor: pointer; transition: background-color 0.15s ease-out; }
+        .user-dropdown-item:hover { background: var(--bg-color); }
+        .user-dropdown-item.text-danger { color: #dc2626; }
+        .dark .user-dropdown-item.text-danger { color: #ef4444; }
+        .floating-add-btn { position: fixed; bottom: 32px; right: 32px; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); z-index: 50; padding: 0; }
+        .floating-add-btn:hover { transform: scale(1.05); box-shadow: 0 12px 28px -5px rgba(37, 99, 235, 0.5); }
         .outline-btn { padding: 8px 16px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease; }
         .outline-btn:hover { background: var(--bg-color); border-color: #cbd5e1; }
         
@@ -1029,22 +1040,27 @@ export default function JobTrackerDashboard() {
           </div>
 
           <nav>
-            <div className={`nav-item active`} onClick={() => setActiveFilter("all")}>
-              Dashboard
-            </div>
+            {[
+              { label: "Dashboard", value: "all" },
+              { label: "New", value: "new" },
+              { label: "Deadline today", value: "deadlines" },
+              { label: "Applied", value: "applied" },
+              { label: "Done", value: "done" },
+              { label: "Unmarked", value: "unmarked" },
+            ].map(({ label, value }) => (
+              <div 
+                key={value}
+                className={`nav-item ${activeFilter === value ? 'active' : ''}`} 
+                onClick={() => setActiveFilter(value)}
+              >
+                {label}
+              </div>
+            ))}
           </nav>
 
           <div className="sidebar-bottom">
-            <button className="sync-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
-              {(syncing || syncStatus === "pending") ? "Syncing (Background)..." : "Sync Emails"}
-            </button>
-            {lastSyncTime && (
-              <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '-12px', marginBottom: '16px' }}>
-                Last synced: {new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            )}
-            <div className="nav-item" onClick={handleLogout} style={{ marginTop: 0, color: '#ba1a1a' }}>
-              <span>Sign Out</span>
+            <div className="nav-item" style={{ marginTop: 0 }}>
+              <span>Support</span>
             </div>
           </div>
         </aside>
@@ -1065,29 +1081,34 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
             <div className="topbar-actions">
-              <button 
-                onClick={toggleDarkMode} 
-                className="outline-btn" 
-                style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                title="Toggle Dark Mode"
-              >
-                {isDarkMode ? "☀️" : "🌙"}
-              </button>
-              <div className="user-badge">
-                <span className="user-email">{userEmail}</span>
-              </div>
-              <button className="outline-btn" onClick={handleLogout} style={{ background: '#fef2f2', borderColor: '#fee2e2', color: '#991b1b' }}>
-                Logout
-              </button>
-              <button className="btn-primary" onClick={() => setShowAddModal(true)}>
-                + Add Application
-              </button>
               <button className="outline-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
                 {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
               </button>
               <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
                 {clearing ? "Clearing..." : "Clear All"}
               </button>
+              
+              <div className="user-dropdown-container">
+                <button 
+                  className="user-avatar-btn"
+                  onClick={() => setShowUserDropdown(!showUserDropdown)}
+                >
+                  {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+                </button>
+                {showUserDropdown && (
+                  <div className="user-dropdown-menu">
+                    <div className="user-dropdown-header">
+                      <span className="user-dropdown-email">{userEmail}</span>
+                    </div>
+                    <button className="user-dropdown-item" onClick={() => { toggleDarkMode(); setShowUserDropdown(false); }}>
+                      {isDarkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}
+                    </button>
+                    <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 
@@ -1148,25 +1169,7 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
 
-            <div className="filters">
-              {[
-                { label: "All", value: "all" },
-                { label: "Deadlines Today", value: "deadlines" },
-                { label: "New", value: "new" },
-                { label: "Interview", value: "interview" },
-                { label: "Applied", value: "applied" },
-                { label: "Done", value: "done" },
-                { label: "Unmarked", value: "unmarked" },
-              ].map(({ label, value }) => (
-                <button
-                  key={value}
-                  className={`filter-btn${activeFilter === value ? " active" : ""}`}
-                  onClick={() => setActiveFilter(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+
 
             {loading && applications.length === 0 ? (
               <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
@@ -1229,29 +1232,24 @@ export default function JobTrackerDashboard() {
                         <div className="app-header">
                           <div className="app-info">
                             <div className="company-logo-container">
-                              {app.companyInfo?.logo || app.companyInfo?.domain ? (
+                              {app.companyInfo?.logo ? (
                                 <img 
-                                  src={app.companyInfo?.logo || uiAvatarUrl} 
+                                  src={app.companyInfo?.logo} 
                                   alt={app.company}
                                   className="company-logo-img"
                                   onError={(e) => {
-                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
-                                    const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-                                    if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
-                                      e.target.src = googleFallback;
-                                    } else if (!e.target.src.includes('ui-avatars.com')) {
-                                      e.target.src = uiAvatarUrl;
-                                    } else {
-                                      e.target.onerror = null;
-                                      e.target.style.display = 'none';
-                                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                    }
+                                    e.target.onerror = null;
+                                    e.target.src = uiAvatarUrl;
                                   }}
                                 />
-                              ) : null}
-                              <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
-                                {companyInitials}
-                              </div>
+                              ) : (
+                                <img 
+                                  src={uiAvatarUrl} 
+                                  alt={app.company}
+                                  className="company-logo-img"
+                                />
+                              )}
+                            </div>
                             </div>
                             <div className="role-company">
                               <div className="role-title">{app.company || "Unknown Company"}</div>
@@ -1430,6 +1428,14 @@ export default function JobTrackerDashboard() {
               </p>
             )}
           </main>
+          
+          <button 
+            className="floating-add-btn btn-primary"
+            onClick={() => setShowAddModal(true)}
+            title="Add Application"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
         </div>
       </div>
 
