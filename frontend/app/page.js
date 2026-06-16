@@ -356,19 +356,30 @@ export default function JobTrackerDashboard() {
     const original = editingApp;
 
     if (editFormData.company !== (original.company || "")) manualEdits.company = editFormData.company;
-    if (editFormData.jobRole !== (original.role || "")) manualEdits.role = editFormData.jobRole;
-    if (editFormData.deadlineText !== (original.deadlineText || "")) manualEdits.deadlineText = editFormData.deadlineText;
-    if (editFormData.programStipend !== (original.programStipend || "")) manualEdits.programStipend = editFormData.programStipend;
-    if (editFormData.programDuration !== (original.programDuration || "")) manualEdits.programDuration = editFormData.programDuration;
-    if (editFormData.venue !== (original.venue || "")) manualEdits.venue = editFormData.venue;
-    if (editFormData.type !== (original.type || "")) manualEdits.type = editFormData.type;
+    if (editFormData.role !== (original.role || "")) manualEdits.role = editFormData.role;
+    if (editFormData.stipend !== (original.programStipend || "")) manualEdits.programStipend = editFormData.stipend;
+    if (editFormData.ctc !== (original.salaryText || "")) manualEdits.salaryText = editFormData.ctc;
+    if (editFormData.duration !== (original.programDuration || "")) manualEdits.programDuration = editFormData.duration;
+    if (editFormData.location !== (original.venue || "")) manualEdits.venue = editFormData.location;
+    if (editFormData.deadline !== (original.deadlineText || "")) manualEdits.deadlineText = editFormData.deadline;
+    if (editFormData.link !== (original.link || "")) manualEdits.link = editFormData.link;
 
-    if (editFormData.eventDate) {
-      const fd = new Date(editFormData.eventDate).toISOString();
-      const od = original.eventDate ? new Date(original.eventDate).toISOString() : null;
-      if (fd !== od) manualEdits.eventDate = fd;
-    } else if (original.eventDate) {
-      manualEdits.eventDate = null;
+    if (editFormData.date) {
+      const fd = new Date(editFormData.date).toISOString();
+      const od = original.date ? new Date(original.date).toISOString() : null;
+      if (fd !== od) manualEdits.date = fd;
+    }
+
+    const displayFields = [];
+    if (editFormData.ctc) displayFields.push({ label: "CTC", value: editFormData.ctc });
+    if (editFormData.joining) displayFields.push({ label: "Joining", value: editFormData.joining });
+    if (editFormData.stipend) displayFields.push({ label: "Stipend", value: editFormData.stipend });
+    if (editFormData.duration) displayFields.push({ label: "Duration", value: editFormData.duration });
+    if (editFormData.deadline) displayFields.push({ label: "Deadline", value: editFormData.deadline });
+    if (editFormData.location) displayFields.push({ label: "Location", value: editFormData.location });
+    
+    if (displayFields.length > 0) {
+      manualEdits.displayFields = displayFields;
     }
 
     if (Object.keys(manualEdits).length === 0) {
@@ -1426,15 +1437,26 @@ export default function JobTrackerDashboard() {
                             className="card-btn card-btn-edit"
                             onClick={() => {
                               setEditingApp(app);
+                              
+                              const getField = (label, dbField) => {
+                                if (app.displayFields && app.displayFields.length > 0) {
+                                  const f = app.displayFields.find(df => df.label === label);
+                                  if (f) return f.value;
+                                }
+                                return dbField || "";
+                              };
+
                               setEditFormData({
                                 company: app.company || "",
-                                jobRole: app.role || "",
-                                deadlineText: app.deadlineText || "",
-                                programStipend: app.programStipend || "",
-                                programDuration: app.programDuration || "",
-                                venue: app.venue || "",
-                                eventDate: app.eventDate ? new Date(app.eventDate).toISOString().substring(0, 10) : "",
-                                type: app.type || "",
+                                role: app.role || "",
+                                stipend: getField("Stipend", app.programStipend),
+                                ctc: getField("CTC", app.salaryText),
+                                duration: getField("Duration", app.programDuration),
+                                location: getField("Location", app.venue),
+                                joining: getField("Joining", ""),
+                                deadline: getField("Deadline", app.deadlineText),
+                                date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
+                                link: app.link || "",
                               });
                               setShowEditModal(true);
                             }}
@@ -1638,40 +1660,48 @@ export default function JobTrackerDashboard() {
               {editFormError && <div className="form-error">{editFormError}</div>}
 
               <div className="form-group">
-                <label className="form-label">Company</label>
-                <input type="text" className="form-input" value={editFormData.company} onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })} />
+                <label className="form-label">Company *</label>
+                <input type="text" className="form-input" value={editFormData.company || ""} onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })} required />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Job Role</label>
-                <input type="text" className="form-input" value={editFormData.jobRole} onChange={(e) => setEditFormData({ ...editFormData, jobRole: e.target.value })} />
-              </div>
-
-              <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Deadline</label>
-                  <input type="text" className="form-input" value={editFormData.deadlineText} onChange={(e) => setEditFormData({ ...editFormData, deadlineText: e.target.value })} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Role</label>
+                  <input type="text" className="form-input" value={editFormData.role || ""} onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Event Date</label>
-                  <input type="date" className="form-input" value={editFormData.eventDate} onChange={(e) => setEditFormData({ ...editFormData, eventDate: e.target.value })} />
-                </div>
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Stipend</label>
-                  <input type="text" className="form-input" value={editFormData.programStipend} onChange={(e) => setEditFormData({ ...editFormData, programStipend: e.target.value })} />
+                  <input type="text" className="form-input" value={editFormData.stipend || ""} onChange={(e) => setEditFormData({ ...editFormData, stipend: e.target.value })} />
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">CTC</label>
+                  <input type="text" className="form-input" value={editFormData.ctc || ""} onChange={(e) => setEditFormData({ ...editFormData, ctc: e.target.value })} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Duration</label>
-                  <input type="text" className="form-input" value={editFormData.programDuration} onChange={(e) => setEditFormData({ ...editFormData, programDuration: e.target.value })} />
+                  <input type="text" className="form-input" value={editFormData.duration || ""} onChange={(e) => setEditFormData({ ...editFormData, duration: e.target.value })} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Venue</label>
-                  <input type="text" className="form-input" value={editFormData.venue} onChange={(e) => setEditFormData({ ...editFormData, venue: e.target.value })} />
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Location</label>
+                  <input type="text" className="form-input" value={editFormData.location || ""} onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Type</label>
-                  <input type="text" className="form-input" value={editFormData.type} onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value })} />
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Joining</label>
+                  <input type="text" className="form-input" value={editFormData.joining || ""} onChange={(e) => setEditFormData({ ...editFormData, joining: e.target.value })} />
                 </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Deadline</label>
+                  <input type="text" className="form-input" value={editFormData.deadline || ""} onChange={(e) => setEditFormData({ ...editFormData, deadline: e.target.value })} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Date</label>
+                  <input type="date" className="form-input" value={editFormData.date || ""} onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label className="form-label">Link (Google Form, etc.)</label>
+                <input type="url" className="form-input" value={editFormData.link || ""} onChange={(e) => setEditFormData({ ...editFormData, link: e.target.value })} />
               </div>
 
               <div className="modal-actions" style={{ marginTop: '24px' }}>
