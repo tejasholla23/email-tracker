@@ -39,6 +39,7 @@ export default function JobTrackerDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showThemeSubmenu, setShowThemeSubmenu] = useState(false);
   
   const [userEmail, setUserEmail] = useState(null);
   //test comment
@@ -478,10 +479,16 @@ export default function JobTrackerDashboard() {
         .user-dropdown-item:hover { background: var(--bg-color); }
         .user-dropdown-item.text-danger { color: #dc2626; }
         .dark .user-dropdown-item.text-danger { color: #ef4444; }
-        .floating-add-btn { position: fixed; bottom: 32px; right: 32px; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); z-index: 50; padding: 0; }
+        .floating-add-btn { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); z-index: 50; padding: 0; }
         .floating-add-btn:hover { transform: scale(1.05); box-shadow: 0 12px 28px -5px rgba(37, 99, 235, 0.5); }
         .outline-btn { padding: 8px 16px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease; }
         .outline-btn:hover { background: var(--bg-color); border-color: #cbd5e1; }
+        .btn-outline-primary { padding: 8px 16px; border: 1px solid rgba(37, 99, 235, 0.3); background: transparent; color: var(--brand-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease-out; }
+        .btn-outline-primary:hover:not(:disabled) { background: rgba(37, 99, 235, 0.05); border-color: var(--brand-primary); filter: brightness(1.05); }
+        .btn-outline-primary:active:not(:disabled) { transform: scale(0.98); }
+        .btn-outline-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .dark .btn-outline-primary { border-color: rgba(59, 130, 246, 0.4); color: #60a5fa; }
+        .dark .btn-outline-primary:hover:not(:disabled) { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; }
         
         /* Content */
         .content { padding: 32px; max-width: 1400px; margin: 0 auto; width: 100%; }
@@ -1081,7 +1088,7 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
             <div className="topbar-actions">
-              <button className="outline-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
+              <button className="btn-outline-primary" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
                 {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
               </button>
               <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
@@ -1091,21 +1098,38 @@ export default function JobTrackerDashboard() {
               <div className="user-dropdown-container">
                 <button 
                   className="user-avatar-btn"
-                  onClick={() => setShowUserDropdown(!showUserDropdown)}
+                  onClick={() => { setShowUserDropdown(!showUserDropdown); setShowThemeSubmenu(false); }}
                 >
-                  {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+                  U
                 </button>
                 {showUserDropdown && (
                   <div className="user-dropdown-menu">
                     <div className="user-dropdown-header">
                       <span className="user-dropdown-email">{userEmail}</span>
                     </div>
-                    <button className="user-dropdown-item" onClick={() => { toggleDarkMode(); setShowUserDropdown(false); }}>
-                      {isDarkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}
-                    </button>
-                    <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>
-                      Logout
-                    </button>
+                    
+                    {!showThemeSubmenu ? (
+                      <>
+                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
+                          Theme ❯
+                        </button>
+                        <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>
+                          Logout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(false); }}>
+                          ❮ Back
+                        </button>
+                        <button className="user-dropdown-item" onClick={() => { setIsDarkMode(false); setShowUserDropdown(false); localStorage.setItem('darkMode', 'false'); }}>
+                          ☀️ Light Mode
+                        </button>
+                        <button className="user-dropdown-item" onClick={() => { setIsDarkMode(true); setShowUserDropdown(false); localStorage.setItem('darkMode', 'true'); }}>
+                          🌙 Dark Mode
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -1232,23 +1256,17 @@ export default function JobTrackerDashboard() {
                         <div className="app-header">
                           <div className="app-info">
                             <div className="company-logo-container">
-                              {app.companyInfo?.logo ? (
-                                <img 
-                                  src={app.companyInfo?.logo} 
-                                  alt={app.company}
-                                  className="company-logo-img"
-                                  onError={(e) => {
+                              <img 
+                                src={app.companyInfo?.logo || `https://logo.clearbit.com/${app.companyInfo?.domain || app.company.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com'}`} 
+                                alt={app.company}
+                                className="company-logo-img"
+                                onError={(e) => {
+                                  if (!e.target.src.includes('ui-avatars.com')) {
                                     e.target.onerror = null;
                                     e.target.src = uiAvatarUrl;
-                                  }}
-                                />
-                              ) : (
-                                <img 
-                                  src={uiAvatarUrl} 
-                                  alt={app.company}
-                                  className="company-logo-img"
-                                />
-                              )}
+                                  }
+                                }}
+                              />
                             </div>
                             <div className="role-company">
                               <div className="role-title">{app.company || "Unknown Company"}</div>
@@ -1433,7 +1451,7 @@ export default function JobTrackerDashboard() {
             onClick={() => setShowAddModal(true)}
             title="Add Application"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           </button>
         </div>
       </div>
