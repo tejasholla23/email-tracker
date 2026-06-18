@@ -723,11 +723,11 @@ export default function JobTrackerDashboard() {
           letter-spacing: 0.03em;
           border: 1px solid transparent;
         }
-        .status-new { background: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
+        .status-new { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
         .status-unmarked { background: #fef3c7; color: #92400e; border-color: #fde68a; }
         .status-applied { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
         .status-done { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
-        .app-card.status-outline-new { border-color: #e5e7eb; }
+        .app-card.status-outline-new { border-color: #a7f3d0; }
         .app-card.status-outline-unmarked { border-color: #fde68a; }
         .app-card.status-outline-applied { border-color: #c7d2fe; }
         .app-card.status-outline-done { border-color: #e5e7eb; }
