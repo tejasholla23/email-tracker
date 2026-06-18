@@ -228,9 +228,13 @@ const INVALID_TITLE_FRAGMENTS = [
 function matchKnownCompany(text = "") {
   if (!text) return "";
   const normalized = normalizeKey(text);
-  for (const alias of Object.keys(KNOWN_COMPANY_ALIASES)) {
-    if (normalized.includes(alias)) {
-      return KNOWN_COMPANY_ALIASES[alias];
+  for (const rawAlias of Object.keys(KNOWN_COMPANY_ALIASES)) {
+    const alias = normalizeKey(rawAlias);
+    if (!alias) continue;
+    const safeAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${safeAlias}\\b`, 'i');
+    if (regex.test(normalized)) {
+      return KNOWN_COMPANY_ALIASES[rawAlias];
     }
   }
   return "";
@@ -971,9 +975,8 @@ function validateGeminiResponse(raw) {
       .slice(0, 5);                        // cap at 5
   }
 
-  // status â€” must be from the valid set
-  const validStatuses = ["applied", "interview", "offer", "rejected", "new"];
-  const status = validStatuses.includes(raw.status) ? raw.status : null;
+  // status â€” strictly enforced as "new" regardless of Gemini output
+  const status = "new";
 
   // type â€” must be from the valid set
   const validTypes = ["internship", "full-time", "event", "test", "unknown"];
@@ -1012,7 +1015,6 @@ Return exactly this JSON schema:
   "classification": "<one of: New Hiring Opportunity | Internship Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Expert Talk Series | Scholarship | Non-Recruitment Email>",
   "company": "<actual organizing company â€” see COMPANY RULES>",
   "subtitle": "<program/event/role name shown below the company name on the card â€” see SUBTITLE RULES>",
-  "status": "<applied | interview | offer | rejected>",
   "type": "<internship | full-time | event | test | unknown>",
   "link": "<primary registration or application URL, or empty string>",
   "displayFields": [
@@ -1252,9 +1254,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job"
   );
   const finalClassification = gemini?.classification ?? detClassification.classification;
-  const finalStatus = gemini?.status
-    ? normalizeStatus(gemini.status)
-    : normalizeStatus(detClassification.status);
+  const finalStatus = "new"; // Enforce all parsed items to start as "new"
   const finalType = gemini?.type ?? detClassification.type;
 
   // â”€â”€ Step 5: Subtitle (shown below company name on card) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

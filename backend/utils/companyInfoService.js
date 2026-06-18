@@ -21,7 +21,13 @@ async function getCompanyInfo(companyName) {
     }
 
     // Generate deterministic fallback URLs
-    const domain = `${normalizedName.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
+    const lowerName = normalizedName.toLowerCase();
+    let domain = `${lowerName.replace(/[^a-z0-9]/g, "")}.com`;
+    
+    if (lowerName === "eightfold" || lowerName === "eightfold ai") {
+      domain = "eightfold.ai";
+    }
+
     const clearbitUrl = `https://logo.clearbit.com/${domain}`;
     
     let hash = 0;

@@ -724,16 +724,12 @@ export default function JobTrackerDashboard() {
           border: 1px solid transparent;
         }
         .status-new { background: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
+        .status-unmarked { background: #fef3c7; color: #92400e; border-color: #fde68a; }
         .status-applied { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
-        .status-interview { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
-        .status-offer { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
-        .status-rejected { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
         .status-done { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
         .app-card.status-outline-new { border-color: #e5e7eb; }
+        .app-card.status-outline-unmarked { border-color: #fde68a; }
         .app-card.status-outline-applied { border-color: #c7d2fe; }
-        .app-card.status-outline-interview { border-color: #bbf7d0; }
-        .app-card.status-outline-offer { border-color: #bfdbfe; }
-        .app-card.status-outline-rejected { border-color: #fecaca; }
         .app-card.status-outline-done { border-color: #e5e7eb; }
         .app-card.is-urgent { border-color: #dc2626; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18); }
         
@@ -1253,19 +1249,31 @@ export default function JobTrackerDashboard() {
             ) : (
               <div className="app-grid">
                 {applications
+                  .map(app => {
+                    let derivedStatus = (app.status || "new").toLowerCase();
+                    // Fallback for any legacy records
+                    if (["interview", "offer", "rejected"].includes(derivedStatus)) {
+                      derivedStatus = "applied";
+                    }
+                    if (derivedStatus === "new") {
+                      const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
+                      if (ageInMs > 24 * 60 * 60 * 1000) {
+                        derivedStatus = "unmarked";
+                      }
+                    }
+                    return { ...app, derivedStatus };
+                  })
                   .filter((app) => {
                     const query = searchQuery.toLowerCase();
                     const matchesSearch =
                       (app.company || "").toLowerCase().includes(query) ||
                       (app.role || "").toLowerCase().includes(query);
 
-                    const s = (app.status || "").toLowerCase();
                     const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
                     const matchesFilter =
                       activeFilter === "all" ||
                       (activeFilter === "deadlines" && isDeadlineToday) ||
-                      (activeFilter === "unmarked" && s !== "done") ||
-                      activeFilter === s;
+                      activeFilter === app.derivedStatus;
 
                     return matchesSearch && matchesFilter;
                   })
@@ -1280,7 +1288,7 @@ export default function JobTrackerDashboard() {
                       ? new Date(dateToShow).toLocaleString(undefined, app.deadlineISO ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' })
                       : "N/A";
                     const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                    const statusKey = (app.status || "new").toLowerCase();
+                    const statusKey = app.derivedStatus;
                     const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
                     const isDone = statusKey === "done";
 
@@ -1344,8 +1352,8 @@ export default function JobTrackerDashboard() {
                             </div>
                           </div>
                           <div className="status-badge-container">
-                            <span className={`status-badge status-${(app.status || "applied").toLowerCase()}`}>
-                              {app.status || "applied"}
+                            <span className={`status-badge status-${app.derivedStatus}`}>
+                              {app.derivedStatus}
                             </span>
                           </div>
                         </div>
@@ -1495,12 +1503,12 @@ export default function JobTrackerDashboard() {
                                 console.log("[DEBUG_LINK] Clicked app ID:", app._id);
                                 console.log("[DEBUG_LINK] Original app.link value:", app.link);
                                 console.log("[DEBUG_LINK] Rendered href on click:", e.currentTarget.href);
-                                if (app.status === "new") {
+                                if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
                                   handleApply(app._id);
                                 }
                               }}
                             >
-                              {(app.status === "new" && app.isFormLink) ? "Apply" : "Open Link"}
+                              {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
                             </a>
                           )}
                           <button

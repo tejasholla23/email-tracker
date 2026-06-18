@@ -45,7 +45,8 @@ function extractHtml(payload) {
 }
 
 function getFullBodyText(payload) {
-  let text = extractText(payload) || extractHtml(payload) || "";
+  // Prioritize HTML extraction so we don't lose tables and rich text that might be missing from plain text parts
+  let text = extractHtml(payload) || extractText(payload) || "";
   
   // Decode HTML entities (e.g., &nbsp; -> " ")
   text = he.decode(text);
