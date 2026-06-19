@@ -356,7 +356,10 @@ export default function JobTrackerDashboard() {
     const original = editingApp;
 
     if (editFormData.company !== (original.company || "")) manualEdits.company = editFormData.company;
-    if (editFormData.role !== (original.role || "")) manualEdits.role = editFormData.role;
+    if (editFormData.role !== (original.subtitle || original.role || "")) {
+      manualEdits.role = editFormData.role;
+      manualEdits.subtitle = editFormData.role;
+    }
     if (editFormData.stipend !== (original.programStipend || "")) manualEdits.programStipend = editFormData.stipend;
     if (editFormData.ctc !== (original.salaryText || "")) manualEdits.salaryText = editFormData.ctc;
     if (editFormData.duration !== (original.programDuration || "")) manualEdits.programDuration = editFormData.duration;
@@ -371,6 +374,7 @@ export default function JobTrackerDashboard() {
     }
 
     const displayFields = [];
+    if (editFormData.role) displayFields.push({ label: "Role", value: editFormData.role });
     if (editFormData.ctc) displayFields.push({ label: "CTC", value: editFormData.ctc });
     if (editFormData.joining) displayFields.push({ label: "Joining", value: editFormData.joining });
     if (editFormData.stipend) displayFields.push({ label: "Stipend", value: editFormData.stipend });
@@ -1461,7 +1465,7 @@ export default function JobTrackerDashboard() {
                                 return dbField || "";
                               };
 
-                              const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline"];
+                              const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
                               const dynamicFields = [];
                               if (app.displayFields && app.displayFields.length > 0) {
                                 app.displayFields.forEach(df => {
@@ -1473,7 +1477,7 @@ export default function JobTrackerDashboard() {
 
                               setEditFormData({
                                 company: app.company || "",
-                                role: app.role || "",
+                                role: app.subtitle || app.role || "",
                                 stipend: getField("Stipend", app.programStipend),
                                 ctc: getField("CTC", app.salaryText),
                                 duration: getField("Duration", app.programDuration),
