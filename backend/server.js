@@ -10,7 +10,7 @@ const { google } = require("googleapis");
 const Application = require("./models/Application");
 const Account = require("./models/Account");
 const applicationRoutes = require("./routes/applicationRoutes");
-const { parseEmailWithLLM } = require("./utils/parseEmailWithLLM");
+const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmailWithLLM");
 const { getCompanyInfo } = require("./utils/companyInfoService");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
@@ -31,9 +31,24 @@ function extractText(payload) {
 
 function extractHtml(payload) {
   if (payload.mimeType === "text/html" && payload.body.data) {
-    return Buffer.from(payload.body.data, "base64")
-      .toString("utf-8")
-      .replace(/<[^>]*>?/gm, " ");
+    let html = Buffer.from(payload.body.data, "base64").toString("utf-8");
+    
+    // 1. Remove style and script tags and their contents
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    
+    // 2. Remove HTML comments
+    html = html.replace(/<!--[\s\S]*?-->/g, "");
+    
+    // 3. Map block-level tags to newlines
+    html = html.replace(/<br\s*\/?>/gi, "\n");
+    html = html.replace(/<\/(p|div|tr|li|h[1-6]|thead|tbody|tfoot)>/gi, "\n");
+    html = html.replace(/<(p|div|tr|li|h[1-6]|thead|tbody|tfoot)[^>]*>/gi, "\n");
+    
+    // 4. Strip remaining HTML tags
+    html = html.replace(/<[^>]*>/g, " ");
+    
+    return html;
   }
   if (payload.parts) {
     for (const part of payload.parts) {
@@ -44,9 +59,18 @@ function extractHtml(payload) {
   return null;
 }
 
+
+
 function getFullBodyText(payload) {
-  // Prioritize HTML extraction so we don't lose tables and rich text that might be missing from plain text parts
-  let text = extractHtml(payload) || extractText(payload) || "";
+  const htmlRaw = extractHtml(payload);
+  const textRaw = extractText(payload);
+  
+  let text = "";
+  if (htmlRaw && textRaw) {
+    text = mergeAlternativeTexts(htmlRaw, textRaw);
+  } else {
+    text = htmlRaw || textRaw || "";
+  }
   
   // Decode HTML entities (e.g., &nbsp; -> " ")
   text = he.decode(text);
@@ -343,6 +367,8 @@ async function fetchAndProcessEmails() {
         const messages = response.data.messages || [];
         fetchedCount += messages.length;
         console.log(`\n--- STARTING SYNC FOR ${acc.email} ---`);
+        
+        let geminiParsedCount = 0;
 
         for (let msg of messages) {
           // Abort the loop immediately if a Clear All was requested while sync was running
@@ -484,6 +510,7 @@ async function fetchAndProcessEmails() {
             const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
             // NEW: Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
             await new Promise(r => setTimeout(r, 6500));
+            geminiParsedCount++;
             console.log(`[PARSE_RESULT] ${id}`, parsed);
             
             if (!parsed || !parsed.isRelevant || !parsed.company) {
@@ -573,11 +600,7 @@ async function fetchAndProcessEmails() {
               if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
 
               if (!ov.includes("status")) {
-                const incStatus = classificationToStatus(parsed.classification);
-                const advancedStatus = advanceStatus(contentExists.status, incStatus);
-                if (advancedStatus !== contentExists.status) {
-                  updatePayload.status = advancedStatus;
-                }
+                // Status is now strictly time/action-based. We do not advance status based on classification anymore.
               }
 
               const eventAdded = appendApplicationEvent(contentExists, parsed, {
@@ -600,8 +623,8 @@ async function fetchAndProcessEmails() {
               continue;
             }
 
-            const incStatus = classificationToStatus(parsed.classification);
-            const normalizedStatus = advanceStatus("new", incStatus);
+            // Enforce all new emails to start strictly as "new"
+            const normalizedStatus = "new";
 
             const newApp = new Application({
               company: parsed.company,
@@ -662,6 +685,11 @@ async function fetchAndProcessEmails() {
               console.log(`[ERROR] ${id}`, error.message);
             }
             skippedCount++;
+          }
+          
+          if (geminiParsedCount >= 6) {
+            console.log("[SYNC_PROGRESSIVE] Reached limit of 6 Gemini parses. Stopping sync to preserve quota.");
+            break;
           }
         }
 
@@ -743,6 +771,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: "Internal Server Error" });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = {
+  mergeAlternativeTexts
+};

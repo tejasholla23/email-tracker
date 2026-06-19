@@ -15,6 +15,219 @@ function normalizeText(raw = "") {
     .replace(/\s+/g, " ")
     .trim();
 }
+/**
+ * Priority ordering maps for display fields by opportunity type.
+ * Used ONLY when more than 5 valid fields are returned (to select top 5).
+ */
+const FIELD_PRIORITY = {
+  JOB_APPLICATION: ["role", "ctc", "stipend", "deadline", "duration", "location", "eligibility", "joining"],
+  HACKATHON: ["prize", "prize pool", "registration deadline", "deadline", "team size", "eligibility", "mode", "organizer", "timeline"],
+  WEBINAR: ["date", "time", "speaker", "topic", "eligibility"],
+  OTHER_PLACEMENT_EVENT: ["date", "time", "organizer", "mode", "eligibility"],
+};
+
+/**
+ * Patterns that indicate a field label boundary inside a value string.
+ * Used to detect when Gemini has merged two fields together.
+ */
+const FIELD_LABEL_PATTERNS = /\b(?:Stipend|CTC|Duration|Location|Deadline|Role|Eligibility|Joining|Venue|Date|Time|Mode|Prize|Team Size|Speaker|Topic|Organizer|Registration Deadline|Type|Salary|Package|Compensation)\s*:/i;
+
+/**
+ * Descriptive parenthetical content that should be stripped from field values.
+ * Only removes clearly noise-like descriptions, NOT value-carrying parens.
+ */
+const NOISE_PARENS = [
+  /\s*\(subject to (?:taxes|tax|TDS)\)/gi,
+  /\s*\(approx\.?\)/gi,
+  /\s*\(negotiable\)/gi,
+  /\s*\(per month\)/gi,
+  /\s*\(currently preferring [^)]+\)/gi,
+];
+
+/**
+ * Phrases that should never appear in a display field value.
+ * When detected, we truncate the value at the start of the phrase.
+ */
+const VALUE_NOISE_PHRASES = [
+  "this internship", "selected candidates", "students can", "students should",
+  "click here", "view details", "register using", "register at",
+  "please register", "kindly register", "please note", "kindly note",
+  "for more details", "for further details", "for more information",
+  "upon successful completion", "we primarily seek", "we are looking",
+  "find out more", "learn more", "see attached", "refer to",
+];
+
+/**
+ * Helper to clean a single display field value.
+ * Returns the cleaned string.
+ */
+function cleanDisplayFieldValue(label, value) {
+  let val = (value || "").trim();
+  
+  // 1. Merged field boundary detection: If another label starts inside the value, truncate before it
+  const labelMatch = val.match(FIELD_LABEL_PATTERNS);
+  if (labelMatch) {
+    val = val.substring(0, labelMatch.index).trim();
+  }
+
+  // 2. Truncate at VALUE_NOISE_PHRASES
+  for (const phrase of VALUE_NOISE_PHRASES) {
+    const idx = val.toLowerCase().indexOf(phrase);
+    if (idx >= 0) {
+      val = val.substring(0, idx).trim();
+    }
+  }
+
+  // 3. Remove NOISE_PARENS
+  for (const pattern of NOISE_PARENS) {
+    val = val.replace(pattern, "");
+  }
+
+  // Strip leading/trailing spaces and punctuation
+  val = val.replace(/^[-:;.,*•\s]+|[-:;.,*•\s]+$/g, "").trim();
+
+  return val;
+}
+
+/**
+ * Helper to validate a display field.
+ * Returns { valid: boolean, value: string }
+ */
+function validateDisplayField(label, value) {
+  const val = cleanDisplayFieldValue(label, value);
+  const valLower = val.toLowerCase();
+  
+  if (val.length < 3) return { valid: false }; // Too short
+  if (/^(?:details|n\/a|none|nil|na|tbd|tba|null|undefined)$/i.test(valLower)) return { valid: false }; // Garbage
+  if (valLower.includes("will be") || valLower.includes("is as follows")) return { valid: false }; // Partial run-on
+  
+  return { valid: true, value: val };
+}
+
+/**
+ * Merge HTML and Plain Text bodies, preferring HTML, but preserving unique plain text info.
+ */
+function mergeAlternativeTexts(htmlText, plainText) {
+  if (!htmlText) return plainText || "";
+  if (!plainText) return htmlText || "";
+
+  const plainLines = plainText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const htmlLower = htmlText.toLowerCase();
+  const uniquePlainLines = [];
+
+  for (const line of plainLines) {
+    if (line.length < 5) continue; // Skip short boilerplate lines
+    const lineLower = line.toLowerCase();
+    
+    // Check if this line is missing from the HTML version
+    if (!htmlLower.includes(lineLower)) {
+      uniquePlainLines.push(line);
+    }
+  }
+
+  if (uniquePlainLines.length > 0) {
+    return htmlText + "\n\n--- Unique Plain Text Content ---\n" + uniquePlainLines.join("\n");
+  }
+
+  return htmlText;
+}
+
+function preprocessBody(rawText = "") {
+  let text = rawText || "";
+  const decisions = [];
+  const originalLength = text.length;
+
+  // 1. Detect and clean HTML tags if any raw HTML somehow passed through
+  const hasHtmlTags = /<[a-z/][^>]*>/i.test(text);
+  if (hasHtmlTags) {
+    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    text = text.replace(/<!--[\s\S]*?-->/g, "");
+    text = text.replace(/<br\s*\/?>/gi, "\n");
+    text = text.replace(/<\/(p|div|tr|li|h[1-6]|thead|tbody|tfoot)>/gi, "\n");
+    text = text.replace(/<(p|div|tr|li|h[1-6]|thead|tbody|tfoot)[^>]*>/gi, "\n");
+    text = text.replace(/<[^>]*>/g, " ");
+    decisions.push("Stripped HTML style/script blocks and mapped block tags to newlines");
+  }
+
+  // 2. Decode MIME/quoted-printable remnants and zero-width spaces
+  const beforeMime = text.length;
+  text = text
+    .replace(/=3D/g, "=")
+    .replace(/=0D/g, "")
+    .replace(/=0A/g, "")
+    .replace(/&zwnj;/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+  if (text.length !== beforeMime) {
+    decisions.push("Cleaned MIME artifacts/quoted-printable/zero-width chars");
+  }
+
+  // 3. Normalize curly quotes, dashes, and newlines
+  text = text
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+
+  // 4. Repeated separators normalization (e.g. --------- -> ---)
+  const beforeSeparators = text.length;
+  text = text.replace(/[-_*]{3,}/g, "---");
+  if (text.length !== beforeSeparators) {
+    decisions.push("Normalized repeated separators");
+  }
+
+  // 5. Remove confidentiality disclaimers (usually at bottom of emails)
+  const disclaimerRegex = /\n\s*(?:Disclaimer|Confidentiality|This email and any attachments|This message is confidential|Note: This email and its attachments)[\s\S]*$/i;
+  const beforeDisclaimer = text.length;
+  text = text.replace(disclaimerRegex, "");
+  if (text.length < beforeDisclaimer) {
+    decisions.push("Removed confidentiality disclaimer");
+  }
+
+  // 6. Remove mobile email signatures / boilerplate
+  const beforeSig = text.length;
+  text = text.replace(/\n\s*Sent from my (iPhone|iPad|Android|Mail)[\s\S]*?$/i, "");
+  text = text.replace(/\n\s*Get Outlook for (Android|iOS|Mobile)[\s\S]*?$/i, "");
+  if (text.length < beforeSig) {
+    decisions.push("Removed mobile email client boilerplate signature");
+  }
+
+  // 7. Clean duplicate placement office footers if any
+  const beforeFooter = text.length;
+  text = stripForwardingFooter(text);
+  if (text.length < beforeFooter) {
+    decisions.push("Removed placement office forwarding footer");
+  }
+
+  // 8. Line-by-line normalization (trim and collapse extra spaces)
+  const lines = text.split("\n").map(line => {
+    return line.replace(/[ \t]+/g, " ").trim();
+  });
+
+  // 9. Collapse consecutive blank lines (limit to max 1 empty line)
+  const cleanLines = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] === "") {
+      if (cleanLines.length > 0 && cleanLines[cleanLines.length - 1] !== "") {
+        cleanLines.push("");
+      }
+    } else {
+      cleanLines.push(lines[i]);
+    }
+  }
+
+  const cleanedText = cleanLines.join("\n").trim();
+
+  return {
+    text: cleanedText,
+    decisions,
+    originalLength,
+    cleanedLength: cleanedText.length
+  };
+}
+
 
 function normalizeKey(raw = "") {
   return (raw || "")
@@ -428,13 +641,39 @@ function stripForwardingFooter(body = "") {
   return result.trim();
 }
 
-// ---------------------------------------------------------------------------
-// Email classification (deterministic pre-filter)
-// Order matters: higher-priority rules first.
-// ---------------------------------------------------------------------------
+/**
+ * Intent tiers — determines which classification wins when multiple rules match.
+ *   primary:   high-specificity signals that are rarely false positives
+ *   standard:  medium-specificity signals for general job/event categories
+ *   secondary: low-specificity signals that often co-occur with primary intents
+ * When a primary and secondary match both exist, the primary always wins.
+ */
+const INTENT_TIER = {
+  interviewResult:        "primary",
+  interviewSchedule:      "primary",
+  assessmentAnnouncement: "primary",
+  hackathonEvent:         "primary",
+  pptAnnouncement:        "standard",
+  newOpportunity:         "standard",
+  workshopWebinar:        "standard",
+  registrationLink:       "secondary",
+  applicationReminder:    "secondary",
+  venueUpdate:            "secondary",
+  deadlineReminder:       "secondary",
+  genericPlacementNotice: "secondary",
+};
+
+const TIER_RANK = { primary: 3, standard: 2, secondary: 1 };
+
+/**
+ * Strong hiring signals — when present, secondary classifications like
+ * "Registration Link" or "Deadline Reminder" should not win over hiring.
+ */
+const HIRING_SIGNALS = /\b(CTC|stipend|salary|package|compensation|LPA|internship\\s+opportunity|hiring\\s+opportunity|job\\s+opening|new\\s+hiring|recruitment\\s+drive|campus\\s+recruitment|placement\\s+drive|offer\\s+letter)\\b/i;
 
 function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = false }) {
   const text = `${subject} ${body}`.toLowerCase();
+
   const rules = [
     {
       category: "hackathonEvent",
@@ -442,7 +681,8 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "new",
       type: "event",
       opportunityType: "HACKATHON",
-      regex: /\b(hack\w*|innovent|innovation\s+challenge|ideathon|datathon|bootcamp|competition|coding\s+contest|tech\s+fest|techfest|code\s*fest|codathon|makeathon|designathon|project\s+submission|submission\s+window|team\s+size|event\s+invitation|scholarship\s+program|open\s+for\s+registration)\b/i,
+      // Removed "open for registration" — too broad
+      regex: /\b(hack\w*|innovent|innovation\s+challenge|ideathon|datathon|bootcamp|competition|coding\s+contest|tech\s+fest|techfest|code\s*fest|codathon|makeathon|designathon|project\s+submission|submission\s+window|team\s+size|event\s+invitation|scholarship\s+program)\b/i,
       confidence: 0.92,
     },
     {
@@ -469,7 +709,8 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "interview",
       type: "test",
       opportunityType: "JOB_APPLICATION",
-      regex: /\b(aptitude test|assessment|online test|exam|fcat|coding test|technical test)\b/i,
+      // Remove bare 'assessment' and 'exam'
+      regex: /\b(aptitude test|online test|coding test|technical test|fcat|assessment\s+link|scheduled\s+assessment|assessment\s+date|exam\s+link|scheduled\s+exam|exam\s+date)\b/i,
       confidence: 0.9,
     },
     {
@@ -477,8 +718,17 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       classification: "PPT Announcement",
       status: "new",
       type: "unknown",
+      opportunityType: "OTHER_PLACEMENT_EVENT",
+      regex: /\b(pre[-\s]*placement talk|ppt|placement talk|info session)\b/i,
+      confidence: 0.88,
+    },
+    {
+      category: "workshopWebinar",
+      classification: "Workshop / Webinar",
+      status: "new",
+      type: "unknown",
       opportunityType: "WEBINAR",
-      regex: /\b(pre[-\s]*placement talk|ppt|seminar|placement talk|info session|guest lecture|workshop\s+invitation|webinar\s+invitation|webinar|workshop|expert talk)\b/i,
+      regex: /\b(seminar|guest lecture|workshop\s+invitation|webinar\s+invitation|webinar|workshop|expert talk)\b/i,
       confidence: 0.88,
     },
     {
@@ -487,7 +737,8 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "new",
       type: "application",
       opportunityType: "JOB_APPLICATION",
-      regex: /\b(register|registration|complete your profile|profile completion|forms\.gle|docs\.google\.com\/forms)\b/i,
+      // Removed bare 'register'/'registration'
+      regex: /\b(complete your profile|profile completion|forms\.gle|docs\.google\.com\/forms|register\s+here|registration\s+link|registration\s+button)\b/i,
       confidence: 0.9,
     },
     {
@@ -496,7 +747,8 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "new",
       type: "application",
       opportunityType: "JOB_APPLICATION",
-      regex: /\b(reminder|remind|register.*by|submit.*by|last date|deadline)\b/i,
+      // Removed bare 'reminder'
+      regex: /\b(reminder\b.*?\b(register|apply|submit)|deadline\s+reminder|last\s+date\s+to|reminder\s+to\s+apply)\b/i,
       confidence: 0.9,
     },
     {
@@ -505,7 +757,8 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "applied",
       type: "unknown",
       opportunityType: "OTHER_PLACEMENT_EVENT",
-      regex: /\b(venue|hall|room|auditorium|seminar hall|location|place)\b/i,
+      // Removed bare 'venue'/'hall'/'room'/'location'
+      regex: /\b(venue\s+update|changed\s+venue|allotted\s+hall|reporting\s+hall|seminar\s+hall\s+location)\b/i,
       confidence: 0.88,
     },
     {
@@ -514,7 +767,8 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "new",
       type: "unknown",
       opportunityType: "JOB_APPLICATION",
-      regex: /\b(deadline|last date|apply by|register by|submission deadline|before .* today|before .* tomorrow)\b/i,
+      // Removed bare 'deadline'/'last date'
+      regex: /\b(submission deadline|last date to apply|apply by|register by|before .* today|before .* tomorrow)\b/i,
       confidence: 0.9,
     },
     {
@@ -523,22 +777,51 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "applied",
       type: "unknown",
       opportunityType: "JOB_APPLICATION",
-      regex: /\b(campus recruitment|placement notice|hiring process|recruitment drive|opportunity|drive)\b/i,
+      // Removed bare 'opportunity'/'drive'
+      regex: /\b(campus recruitment|placement notice|hiring process|recruitment drive)\b/i,
       confidence: 0.75,
     },
   ];
 
+  const matchedRules = [];
   for (const rule of rules) {
     if (rule.regex.test(text)) {
-      return {
-        category: rule.category,
-        classification: rule.classification,
-        type: rule.type,
-        status: rule.status,
-        opportunityType: rule.opportunityType,
-        confidence: rule.confidence,
-      };
+      matchedRules.push(rule);
     }
+  }
+
+  // If we matched multiple rules, let's see if we should demote secondary ones if hiring signals exist
+  const hasHiring = HIRING_SIGNALS.test(text);
+
+  const processedRules = matchedRules.map(rule => {
+    let conf = rule.confidence;
+    const tier = INTENT_TIER[rule.category] || "secondary";
+    if (tier === "secondary" && hasHiring) {
+      conf = conf * 0.6; // Demote by 40%
+      console.log(`[CLASSIFY_DEMOTED] "${rule.classification}" demoted (hiring signals present)`);
+    }
+    return { ...rule, confidence: conf, tier };
+  });
+
+  if (processedRules.length > 0) {
+    // Sort by tier rank (descending), then by confidence (descending)
+    processedRules.sort((a, b) => {
+      const aRank = TIER_RANK[a.tier] || 1;
+      const bRank = TIER_RANK[b.tier] || 1;
+      if (bRank !== aRank) return bRank - aRank;
+      return b.confidence - a.confidence;
+    });
+
+    const chosen = processedRules[0];
+    console.log(`[CLASSIFY_DETERMINISTIC] matched=${matchedRules.map(r => r.category).join(',')} → chosen="${chosen.classification}" (tier=${chosen.tier}, conf=${chosen.confidence.toFixed(2)})`);
+    return {
+      category: chosen.category,
+      classification: chosen.classification,
+      type: chosen.type,
+      status: chosen.status,
+      opportunityType: chosen.opportunityType,
+      confidence: chosen.confidence,
+    };
   }
 
   if (hasLink) {
@@ -573,9 +856,6 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
   };
 }
 
-// ---------------------------------------------------------------------------
-// Date / time helpers
-// ---------------------------------------------------------------------------
 
 function parseDateString(input = "", referenceDate = new Date()) {
   const text = normalizeText(input);
@@ -899,6 +1179,59 @@ function buildProcessId(company = "") {
   return normalizeKey(company) || "unknown-process";
 }
 
+/**
+ * Dedicated subtitle fallback generator.
+ * Unlike generateTitle(), this NEVER produces generic labels like "ABB Registration".
+ * It chains through real extractors and returns "" if nothing meaningful is found.
+ */
+function generateSubtitleFallback(subject = "", body = "", category = "") {
+  // 1. Role name (using extractProgramRoles)
+  const role = extractProgramRoles(body);
+  if (role && role !== "Internship" && role !== "Apprentice" && role.length > 3) {
+    return role;
+  }
+
+  // 2. Event name (using extractEventName)
+  const eventName = extractEventName(subject, body);
+  if (eventName && eventName.length > 3) {
+    return eventName;
+  }
+
+  // 3. Program name (from body patterns)
+  const programMatch = body.match(/(?:program|programme|course|training)\s*[:\-]\s*([^\r\n.!]{3,60})/i);
+  if (programMatch && programMatch[1]) {
+    const candidate = cleanProgramValue(programMatch[1]);
+    if (candidate && candidate.length > 3) return candidate;
+  }
+
+  // 4. Assessment name (from body patterns)
+  if (category === "assessmentAnnouncement") {
+    const assessMatch = body.match(/(?:aptitude test|online test|coding test|technical test|assessment)\s*(?:for|by|at|:)\s*([^\r\n.!]{3,60})/i);
+    if (assessMatch && assessMatch[1]) {
+      const candidate = cleanProgramValue(assessMatch[1]);
+      if (candidate && candidate.length > 3) return candidate;
+    }
+  }
+
+  // 5. Interview round name (from body patterns)
+  if (category === "interviewSchedule" || category === "interviewResult") {
+    const roundMatch = body.match(/\b(HR\s+round|technical\s+round|final\s+round|telephonic\s+round|panel\s+interview)\b/i);
+    if (roundMatch && roundMatch[1]) {
+      return roundMatch[1].trim();
+    }
+  }
+
+  // 6. Registration target (from body patterns)
+  const regMatch = body.match(/(?:register for|registration for)\s*([^\r\n.!]{3,60})/i);
+  if (regMatch && regMatch[1]) {
+    const candidate = cleanProgramValue(regMatch[1]);
+    if (candidate && candidate.length > 3) return candidate;
+  }
+
+  return "";
+}
+
+
 // ---------------------------------------------------------------------------
 // Gemini structured call â€” primary LLM integration
 // ---------------------------------------------------------------------------
@@ -960,19 +1293,29 @@ function validateGeminiResponse(raw) {
   const company  = sanitizeTextField(raw.company,  100);
   const subtitle = sanitizeTextField(raw.subtitle, 160);
 
-  // displayFields â€” flexible [{label, value}] array, max 5 items
+  // displayFields — flexible [{label, value}] array, max 8 items through (trimmed to 5 later)
   let displayFields = [];
   if (Array.isArray(raw.displayFields)) {
     displayFields = raw.displayFields
       .filter((f) => f && typeof f === "object"
                   && typeof f.label === "string" && f.label.trim()
                   && typeof f.value === "string" && f.value.trim())
-      .map((f) => ({
-        label: cleanProgramValue(f.label.substring(0, 60)),
-        value: cleanProgramValue(f.value.substring(0, 200)),
-      }))
-      .filter((f) => f.label && f.value)  // re-filter after cleaning
-      .slice(0, 5);                        // cap at 5
+      .map((f) => {
+        const label = cleanProgramValue(f.label.substring(0, 60));
+        // Apply field-specific cleanup BEFORE generic cleaning
+        const fieldCleaned = cleanDisplayFieldValue(label, f.value.substring(0, 300));
+        const value = cleanProgramValue(fieldCleaned);
+        return { label, value };
+      })
+      .filter((f) => f.label && f.value)
+      .map((f) => {
+        // Validate each field — prefer trimming over rejecting
+        const result = validateDisplayField(f.label, f.value);
+        if (!result.valid) return null;
+        return { label: f.label, value: result.value };
+      })
+      .filter(Boolean)
+      .slice(0, 8);
   }
 
   // status â€” strictly enforced as "new" regardless of Gemini output
@@ -1067,7 +1410,7 @@ Body: ${truncatedBody}`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 25000);
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-3.5-flash",
         contents: prompt,
         config: { abortSignal: controller.signal }
       });
@@ -1188,10 +1531,11 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
 }
 
 async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", referenceDate = new Date(), rawText = "") {
-  const body = normalizeText(fullBodyText || rawText || "");
+  const preprocessed = preprocessBody(fullBodyText || rawText || "");
+  const body = preprocessed.text;
   const forwarded = parseForwardedEmail(body);
   const sourceBody    = forwarded.body || body;
-  const sourceSubject = forwarded.subject || subject || "";
+  const sourceSubject = (forwarded.subject || subject || "").trim();
   // Footer-stripped body passed to Gemini â€” prevents placement-dept footers
   // from polluting Gemini's understanding of location/company/fields.
   const footerStrippedBody = stripForwardingFooter(sourceBody);
@@ -1248,38 +1592,101 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   const resolvedCompany = company ? (sanitizeCompany(company) || "") : "";
   if (!resolvedCompany) { companySource = "none"; companyConfidence = 0; }
 
-  // â”€â”€ Step 4: Classification, status, type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const emailType = gemini?.emailType ?? (
-    detClassification.category === "hackathonEvent" ? "event" :
-    detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job"
-  );
-  const finalClassification = gemini?.classification ?? detClassification.classification;
-  const finalStatus = "new"; // Enforce all parsed items to start as "new"
-  const finalType = gemini?.type ?? detClassification.type;
+  // â”€â”€ // ── Step 4: Classification arbitration (relative confidence) ──────────────
+  //   Normalize both confidences to the same 0-1 scale.
+  //   Use relative comparison: one source must be proportionally stronger to win.
+  //   When similar, prefer Gemini (richer semantic understanding).
+  const detConf = detClassification.confidence || 0;
+  const geminiClassConf = (gemini?.classificationConfidence || 0) / 100; // normalize 0-100 to 0-1
 
-  // â”€â”€ Step 5: Subtitle (shown below company name on card) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, "", sourceBody);
-  let subtitle;
-  if (gemini?.subtitle) {
-    subtitle = gemini.subtitle;
-  } else if (emailType === "event") {
-    subtitle = extractEventName(sourceSubject, sourceBody) || "Event";
+  let finalClassification, classificationReason;
+  let emailType, finalType;
+
+  if (gemini?.classification && gemini?.emailType) {
+    // Both sources available — compare relative confidence
+    const detIsPrimary = INTENT_TIER[detClassification.category] === "primary";
+    const detProportionallyStronger = detConf > 0 && geminiClassConf > 0 && (detConf / geminiClassConf) > 1.5;
+    const geminiProportionallyStronger = geminiClassConf > 0 && detConf > 0 && (geminiClassConf / detConf) > 1.3;
+
+    if (detProportionallyStronger && detIsPrimary) {
+      // Deterministic is proportionally stronger AND a high-specificity primary intent
+      finalClassification = detClassification.classification;
+      emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
+                  detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
+      finalType = detClassification.type;
+      classificationReason = `deterministic preserved: "${detClassification.classification}" (det=${detConf.toFixed(2)}) is primary-tier and proportionally stronger than gemini="${gemini.classification}" (gem=${geminiClassConf.toFixed(2)})`;
+    } else {
+      // Gemini is stronger, similar, or deterministic is not primary — prefer Gemini semantics
+      finalClassification = gemini.classification;
+      emailType = gemini.emailType;
+      finalType = gemini.type ?? detClassification.type;
+      classificationReason = geminiProportionallyStronger
+        ? `gemini override: "${gemini.classification}" (gem=${geminiClassConf.toFixed(2)}) proportionally stronger than det="${detClassification.classification}" (det=${detConf.toFixed(2)})`
+        : `gemini preferred: "${gemini.classification}" (gem=${geminiClassConf.toFixed(2)}) vs det="${detClassification.classification}" (det=${detConf.toFixed(2)}) — similar confidence, preferring semantic richness`;
+    }
+  } else if (gemini?.classification) {
+    // Gemini available but no confidence score — still prefer Gemini
+    finalClassification = gemini.classification;
+    emailType = gemini.emailType ?? (detClassification.category === "hackathonEvent" ? "event" : "job");
+    finalType = gemini.type ?? detClassification.type;
+    classificationReason = `gemini only (no confidence score): "${gemini.classification}"`;
   } else {
-    subtitle = detTitle;
+    // Gemini failed — use deterministic
+    finalClassification = detClassification.classification;
+    emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
+                detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
+    finalType = detClassification.type;
+    classificationReason = `deterministic fallback (gemini unavailable): "${detClassification.classification}" (det=${detConf.toFixed(2)})`;
   }
 
-  // â”€â”€ Step 6: role field (DB required: true) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // ──── Step 6: role field (DB required: true) ────────────────────────────────
+  // opportunityType consistency: ensure it matches the chosen classification
+  const CLASSIFICATION_TO_OPP_TYPE = {
+    "Hackathon / Event Invitation": "HACKATHON",
+    "Workshop / Webinar": "WEBINAR",
+    "Expert Talk Series": "WEBINAR",
+    "PPT Announcement": "OTHER_PLACEMENT_EVENT",
+    "Venue Update": "OTHER_PLACEMENT_EVENT",
+    "Non-Recruitment Email": "OTHER_PLACEMENT_EVENT",
+  };
+  const inferredOppType = CLASSIFICATION_TO_OPP_TYPE[finalClassification];
+  const finalOppType = inferredOppType || gemini?.opportunityType || detClassification.opportunityType || "JOB_APPLICATION";
+
+  const finalStatus = "new";
+
+  console.log(`[CLASSIFICATION_DECISION] ${classificationReason}\nemailType="${emailType}" opportunityType="${finalOppType}" type="${finalType}"`);
+
+  // ── Step 5: Subtitle ────────────────────────────────────────────────────────
+  //   Gemini -> role extractor -> event name -> program/assessment/interview/
+  //   registration target -> empty string.
+  //   NEVER generates generic labels like "ABB Registration".
+  let subtitle, subtitleSource;
+  if (gemini?.subtitle) {
+    subtitle = gemini.subtitle;
+    subtitleSource = "gemini";
+  } else {
+    const fallback = generateSubtitleFallback(sourceSubject, sourceBody, detClassification.category);
+    if (fallback) {
+      subtitle = fallback;
+      subtitleSource = "fallback_extractor";
+    } else {
+      subtitle = "";
+      subtitleSource = "none";
+    }
+  }
+  console.log(`[SUBTITLE_DECISION] subtitle="${subtitle}" source="${subtitleSource}"`);
+
+  // Keep generateTitle for the title field only (not subtitle)
+  const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, "", sourceBody);
+
+  // ── Step 6: role field (DB required: true) ──────────────────────────────────
   // For job emails: the classification or "Unknown Role" (never the subtitle).
   // For event emails: "Event" as a neutral placeholder.
   const isJobEmail = emailType === "job";
   const roleField = isJobEmail ? "Unknown Role" : (emailType === "event" ? "Event" : "Unknown Role");
 
-  // ──── Step 7: displayFields — flexible [{label,value}] from Gemini ──────────
-  // This is the ONLY source of display fields. No deterministic merging unless Gemini fails.
+  // ── Step 7: displayFields — flexible [{label,value}] from Gemini ─────────────
   let displayFields = gemini?.displayFields || [];
   if (displayFields.length === 0) {
-    // Safety net: If Gemini failed (e.g. Quota Exceeded) or returned no fields, use regex extractors.
     displayFields = extractFallbackDisplayFields(fullBodyText || rawText || "", detClassification.opportunityType);
   }
 
@@ -1287,23 +1694,44 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   displayFields = displayFields
     .map(f => {
       let val = (f.value || "").trim().replace(/\s+/g, " ");
-      val = val.replace(/^[-:;.,*•]+|[-:;.,*•]+$/g, "").trim(); // strip trailing/leading punctuation
+      val = val.replace(/^[-:;.,*•]+|[-:;.,*•]+$/g, "").trim();
+      val = cleanDisplayFieldValue(f.label, val);
       return { ...f, value: val };
     })
-    .filter(f => {
-      const valLower = f.value.toLowerCase();
-      if (f.value.length < 3) return false; // Too short
-      if (/^details?$/i.test(valLower)) return false; // Garbage label
-      if (valLower.includes("will be") || valLower.includes("is as follows")) return false; // Partial run-on sentences
-      return true;
-    });
+    .map(f => {
+      const result = validateDisplayField(f.label, f.value);
+      if (!result.valid) return null;
+      return { label: f.label, value: result.value };
+    })
+    .filter(Boolean);
 
-  // ──── Step 8: Dev-mode trace ────────────────────────────────────────────────
+  // Priority-based selection: ONLY when more than 5 valid fields exist.
+  // When ≤5, preserve Gemini's original order.
+  if (displayFields.length > 5) {
+    const oppType = detClassification.opportunityType || "JOB_APPLICATION";
+    const priorities = FIELD_PRIORITY[oppType] || FIELD_PRIORITY.JOB_APPLICATION;
+    displayFields.sort((a, b) => {
+      const aIdx = priorities.findIndex(p => a.label.toLowerCase().includes(p));
+      const bIdx = priorities.findIndex(p => b.label.toLowerCase().includes(p));
+      const aPriority = aIdx >= 0 ? aIdx : priorities.length;
+      const bPriority = bIdx >= 0 ? bIdx : priorities.length;
+      return aPriority - bPriority;
+    });
+    displayFields = displayFields.slice(0, 5);
+  }
+
+  // ── Step 8: Dev-mode trace with structured reasoning ───────────────────────
   const isDev = process.env.NODE_ENV !== "production";
   const parseTrace = isDev ? {
+    preprocessing: {
+      originalLength: preprocessed.originalLength,
+      cleanedLength: preprocessed.cleanedLength,
+      decisions: preprocessed.decisions,
+    },
     gemini: {
       company:        gemini?.company        ?? null,
       classification: gemini?.classification ?? null,
+      classificationConfidence: gemini?.classificationConfidence ?? null,
       emailType:      gemini?.emailType      ?? null,
       subtitle:       gemini?.subtitle       ?? null,
       displayFields:  gemini?.displayFields  ?? [],
@@ -1313,28 +1741,44 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       source:         detCompanyObj.source,
       confidence:     detCompanyObj.confidence,
       classification: detClassification.classification,
+      classificationConfidence: detClassification.confidence,
+      category:       detClassification.category,
+      intentTier:     INTENT_TIER[detClassification.category] || "unknown",
       senderAlias:    senderAliasCompany     || null,
     },
-    chosen: {
-      company:        resolvedCompany        || null,
-      companySource,
-      companyConfidence,
-      subtitle,
-      classification: finalClassification,
-      reason:
-        companySource === "sender_alias"
+    reasoning: {
+      classification: {
+        chosen: finalClassification,
+        reason: classificationReason,
+        detConf: detConf.toFixed(2),
+        geminiConf: geminiClassConf.toFixed(2),
+      },
+      company: {
+        chosen: resolvedCompany || null,
+        source: companySource,
+        confidence: companyConfidence,
+        reason: companySource === "sender_alias"
           ? `Known alias (1.0): "${senderAliasCompany}"`
           : companySource === "gemini"
           ? "Gemini primary source"
           : `Deterministic fallback (source: ${companySource})`,
+      },
+      subtitle: {
+        chosen: subtitle || null,
+        source: subtitleSource,
+      },
+      displayFields: {
+        source: (gemini?.displayFields?.length > 0) ? "gemini" : "fallback_extractor",
+        count: displayFields.length,
+      },
     },
   } : undefined;
 
-  // â”€â”€ Step 9: Build parsed output â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // // â”€â”€ Step 9: Build parsed output â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const parsed = {
     // Core
     emailType,
-    opportunityType: gemini?.opportunityType || detClassification.opportunityType || "JOB_APPLICATION",
+    opportunityType: finalOppType,
     isRelevant:     emailType !== "nonRecruitment",
     classification: finalClassification,
     type:           finalType,
@@ -1409,5 +1853,9 @@ module.exports = {
   parseEmailWithLLM,
   extractFormLink,
   resolveCompany,
-  extractFallbackDisplayFields
+  extractFallbackDisplayFields,
+  preprocessBody,
+  cleanDisplayFieldValue,
+  validateDisplayField,
+  mergeAlternativeTexts
 };

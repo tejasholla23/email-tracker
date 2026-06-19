@@ -1251,10 +1251,6 @@ export default function JobTrackerDashboard() {
                 {applications
                   .map(app => {
                     let derivedStatus = (app.status || "new").toLowerCase();
-                    // Fallback for any legacy records
-                    if (["interview", "offer", "rejected"].includes(derivedStatus)) {
-                      derivedStatus = "applied";
-                    }
                     if (derivedStatus === "new") {
                       const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
                       if (ageInMs > 24 * 60 * 60 * 1000) {
