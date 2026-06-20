@@ -39,3 +39,117 @@ test('extractFormLink should remove duplicates', () => {
   assert.strictEqual(result.all.length, 1);
   assert.strictEqual(result.primary, 'https://unstop.com/competition');
 });
+
+// Delete existing parseEmailWithLLM from cache so we can reload it with mocked SDK
+delete require.cache[require.resolve('../utils/parseEmailWithLLM')];
+
+// Setup Mock for @google/genai
+let mockResponseText = "";
+let mockShouldThrow = null;
+
+const mockGenerateContent = async ({ model, contents }) => {
+  if (mockShouldThrow) {
+    throw mockShouldThrow;
+  }
+  return { text: mockResponseText };
+};
+
+require.cache[require.resolve('@google/genai')] = {
+  exports: {
+    GoogleGenAI: class {
+      constructor() {
+        this.models = {
+          generateContent: mockGenerateContent
+        };
+      }
+    }
+  }
+};
+
+// Re-require parseEmailWithLLM to use our mocked GoogleGenAI
+const { parseEmailWithLLM } = require('../utils/parseEmailWithLLM');
+
+test('parseEmailWithLLM sets shouldRetry: false on success', async () => {
+  mockShouldThrow = null;
+  mockResponseText = JSON.stringify({
+    emailType: "job",
+    opportunityType: "JOB_APPLICATION",
+    classification: "New Hiring Opportunity",
+    company: "TestCorp",
+    subtitle: "Software Engineer Intern",
+    type: "internship",
+    link: "https://example.com/apply",
+    displayFields: [
+      { label: "Stipend", value: "INR 25,000" }
+    ]
+  });
+
+  const parsed = await parseEmailWithLLM(
+    "Job opportunity at TestCorp",
+    "recruitment@testcorp.com",
+    "We are hiring software engineers."
+  );
+
+  assert.strictEqual(parsed.parseMeta.shouldRetry, false);
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+  assert.strictEqual(parsed.parseMeta.geminiUsed, true);
+  assert.strictEqual(parsed.company, "TestCorp");
+});
+
+test('parseEmailWithLLM sets shouldRetry: false on malformed JSON content error', async () => {
+  mockShouldThrow = null;
+  mockResponseText = "{ invalid json here... }";
+
+  const parsed = await parseEmailWithLLM(
+    "Job opportunity at TestCorp",
+    "recruitment@testcorp.com",
+    "We are hiring software engineers."
+  );
+
+  assert.strictEqual(parsed.parseMeta.shouldRetry, false);
+  assert.strictEqual(parsed.parseMeta.llmStatus, "content_error");
+  assert.strictEqual(parsed.parseMeta.geminiUsed, false);
+  assert.strictEqual(parsed.company, "Testcorp");
+});
+
+test('parseEmailWithLLM sets shouldRetry: false on schema validation failure content error', async () => {
+  mockShouldThrow = null;
+  mockResponseText = JSON.stringify({
+    emailType: "invalidType",
+    classification: "Invalid Classification"
+  });
+
+  const parsed = await parseEmailWithLLM(
+    "Job opportunity at TestCorp",
+    "recruitment@testcorp.com",
+    "We are hiring software engineers."
+  );
+
+  assert.strictEqual(parsed.parseMeta.shouldRetry, false);
+  assert.strictEqual(parsed.parseMeta.llmStatus, "content_error");
+  assert.strictEqual(parsed.parseMeta.geminiUsed, false);
+});
+
+test('parseEmailWithLLM sets shouldRetry: true on rate limit 429 transport error', async () => {
+  mockShouldThrow = new Error("Resource has been exhausted (e.g. 429 Rate Limit)");
+  
+  const originalSetTimeout = global.setTimeout;
+  global.setTimeout = (fn, delay) => {
+    return originalSetTimeout(fn, 0);
+  };
+
+  try {
+    const parsed = await parseEmailWithLLM(
+      "Job opportunity at TestCorp",
+      "recruitment@testcorp.com",
+      "We are hiring software engineers."
+    );
+
+    assert.strictEqual(parsed.parseMeta.shouldRetry, true);
+    assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
+    assert.strictEqual(parsed.parseMeta.geminiUsed, false);
+  } finally {
+    global.setTimeout = originalSetTimeout;
+  }
+});
+

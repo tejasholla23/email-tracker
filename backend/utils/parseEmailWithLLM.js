@@ -4,6 +4,8 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+
 // ---------------------------------------------------------------------------
 // Text utilities
 // ---------------------------------------------------------------------------
@@ -1410,7 +1412,7 @@ Body: ${truncatedBody}`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 25000);
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: MODEL_NAME,
         contents: prompt,
         config: { abortSignal: controller.signal }
       });
@@ -1423,7 +1425,14 @@ Body: ${truncatedBody}`;
         .replace(/```$/i, "")
         .trim();
 
-      const rawParsed = JSON.parse(jsonText);
+      let rawParsed;
+      try {
+        rawParsed = JSON.parse(jsonText);
+      } catch (parseErr) {
+        console.error(`[GEMINI_STRUCTURED] JSON parse failed using ${MODEL_NAME}:`, parseErr.message);
+        return { status: "content_error" };
+      }
+
       console.log("[GEMINI_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
       console.log("RAW_DISPLAY_FIELDS", rawParsed.displayFields);
       
@@ -1431,12 +1440,12 @@ Body: ${truncatedBody}`;
 
       if (!validated) {
         console.warn("[GEMINI_STRUCTURED] Response failed schema validation, discarding.");
-        return null;
+        return { status: "content_error" };
       }
 
       console.log("VALIDATED_DISPLAY_FIELDS", validated.displayFields);
       console.log(`[GEMINI_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
-      return validated;
+      return { status: "success", data: validated };
 
     } catch (err) {
       retries--;
@@ -1450,7 +1459,7 @@ Body: ${truncatedBody}`;
         console.warn(`[GEMINI_STRUCTURED] Service unavailable (503). Retries left: ${retries}. Waiting ${delayMs}ms...`);
       } else {
         console.error("[GEMINI_STRUCTURED] Failed with unrecoverable error:", errorMsg);
-        return null;
+        return { status: "transport_error" };
       }
 
       if (retries > 0) {
@@ -1458,11 +1467,11 @@ Body: ${truncatedBody}`;
         delayMs += 4000; // Increase backoff penalty
       } else {
         console.error("[GEMINI_STRUCTURED] Final failure after all retries.");
-        return null;
+        return { status: "transport_error" };
       }
     }
   }
-  return null;
+  return { status: "transport_error" };
 }
 
 /**
@@ -1550,12 +1559,15 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   });
 
   // â”€â”€ Step 2: Gemini LLM Extraction â”€â”€â”€â”€â”€â”€â”€â”€
-  const gemini = await callGeminiStructured({
+  const geminiResult = await callGeminiStructured({
     subject: sourceSubject,
     sender,
     body: footerStrippedBody || sourceBody,
     opportunityType: detClassification.opportunityType || "JOB_APPLICATION",
   });
+
+  const gemini = geminiResult.status === "success" ? geminiResult.data : null;
+  const shouldRetry = geminiResult.status === "transport_error";
 
   // â”€â”€ Step 3: Three-tier company resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   //   Tier 1 (1.0)  â€” known alias from sender domain
@@ -1830,7 +1842,10 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       companySource,
       companyConfidence,
       hasLink:              !!linkInfo.primary,
-      geminiUsed:           !!gemini,
+      shouldRetry,
+      llmProvider:          MODEL_NAME,
+      llmStatus:            geminiResult.status,
+      geminiUsed:           geminiResult.status === "success",
       geminiEmailType:      gemini?.emailType      ?? null,
       geminiClassification: gemini?.classification ?? null,
       ...(parseTrace ? { trace: parseTrace } : {}),

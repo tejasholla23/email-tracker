@@ -458,43 +458,52 @@ async function fetchAndProcessEmails() {
                 const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
                 // NEW: Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
                 await new Promise(r => setTimeout(r, 6500));
-                if (parsed && parsed.isRelevant) {
-                  const updatePayload = {};
-                  const ov = exists.manualOverrides || [];
-                  if (!ov.includes("programRoles") && !exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-                  if (!ov.includes("programDuration") && !exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-                  if (!ov.includes("programStipend") && !exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-                  if (!ov.includes("deadlineText") && !exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-                  if (!ov.includes("link") && !exists.link && parsed.link) updatePayload.link = parsed.link;
-                  if (!ov.includes("links") && (!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-                  if (!ov.includes("isFormLink") && !exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-                  if (!ov.includes("deadline") && !exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-                  if (!ov.includes("deadlineISO") && !exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-                  if (!ov.includes("classification") && !exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
-                  if (!ov.includes("confidenceScore") && !exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
-                  if (!ov.includes("jobRole") && !exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
-                  if (!ov.includes("title") && !exists.title && parsed.title) updatePayload.title = parsed.title;
-                  if (!ov.includes("processId") && !exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
-                  if (!ov.includes("processName") && !exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
-                  if (!ov.includes("eventDate") && !exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
-                  if (!ov.includes("eventTime") && !exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
-                  if (!ov.includes("reportingTime") && !exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
-                  if (!ov.includes("venue") && !exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
-                  if (!ov.includes("durationText") && !exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
-                  if (!ov.includes("salaryText") && !exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
-                  if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
-                  if (!ov.includes("emailType") && parsed.emailType && exists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
-                  if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
-                  if (!ov.includes("displayFields") && (!exists.displayFields || exists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
-                  if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+                
+                if (parsed) {
+                  const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
+                  if (!shouldRetry) {
+                    const updatePayload = {};
+                    updatePayload.parserVersion = "v2"; // Safely lock version now
 
-                  updatePayload.parserVersion = "v2";
+                    if (parsed.isRelevant) {
+                      const ov = exists.manualOverrides || [];
+                      if (!ov.includes("programRoles") && !exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+                      if (!ov.includes("programDuration") && !exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+                      if (!ov.includes("programStipend") && !exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+                      if (!ov.includes("deadlineText") && !exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+                      if (!ov.includes("link") && !exists.link && parsed.link) updatePayload.link = parsed.link;
+                      if (!ov.includes("links") && (!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+                      if (!ov.includes("isFormLink") && !exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+                      if (!ov.includes("deadline") && !exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+                      if (!ov.includes("deadlineISO") && !exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+                      if (!ov.includes("classification") && !exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
+                      if (!ov.includes("confidenceScore") && !exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
+                      if (!ov.includes("jobRole") && !exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
+                      if (!ov.includes("title") && !exists.title && parsed.title) updatePayload.title = parsed.title;
+                      if (!ov.includes("processId") && !exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
+                      if (!ov.includes("processName") && !exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
+                      if (!ov.includes("eventDate") && !exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
+                      if (!ov.includes("eventTime") && !exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
+                      if (!ov.includes("reportingTime") && !exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
+                      if (!ov.includes("venue") && !exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
+                      if (!ov.includes("durationText") && !exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
+                      if (!ov.includes("salaryText") && !exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
+                      if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+                      if (!ov.includes("emailType") && parsed.emailType && exists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
+                      if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
+                      if (!ov.includes("displayFields") && (!exists.displayFields || exists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
+                      if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+                    }
 
-                  if (eventAdded) updatePayload.events = exists.events;
+                    if (eventAdded) updatePayload.events = exists.events;
 
-                  if (Object.keys(updatePayload).length > 0) {
                     await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-                    console.log(`[UPDATED] ${id} | Existing application enriched with program data`);
+                    console.log(`[UPDATED] ${id} | Existing application enriched & locked (v2)`);
+                  } else {
+                    console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error, will retry on next sync`);
+                    if (eventAdded) {
+                      await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
+                    }
                   }
                 }
               } else if (eventAdded) {
@@ -515,7 +524,10 @@ async function fetchAndProcessEmails() {
             
             if (!parsed || !parsed.isRelevant || !parsed.company) {
               const reason = !parsed ? "Parsing failed" : (!parsed.isRelevant ? "Marked not relevant" : "Missing company");
-              console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored to prevent re-parsing.`);
+              const shouldRetry = parsed?.parseMeta?.shouldRetry ?? false;
+              const parserVer = shouldRetry ? "v1" : "v2";
+              
+              console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored (parserVersion=${parserVer}) to prevent re-parsing.`);
               
               try {
                 const ignoredApp = new Application({
@@ -525,7 +537,7 @@ async function fetchAndProcessEmails() {
                   source: "Gmail",
                   email: acc.email,
                   date: new Date(parseInt(email.data.internalDate)),
-                  parserVersion: "v2",
+                  parserVersion: parserVer,
                   isDeleted: true
                 });
                 await ignoredApp.save();
@@ -625,6 +637,8 @@ async function fetchAndProcessEmails() {
 
             // Enforce all new emails to start strictly as "new"
             const normalizedStatus = "new";
+            const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
+            const parserVer = shouldRetry ? "v1" : "v2";
 
             const newApp = new Application({
               company: parsed.company,
@@ -672,7 +686,7 @@ async function fetchAndProcessEmails() {
               source: "Gmail",
               email: acc.email,
               date: new Date(parseInt(email.data.internalDate)),
-              parserVersion: "v2",
+              parserVersion: parserVer,
             });
 
             await newApp.save();
