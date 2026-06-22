@@ -17,6 +17,81 @@ function normalizeText(raw = "") {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+// ---------------------------------------------------------------------------
+// Deadline resolution: human-readable deadline text → ISO 8601 string
+// Handles relative ("today", "tomorrow") and absolute ("25th June, 2026") dates.
+// ---------------------------------------------------------------------------
+
+function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
+  if (!deadlineText || typeof deadlineText !== "string") return "";
+
+  const text = deadlineText.trim();
+  if (!text) return "";
+
+  // ── Extract time component (e.g. "10 PM", "5:30 AM") ──────────────────────
+  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  let hours = 0, minutes = 0;
+  if (timeMatch) {
+    hours = parseInt(timeMatch[1], 10);
+    minutes = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    const meridian = timeMatch[3].toLowerCase();
+    if (meridian === "pm" && hours !== 12) hours += 12;
+    if (meridian === "am" && hours === 12) hours = 0;
+  }
+
+  const lower = text.toLowerCase();
+
+  // ── Relative dates: "today", "tomorrow" ────────────────────────────────────
+  if (/\btoday\b/i.test(lower)) {
+    const d = new Date(referenceDate);
+    d.setHours(hours, minutes, 0, 0);
+    return d.toISOString();
+  }
+  if (/\btomorrow\b/i.test(lower)) {
+    const d = new Date(referenceDate);
+    d.setDate(d.getDate() + 1);
+    d.setHours(hours, minutes, 0, 0);
+    return d.toISOString();
+  }
+
+  // ── Absolute dates ─────────────────────────────────────────────────────────
+  // Strip ordinal suffixes (1st, 2nd, 3rd, 4th, etc.) for Date.parse
+  const cleaned = text.replace(/(\d{1,2})(st|nd|rd|th)/gi, "$1");
+
+  // Try parsing the cleaned text directly
+  const parsed = new Date(cleaned);
+  if (!isNaN(parsed.getTime())) {
+    if (timeMatch) {
+      parsed.setHours(hours, minutes, 0, 0);
+    }
+    return parsed.toISOString();
+  }
+
+  // Try extracting just the date portion ("25 June 2026", "June 25, 2026", etc.)
+  const datePattern = /(?:(\d{1,2})\s+(?:of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)[,\s]+(\d{4})|(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})[,\s]+(\d{4}))/i;
+  const dateMatch = cleaned.match(datePattern);
+  if (dateMatch) {
+    let dateStr;
+    if (dateMatch[1]) {
+      // day month year
+      dateStr = `${dateMatch[2]} ${dateMatch[1]}, ${dateMatch[3]}`;
+    } else {
+      // month day year
+      dateStr = `${dateMatch[4]} ${dateMatch[5]}, ${dateMatch[6]}`;
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      if (timeMatch) {
+        d.setHours(hours, minutes, 0, 0);
+      }
+      return d.toISOString();
+    }
+  }
+
+  return "";
+}
+
 /**
  * Priority ordering maps for display fields by opportunity type.
  * Used ONLY when more than 5 valid fields are returned (to select top 5).
@@ -1732,6 +1807,15 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     displayFields = displayFields.slice(0, 5);
   }
 
+  // ── Step 7b: Extract deadlineISO from displayFields ───────────────────────
+  // Look for deadline-like fields and resolve to ISO date for filter/urgency support.
+  const deadlineField = displayFields.find(f =>
+    /deadline|due date|last date|closing date/i.test(f.label)
+  );
+  const resolvedDeadlineISO = deadlineField
+    ? resolveDeadlineISO(deadlineField.value, referenceDate)
+    : "";
+
   // ── Step 8: Dev-mode trace with structured reasoning ───────────────────────
   const isDev = process.env.NODE_ENV !== "production";
   const parseTrace = isDev ? {
@@ -1816,8 +1900,8 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     programStipend:  "",
     programDuration: "",
     deadlineText:    "",
-    deadline:        "",
-    deadlineISO:     "",
+    deadline:        deadlineField?.value || "",
+    deadlineISO:     resolvedDeadlineISO,
     venue:           "",
     durationText:    "",
     salaryText:      "",
@@ -1872,5 +1956,6 @@ module.exports = {
   preprocessBody,
   cleanDisplayFieldValue,
   validateDisplayField,
+  resolveDeadlineISO,
   mergeAlternativeTexts
 };
