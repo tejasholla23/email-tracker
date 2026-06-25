@@ -1036,5 +1036,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  mergeAlternativeTexts
+  mergeAlternativeTexts,
+  fetchAndProcessEmails
 };
