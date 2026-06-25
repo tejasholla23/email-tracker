@@ -16,6 +16,15 @@ const accountSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  lastHistoryId: {
+    type: String,
+    default: null,
+  },
+  syncMode: {
+    type: String,
+    enum: ["full", "incremental"],
+    default: "full",
+  },
 });
 
 module.exports = mongoose.model("Account", accountSchema);

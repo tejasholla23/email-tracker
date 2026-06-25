@@ -299,6 +299,443 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
 // ==========================
 // 📥 FETCH + SAVE EMAILS
 // ==========================
+
+// --- Extracted per-message processing logic ---
+// Returns: { action: 'inserted' | 'skipped' | 'error', usedGemini: boolean }
+async function processMessage(gmail, acc, messageId, subject_unused, existingFast, geminiParsedCount) {
+  const id = messageId;
+  let usedGemini = false;
+
+  try {
+    // ── FAST PATH: already fully parsed (v2) ──
+    if (existingFast) {
+      if (existingFast.parserVersion === "v2") {
+        if (existingFast.isDeleted) {
+          console.log(`[SKIP_FAST] ${id} | Reason: Message already deleted by user`);
+        } else {
+          console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (v2)`);
+        }
+        return { action: 'skipped', usedGemini: false };
+      } else {
+        // Check if backoff retry window has elapsed
+        const nextRetry = existingFast.parseMeta?.nextRetryAt ? new Date(existingFast.parseMeta.nextRetryAt) : null;
+        if (nextRetry && new Date() < nextRetry) {
+          console.log(`[SKIP_FAST] ${id} | Reason: Backoff active (retry deferred until ${nextRetry.toISOString()})`);
+          return { action: 'skipped', usedGemini: false };
+        }
+      }
+    }
+
+    // ── FETCH FULL EMAIL BODY FROM GMAIL ──
+    const getController = new AbortController();
+    const getTimeoutId = setTimeout(() => getController.abort(), 15000);
+    let email;
+    try {
+      email = await gmail.users.messages.get({
+        userId: "me",
+        id: id,
+        format: "full",
+      }, {
+        signal: getController.signal
+      });
+      clearTimeout(getTimeoutId);
+    } catch (error) {
+      clearTimeout(getTimeoutId);
+      if (error.name === "AbortError" || getController.signal.aborted) {
+        const timeoutError = new Error(`Gmail get message ${id} request timed out`);
+        timeoutError.code = "ETIMEOUT";
+        throw timeoutError;
+      }
+      throw error;
+    }
+
+    const headers = email.data.payload.headers;
+    const fromHeader = headers.find((h) => h.name === "From")?.value || "";
+    const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    const snippet = email.data.snippet || "";
+    const rawText = `${subject} ${snippet}`.trim();
+    
+    const fullBodyText = getFullBodyText(email.data.payload);
+    console.log(`[BODY_FETCHED] ${id} length: ${fullBodyText.length}`);
+    
+    console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
+
+    // ── EXISTING RECORD: enrich or skip ──
+    const exists = existingFast ? await Application.findOne({ messageId: id }) : null;
+    if (exists) {
+      // Skip if this messageId was already marked as deleted (and is a normal application)
+      if (exists.isDeleted) {
+        console.log(`[SKIP] ${id} | Reason: Message already deleted by user`);
+        return { action: 'skipped', usedGemini: false };
+      }
+      
+      let eventAdded = false;
+      if (!exists.events || !exists.events.some(e => e.messageId === id)) {
+        if (!exists.events) exists.events = [];
+        exists.events.push({
+          messageId: id,
+          date: exists.date,
+          classification: exists.classification,
+          title: exists.title,
+          subject: subject,
+          status: exists.status,
+          link: exists.link
+        });
+        exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+        console.log(`[EVENT_ADDED] ${id}`);
+        eventAdded = true;
+      }
+
+      const missingDetails = exists.parserVersion !== "v2";
+      if (missingDetails) {
+        console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
+        const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+        // Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
+        await new Promise(r => setTimeout(r, 6500));
+        usedGemini = true;
+        
+        if (parsed) {
+          const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
+          if (!shouldRetry) {
+            const updatePayload = {};
+            updatePayload.parserVersion = "v2"; // Safely lock version now
+
+            if (!parsed.isRelevant || !parsed.company) {
+              if (exists.company === "PENDING_PARSE") {
+                updatePayload.company = "IGNORED";
+                updatePayload.role = "IGNORED";
+                updatePayload.isDeleted = true;
+              }
+            } else {
+              if (exists.company === "PENDING_PARSE") {
+                updatePayload.company = parsed.company;
+                updatePayload.companyKey = normalizeCompany(parsed.company);
+                updatePayload.role = parsed.role || "Unknown Role";
+                updatePayload.status = "new";
+                updatePayload.isDeleted = false;
+              }
+
+              const ov = exists.manualOverrides || [];
+              if (!ov.includes("programRoles") && !exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+              if (!ov.includes("programDuration") && !exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+              if (!ov.includes("programStipend") && !exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+              if (!ov.includes("deadlineText") && !exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+              if (!ov.includes("link") && !exists.link && parsed.link) updatePayload.link = parsed.link;
+              if (!ov.includes("links") && (!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+              if (!ov.includes("isFormLink") && !exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+              if (!ov.includes("deadline") && !exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+              if (!ov.includes("deadlineISO") && !exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+              if (!ov.includes("classification") && !exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
+              if (!ov.includes("confidenceScore") && !exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
+              if (!ov.includes("jobRole") && !exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
+              if (!ov.includes("title") && !exists.title && parsed.title) updatePayload.title = parsed.title;
+              if (!ov.includes("processId") && !exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
+              if (!ov.includes("processName") && !exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
+              if (!ov.includes("eventDate") && !exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
+              if (!ov.includes("eventTime") && !exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
+              if (!ov.includes("reportingTime") && !exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
+              if (!ov.includes("venue") && !exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
+              if (!ov.includes("durationText") && !exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
+              if (!ov.includes("salaryText") && !exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
+              if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+              if (!ov.includes("emailType") && parsed.emailType && exists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
+              if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
+              if (!ov.includes("displayFields") && (!exists.displayFields || exists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
+              if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+            }
+
+            if (eventAdded) updatePayload.events = exists.events;
+
+            await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
+            console.log(`[UPDATED] ${id} | Existing application enriched & locked (v2)`);
+          } else {
+            const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
+            const nextRetry = getNextRetryDate(currentAttempts);
+            const newStatus = currentAttempts >= 5 ? "failed_retryable" : "pending";
+            
+            const updateObj = {
+              status: newStatus,
+              "parseMeta.retryCount": currentAttempts,
+              "parseMeta.lastRetryAt": new Date(),
+              "parseMeta.nextRetryAt": nextRetry,
+              "parseMeta.shouldRetry": true
+            };
+            if (eventAdded) {
+              updateObj.events = exists.events;
+            }
+            await Application.findByIdAndUpdate(exists._id, updateObj, { new: true });
+            console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
+          }
+        } else {
+          // Fatal parsing error (parseEmailWithLLM returned null)
+          const updatePayload = { parserVersion: "v2" };
+          if (eventAdded) updatePayload.events = exists.events;
+          
+          if (exists.company === "PENDING_PARSE") {
+            updatePayload.company = "IGNORED";
+            updatePayload.role = "IGNORED";
+            updatePayload.isDeleted = true;
+          }
+          
+          await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
+          console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to v2`);
+        }
+      } else if (eventAdded) {
+        await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
+      }
+
+      console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
+      return { action: 'skipped', usedGemini };
+    }
+
+    // ── NEW EMAIL: parse and save ──
+    console.log(`[PARSE_START] ${id}`);
+    const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+    // Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
+    await new Promise(r => setTimeout(r, 6500));
+    usedGemini = true;
+    console.log(`[PARSE_RESULT] ${id}`, parsed);
+    
+    if (!parsed || !parsed.isRelevant || !parsed.company) {
+      const reason = !parsed ? "Parsing failed" : (!parsed.isRelevant ? "Marked not relevant" : "Missing company");
+      const shouldRetry = parsed?.parseMeta?.shouldRetry ?? false;
+      
+      if (shouldRetry) {
+        const nextRetry = getNextRetryDate(1);
+        console.log(`[PARSE_DEFERRED] ${id} | Reason: ${reason} (Transient error). Saving as pending (deferred until ${nextRetry.toISOString()}).`);
+        try {
+          const pendingApp = new Application({
+            company: "PENDING_PARSE",
+            role: "PENDING_PARSE",
+            messageId: id,
+            source: "Gmail",
+            email: acc.email,
+            date: new Date(parseInt(email.data.internalDate)),
+            parserVersion: "v1",
+            status: "pending",
+            isDeleted: false,
+            parseMeta: {
+              shouldRetry: true,
+              retryCount: 1,
+              lastRetryAt: new Date(),
+              nextRetryAt: nextRetry,
+              llmProvider: parsed?.parseMeta?.llmProvider || "gemini-3.5-flash",
+              llmStatus: parsed?.parseMeta?.llmStatus || "transport_error"
+            }
+          });
+          await pendingApp.save();
+        } catch (e) {
+          if (e.code !== 11000) {
+            console.error(`[PENDING_SAVE_ERROR] ${id}`, e.message);
+          }
+        }
+        return { action: 'skipped', usedGemini };
+      }
+      
+      const parserVer = "v2";
+      console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored (parserVersion=${parserVer}) to prevent re-parsing.`);
+      
+      try {
+        const ignoredApp = new Application({
+          company: "IGNORED",
+          role: "IGNORED",
+          messageId: id,
+          source: "Gmail",
+          email: acc.email,
+          date: new Date(parseInt(email.data.internalDate)),
+          parserVersion: parserVer,
+          isDeleted: true
+        });
+        await ignoredApp.save();
+      } catch (e) {
+        if (e.code !== 11000) {
+          console.error(`[IGNORE_SAVE_ERROR] ${id}`, e.message);
+        }
+      }
+
+      return { action: 'skipped', usedGemini };
+    }
+
+    const finalRole = parsed.role || "Unknown Role";
+    const companyKey = normalizeCompany(parsed.company);
+    const isValid = isValidCompany(parsed.company);
+    
+    // Fetch Company Info (with caching inside)
+    console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
+    const companyInfo = await getCompanyInfo(parsed.company);
+    if (!companyInfo) {
+      console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
+    }
+
+    let contentExists = null;
+    if (isValid) {
+      contentExists = await Application.findOne({
+        companyKey,
+        isDeleted: { $ne: true }
+      });
+    }
+
+    if (contentExists) {
+      const updatePayload = {};
+      const ov = contentExists.manualOverrides || [];
+      if (!ov.includes("programRoles") && !contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
+      if (!ov.includes("programDuration") && !contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
+      if (!ov.includes("programStipend") && !contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
+      if (!ov.includes("deadlineText") && !contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
+      if (!ov.includes("link") && !contentExists.link && parsed.link) updatePayload.link = parsed.link;
+      if (!ov.includes("links") && (!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
+      if (!ov.includes("isFormLink") && !contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
+      if (!ov.includes("deadline") && !contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
+      if (!ov.includes("deadlineISO") && !contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
+      if (!ov.includes("classification") && !contentExists.classification && parsed.classification) updatePayload.classification = parsed.classification;
+      if (!ov.includes("confidenceScore") && !contentExists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
+      if (!ov.includes("jobRole") && !contentExists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
+      if (!ov.includes("title") && !contentExists.title && parsed.title) updatePayload.title = parsed.title;
+      if (!ov.includes("processId") && !contentExists.processId && parsed.processId) updatePayload.processId = parsed.processId;
+      if (!ov.includes("processName") && !contentExists.processName && parsed.processName) updatePayload.processName = parsed.processName;
+      
+      if (!ov.includes("eventDate") && parsed.eventDate) {
+        if (!contentExists.eventDate || new Date(parsed.eventDate) > new Date(contentExists.eventDate)) {
+          updatePayload.eventDate = parsed.eventDate;
+        }
+      }
+      if (!ov.includes("type") && parsed.type && parsed.type !== "unknown") {
+        if (!contentExists.type || contentExists.type === "unknown") {
+          updatePayload.type = parsed.type;
+        }
+      }
+      
+      if (!ov.includes("eventTime") && !contentExists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
+      if (!ov.includes("reportingTime") && !contentExists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
+      if (!ov.includes("venue") && !contentExists.venue && parsed.venue) updatePayload.venue = parsed.venue;
+      if (!ov.includes("durationText") && !contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
+      if (!ov.includes("salaryText") && !contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
+      if (!ov.includes("parseMeta") && !contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
+      if (!ov.includes("emailType") && parsed.emailType && contentExists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
+      if (!ov.includes("subtitle") && !contentExists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
+      if (!ov.includes("displayFields") && (!contentExists.displayFields || contentExists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
+      if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+
+      if (!ov.includes("status")) {
+        // Status is now strictly time/action-based. We do not advance status based on classification anymore.
+      }
+
+      const eventAdded = appendApplicationEvent(contentExists, parsed, {
+        messageId: id,
+        date: new Date(parseInt(email.data.internalDate)),
+        subject: subject
+      });
+      
+      if (eventAdded) {
+        updatePayload.events = contentExists.events;
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
+        console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data and/or event history`);
+      }
+
+      console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
+      return { action: 'skipped', usedGemini };
+    }
+
+    // Enforce all new emails to start strictly as "new"
+    const normalizedStatus = "new";
+    const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
+    const parserVer = shouldRetry ? "v1" : "v2";
+
+    const newApp = new Application({
+      company: parsed.company,
+      companyKey,
+      emailType: parsed.emailType || "job",
+      subtitle: parsed.subtitle || "",
+      displayFields: parsed.displayFields || [],
+      fieldsToDisplay: parsed.fieldsToDisplay || [],
+      role: finalRole,
+      type: parsed.type || "",
+      status: normalizedStatus,
+      link: parsed.link || "",
+      links: parsed.links || [],
+      isFormLink: parsed.isFormLink || false,
+      deadline: parsed.deadline || "",
+      deadlineISO: parsed.deadlineISO || "",
+      deadlineText: parsed.deadlineText || "",
+      programRoles: parsed.programRoles || "",
+      programDuration: parsed.programDuration || "",
+      programStipend: parsed.programStipend || "",
+      classification: parsed.classification || "",
+      confidenceScore: parsed.confidenceScore || 0,
+      jobRole: parsed.jobRole || "",
+      title: parsed.title || "",
+      processId: parsed.processId || "",
+      processName: parsed.processName || "",
+      eventDate: parsed.eventDate || null,
+      eventTime: parsed.eventTime || "",
+      reportingTime: parsed.reportingTime || "",
+      venue: parsed.venue || "",
+      durationText: parsed.durationText || "",
+      salaryText: parsed.salaryText || "",
+      parseMeta: parsed.parseMeta || {},
+      events: [{
+        messageId: id,
+        date: new Date(parseInt(email.data.internalDate)),
+        classification: parsed.classification || "",
+        title: parsed.title || "",
+        subject: subject || "",
+        status: normalizedStatus,
+        link: parsed.link || ""
+      }],
+      rawText,
+      messageId: id,
+      source: "Gmail",
+      email: acc.email,
+      date: new Date(parseInt(email.data.internalDate)),
+      parserVersion: parserVer,
+    });
+
+    await newApp.save();
+    console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
+    return { action: 'inserted', usedGemini };
+  } catch (error) {
+    if (error.code === 11000) {
+      console.log(`[SKIP] ${id} | Reason: Duplicate key error (E11000)`);
+    } else {
+      console.log(`[ERROR] ${id}`, error.message);
+    }
+    return { action: 'error', usedGemini: false };
+  }
+}
+
+// --- Batch DB lookup helper ---
+// Returns a Map of messageId -> { parserVersion, isDeleted, parseMeta } for all known IDs
+async function batchLookupMessageIds(messageIds) {
+  const results = await Application.find(
+    { $or: [
+      { messageId: { $in: messageIds } },
+      { "events.messageId": { $in: messageIds } }
+    ]},
+    { messageId: 1, parserVersion: 1, isDeleted: 1, "parseMeta.nextRetryAt": 1, "events.messageId": 1 }
+  );
+  
+  const lookup = new Map();
+  for (const doc of results) {
+    // Map the primary messageId
+    if (doc.messageId) {
+      lookup.set(doc.messageId, doc);
+    }
+    // Also map any event messageIds that match
+    if (doc.events) {
+      for (const ev of doc.events) {
+        if (messageIds.includes(ev.messageId) && !lookup.has(ev.messageId)) {
+          lookup.set(ev.messageId, doc);
+        }
+      }
+    }
+  }
+  return lookup;
+}
+
+// --- Main sync orchestrator ---
 async function fetchAndProcessEmails() {
   if (isProcessing) {
     console.log("Cron already running, skipping...");
@@ -354,459 +791,169 @@ async function fetchAndProcessEmails() {
           version: "v1",
           auth: localOauth2Client,
         });
-        const listController = new AbortController();
-        const listTimeoutId = setTimeout(() => listController.abort(), 15000);
-        let response;
-        try {
-          response = await gmail.users.messages.list({
-            userId: "me",
-            maxResults: 250,
-            q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:90d",
-          }, {
-            signal: listController.signal
-          });
-          clearTimeout(listTimeoutId);
-        } catch (error) {
-          clearTimeout(listTimeoutId);
-          if (error.name === "AbortError" || listController.signal.aborted) {
-            const timeoutError = new Error("Gmail list messages request timed out");
-            timeoutError.code = "ETIMEOUT";
-            throw timeoutError;
+
+        // ══════════════════════════════════════════════
+        // DECIDE: Incremental sync or Full sync?
+        // ══════════════════════════════════════════════
+        let messageIdsToProcess = [];
+        let newHistoryId = null;
+        let syncPath = "full"; // default
+
+        if (acc.lastHistoryId) {
+          // ── PATH 1: INCREMENTAL SYNC via History API ──
+          try {
+            console.log(`[INCREMENTAL] Starting incremental sync from historyId: ${acc.lastHistoryId}`);
+            
+            let allAddedMessageIds = [];
+            let pageToken = null;
+            let latestHistoryId = null;
+
+            do {
+              const historyParams = {
+                userId: "me",
+                startHistoryId: acc.lastHistoryId,
+                historyTypes: ["messageAdded"],
+              };
+              if (pageToken) historyParams.pageToken = pageToken;
+
+              const historyResponse = await gmail.users.history.list(historyParams);
+              
+              latestHistoryId = historyResponse.data.historyId;
+
+              if (historyResponse.data.history) {
+                for (const record of historyResponse.data.history) {
+                  if (record.messagesAdded) {
+                    for (const added of record.messagesAdded) {
+                      allAddedMessageIds.push(added.message.id);
+                    }
+                  }
+                }
+              }
+
+              pageToken = historyResponse.data.nextPageToken || null;
+            } while (pageToken);
+
+            newHistoryId = latestHistoryId;
+
+            if (allAddedMessageIds.length === 0) {
+              console.log(`[INCREMENTAL] No new messages since last sync.`);
+              console.log(`[INCREMENTAL_SUMMARY] History events: 0 | New messages: 0 | historyId: ${acc.lastHistoryId} → ${newHistoryId}`);
+              // Update historyId even when nothing changed
+              await Account.findOneAndUpdate(
+                { email: acc.email },
+                { lastHistoryId: newHistoryId, syncMode: "incremental", syncStatus: "success", syncError: null, lastSyncTime: new Date() }
+              );
+              continue; // Skip to next account
+            }
+
+            // Deduplicate (History API can return the same message in multiple history records)
+            messageIdsToProcess = [...new Set(allAddedMessageIds)];
+            syncPath = "incremental";
+            console.log(`[INCREMENTAL] Found ${messageIdsToProcess.length} new message(s) to process (${allAddedMessageIds.length} history events, ${messageIdsToProcess.length} unique).`);
+
+          } catch (historyError) {
+            // 404 means historyId has expired — fall back to full sync
+            if (historyError.code === 404 || historyError.response?.status === 404) {
+              console.log(`[INCREMENTAL_EXPIRED] historyId ${acc.lastHistoryId} has expired. Falling back to full sync.`);
+              syncPath = "full";
+            } else {
+              throw historyError; // Re-throw unexpected errors
+            }
           }
-          throw error;
         }
 
-        const messages = response.data.messages || [];
-        fetchedCount += messages.length;
-        console.log(`\n--- STARTING SYNC FOR ${acc.email} ---`);
-        
+        if (syncPath === "full") {
+          // ── PATH 2: FULL SYNC (bootstrap or recovery) ──
+          console.log(`[FULL_SYNC] Starting full sync for ${acc.email}`);
+
+          const listController = new AbortController();
+          const listTimeoutId = setTimeout(() => listController.abort(), 15000);
+          let response;
+          try {
+            response = await gmail.users.messages.list({
+              userId: "me",
+              maxResults: 250,
+              q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:90d",
+            }, {
+              signal: listController.signal
+            });
+            clearTimeout(listTimeoutId);
+          } catch (error) {
+            clearTimeout(listTimeoutId);
+            if (error.name === "AbortError" || listController.signal.aborted) {
+              const timeoutError = new Error("Gmail list messages request timed out");
+              timeoutError.code = "ETIMEOUT";
+              throw timeoutError;
+            }
+            throw error;
+          }
+
+          const messages = response.data.messages || [];
+          messageIdsToProcess = messages.map(m => m.id);
+
+          // Capture historyId from the profile for bootstrapping
+          // messages.list doesn't return historyId directly, so we get it from the user's profile
+          try {
+            const profileResponse = await gmail.users.getProfile({ userId: "me" });
+            newHistoryId = profileResponse.data.historyId;
+            console.log(`[FULL_SYNC] Captured historyId from profile: ${newHistoryId}`);
+          } catch (profileErr) {
+            console.error(`[FULL_SYNC] Failed to get profile historyId: ${profileErr.message}`);
+            // Non-fatal: we proceed without historyId and will do a full sync again next time
+          }
+
+          console.log(`[FULL_SYNC] Messages listed: ${messageIdsToProcess.length} | historyId: ${newHistoryId || 'unavailable'}`);
+        }
+
+        // ══════════════════════════════════════════════
+        // COMMON: Process the collected message IDs
+        // ══════════════════════════════════════════════
+        fetchedCount += messageIdsToProcess.length;
+        console.log(`\n--- STARTING SYNC FOR ${acc.email} (${syncPath}) ---`);
+
+        // BATCH DB LOOKUP: Replace N individual findOne() calls with one $in query
+        const knownDocs = await batchLookupMessageIds(messageIdsToProcess);
+        const newCount = messageIdsToProcess.length - knownDocs.size;
+        console.log(`[BATCH_LOOKUP] Already known: ${knownDocs.size} | New: ${newCount} | Total: ${messageIdsToProcess.length}`);
+
         let geminiParsedCount = 0;
 
-        for (let msg of messages) {
+        for (const msgId of messageIdsToProcess) {
           // Abort the loop immediately if a Clear All was requested while sync was running
           if (clearRequested) {
             console.log("[SYNC_ABORTED] Clear All requested — aborting sync loop");
             break;
           }
-          const id = msg.id;
-          try {
-            // FAST PATH: Skip fetching the heavy email body from Google if it's already processed in the DB
-            const existingFast = await Application.findOne({ 
-              $or: [{ messageId: id }, { "events.messageId": id }] 
-            }, { parserVersion: 1, isDeleted: 1, "parseMeta.nextRetryAt": 1 });
-            
-            if (existingFast) {
-              if (existingFast.parserVersion === "v2") {
-                if (existingFast.isDeleted) {
-                  console.log(`[SKIP_FAST] ${id} | Reason: Message already deleted by user`);
-                } else {
-                  console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (v2)`);
-                }
-                skippedCount++;
-                continue;
-              } else {
-                // Check if backoff retry window has elapsed
-                const nextRetry = existingFast.parseMeta?.nextRetryAt ? new Date(existingFast.parseMeta.nextRetryAt) : null;
-                if (nextRetry && new Date() < nextRetry) {
-                  console.log(`[SKIP_FAST] ${id} | Reason: Backoff active (retry deferred until ${nextRetry.toISOString()})`);
-                  skippedCount++;
-                  continue;
-                }
-              }
-            }
 
-            const getController = new AbortController();
-            const getTimeoutId = setTimeout(() => getController.abort(), 15000);
-            let email;
-            try {
-              email = await gmail.users.messages.get({
-                userId: "me",
-                id: id,
-                format: "full",
-              }, {
-                signal: getController.signal
-              });
-              clearTimeout(getTimeoutId);
-            } catch (error) {
-              clearTimeout(getTimeoutId);
-              if (error.name === "AbortError" || getController.signal.aborted) {
-                const timeoutError = new Error(`Gmail get message ${id} request timed out`);
-                timeoutError.code = "ETIMEOUT";
-                throw timeoutError;
-              }
-              throw error;
-            }
+          const existingFast = knownDocs.get(msgId) || null;
+          const result = await processMessage(gmail, acc, msgId, null, existingFast, geminiParsedCount);
 
-            const headers = email.data.payload.headers;
-            const fromHeader = headers.find((h) => h.name === "From")?.value || "";
-            const subject = headers.find((h) => h.name === "Subject")?.value || "";
-            const snippet = email.data.snippet || "";
-            const rawText = `${subject} ${snippet}`.trim();
-            
-            const fullBodyText = getFullBodyText(email.data.payload);
-            console.log(`[BODY_FETCHED] ${id} length: ${fullBodyText.length}`);
-            
-            console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
+          if (result.action === 'inserted') insertedCount++;
+          else skippedCount++;
 
-            const exists = existingFast ? await Application.findOne({ messageId: id }) : null;
-            if (exists) {
-              // Skip if this messageId was already marked as deleted (and is a normal application)
-              // Note: PENDING_PARSE is not deleted (isDeleted is false). But IGNORED is.
-              if (exists.isDeleted) {
-                console.log(`[SKIP] ${id} | Reason: Message already deleted by user`);
-                skippedCount++;
-                continue;
-              }
-              
-              let eventAdded = false;
-              if (!exists.events || !exists.events.some(e => e.messageId === id)) {
-                if (!exists.events) exists.events = [];
-                exists.events.push({
-                  messageId: id,
-                  date: exists.date,
-                  classification: exists.classification,
-                  title: exists.title,
-                  subject: subject,
-                  status: exists.status,
-                  link: exists.link
-                });
-                exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
-                console.log(`[EVENT_ADDED] ${id}`);
-                eventAdded = true;
-              }
+          if (result.usedGemini) geminiParsedCount++;
 
-              const missingDetails = exists.parserVersion !== "v2";
-              if (missingDetails) {
-                console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
-                const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-                // NEW: Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
-                await new Promise(r => setTimeout(r, 6500));
-                
-                if (parsed) {
-                  const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
-                  if (!shouldRetry) {
-                    const updatePayload = {};
-                    updatePayload.parserVersion = "v2"; // Safely lock version now
-
-                    if (!parsed.isRelevant || !parsed.company) {
-                      if (exists.company === "PENDING_PARSE") {
-                        updatePayload.company = "IGNORED";
-                        updatePayload.role = "IGNORED";
-                        updatePayload.isDeleted = true;
-                      }
-                    } else {
-                      if (exists.company === "PENDING_PARSE") {
-                        updatePayload.company = parsed.company;
-                        updatePayload.companyKey = normalizeCompany(parsed.company);
-                        updatePayload.role = parsed.role || "Unknown Role";
-                        updatePayload.status = "new";
-                        updatePayload.isDeleted = false;
-                      }
-
-                      const ov = exists.manualOverrides || [];
-                      if (!ov.includes("programRoles") && !exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-                      if (!ov.includes("programDuration") && !exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-                      if (!ov.includes("programStipend") && !exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-                      if (!ov.includes("deadlineText") && !exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-                      if (!ov.includes("link") && !exists.link && parsed.link) updatePayload.link = parsed.link;
-                      if (!ov.includes("links") && (!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-                      if (!ov.includes("isFormLink") && !exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-                      if (!ov.includes("deadline") && !exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-                      if (!ov.includes("deadlineISO") && !exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-                      if (!ov.includes("classification") && !exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
-                      if (!ov.includes("confidenceScore") && !exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
-                      if (!ov.includes("jobRole") && !exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
-                      if (!ov.includes("title") && !exists.title && parsed.title) updatePayload.title = parsed.title;
-                      if (!ov.includes("processId") && !exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
-                      if (!ov.includes("processName") && !exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
-                      if (!ov.includes("eventDate") && !exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
-                      if (!ov.includes("eventTime") && !exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
-                      if (!ov.includes("reportingTime") && !exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
-                      if (!ov.includes("venue") && !exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
-                      if (!ov.includes("durationText") && !exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
-                      if (!ov.includes("salaryText") && !exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
-                      if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
-                      if (!ov.includes("emailType") && parsed.emailType && exists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
-                      if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
-                      if (!ov.includes("displayFields") && (!exists.displayFields || exists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
-                      if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
-                    }
-
-                    if (eventAdded) updatePayload.events = exists.events;
-
-                    await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-                    console.log(`[UPDATED] ${id} | Existing application enriched & locked (v2)`);
-                  } else {
-                    const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
-                    const nextRetry = getNextRetryDate(currentAttempts);
-                    const newStatus = currentAttempts >= 5 ? "failed_retryable" : "pending";
-                    
-                    const updateObj = {
-                      status: newStatus,
-                      "parseMeta.retryCount": currentAttempts,
-                      "parseMeta.lastRetryAt": new Date(),
-                      "parseMeta.nextRetryAt": nextRetry,
-                      "parseMeta.shouldRetry": true
-                    };
-                    if (eventAdded) {
-                      updateObj.events = exists.events;
-                    }
-                    await Application.findByIdAndUpdate(exists._id, updateObj, { new: true });
-                    console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
-                  }
-                } else {
-                  // Fatal parsing error (parseEmailWithLLM returned null)
-                  const updatePayload = { parserVersion: "v2" };
-                  if (eventAdded) updatePayload.events = exists.events;
-                  
-                  if (exists.company === "PENDING_PARSE") {
-                    updatePayload.company = "IGNORED";
-                    updatePayload.role = "IGNORED";
-                    updatePayload.isDeleted = true;
-                  }
-                  
-                  await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-                  console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to v2`);
-                }
-              } else if (eventAdded) {
-                await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
-              }
-
-              console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
-              skippedCount++;
-              continue;
-            }
-
-            console.log(`[PARSE_START] ${id}`);
-            const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-            // NEW: Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
-            await new Promise(r => setTimeout(r, 6500));
-            geminiParsedCount++;
-            console.log(`[PARSE_RESULT] ${id}`, parsed);
-            
-            if (!parsed || !parsed.isRelevant || !parsed.company) {
-              const reason = !parsed ? "Parsing failed" : (!parsed.isRelevant ? "Marked not relevant" : "Missing company");
-              const shouldRetry = parsed?.parseMeta?.shouldRetry ?? false;
-              
-              if (shouldRetry) {
-                const nextRetry = getNextRetryDate(1);
-                console.log(`[PARSE_DEFERRED] ${id} | Reason: ${reason} (Transient error). Saving as pending (deferred until ${nextRetry.toISOString()}).`);
-                try {
-                  const pendingApp = new Application({
-                    company: "PENDING_PARSE",
-                    role: "PENDING_PARSE",
-                    messageId: id,
-                    source: "Gmail",
-                    email: acc.email,
-                    date: new Date(parseInt(email.data.internalDate)),
-                    parserVersion: "v1",
-                    status: "pending",
-                    isDeleted: false,
-                    parseMeta: {
-                      shouldRetry: true,
-                      retryCount: 1,
-                      lastRetryAt: new Date(),
-                      nextRetryAt: nextRetry,
-                      llmProvider: parsed?.parseMeta?.llmProvider || "gemini-3.5-flash",
-                      llmStatus: parsed?.parseMeta?.llmStatus || "transport_error"
-                    }
-                  });
-                  await pendingApp.save();
-                } catch (e) {
-                  if (e.code !== 11000) {
-                    console.error(`[PENDING_SAVE_ERROR] ${id}`, e.message);
-                  }
-                }
-                skippedCount++;
-                continue;
-              }
-              
-              const parserVer = "v2";
-              console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored (parserVersion=${parserVer}) to prevent re-parsing.`);
-              
-              try {
-                const ignoredApp = new Application({
-                  company: "IGNORED",
-                  role: "IGNORED",
-                  messageId: id,
-                  source: "Gmail",
-                  email: acc.email,
-                  date: new Date(parseInt(email.data.internalDate)),
-                  parserVersion: parserVer,
-                  isDeleted: true
-                });
-                await ignoredApp.save();
-              } catch (e) {
-                if (e.code !== 11000) {
-                  console.error(`[IGNORE_SAVE_ERROR] ${id}`, e.message);
-                }
-              }
-
-              skippedCount++;
-              continue;
-            }
-
-            const finalRole = parsed.role || "Unknown Role";
-            const companyKey = normalizeCompany(parsed.company);
-            const isValid = isValidCompany(parsed.company);
-            
-            // Fetch Company Info (with caching inside)
-            console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
-            const companyInfo = await getCompanyInfo(parsed.company);
-            if (!companyInfo) {
-              console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
-            }
-
-            let contentExists = null;
-            if (isValid) {
-              contentExists = await Application.findOne({
-                companyKey,
-                isDeleted: { $ne: true }
-              });
-            }
-
-            if (contentExists) {
-              const updatePayload = {};
-              const ov = contentExists.manualOverrides || [];
-              if (!ov.includes("programRoles") && !contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-              if (!ov.includes("programDuration") && !contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-              if (!ov.includes("programStipend") && !contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-              if (!ov.includes("deadlineText") && !contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-              if (!ov.includes("link") && !contentExists.link && parsed.link) updatePayload.link = parsed.link;
-              if (!ov.includes("links") && (!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-              if (!ov.includes("isFormLink") && !contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-              if (!ov.includes("deadline") && !contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-              if (!ov.includes("deadlineISO") && !contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-              if (!ov.includes("classification") && !contentExists.classification && parsed.classification) updatePayload.classification = parsed.classification;
-              if (!ov.includes("confidenceScore") && !contentExists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
-              if (!ov.includes("jobRole") && !contentExists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
-              if (!ov.includes("title") && !contentExists.title && parsed.title) updatePayload.title = parsed.title;
-              if (!ov.includes("processId") && !contentExists.processId && parsed.processId) updatePayload.processId = parsed.processId;
-              if (!ov.includes("processName") && !contentExists.processName && parsed.processName) updatePayload.processName = parsed.processName;
-              
-              if (!ov.includes("eventDate") && parsed.eventDate) {
-                if (!contentExists.eventDate || new Date(parsed.eventDate) > new Date(contentExists.eventDate)) {
-                  updatePayload.eventDate = parsed.eventDate;
-                }
-              }
-              if (!ov.includes("type") && parsed.type && parsed.type !== "unknown") {
-                if (!contentExists.type || contentExists.type === "unknown") {
-                  updatePayload.type = parsed.type;
-                }
-              }
-              
-              if (!ov.includes("eventTime") && !contentExists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
-              if (!ov.includes("reportingTime") && !contentExists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
-              if (!ov.includes("venue") && !contentExists.venue && parsed.venue) updatePayload.venue = parsed.venue;
-              if (!ov.includes("durationText") && !contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
-              if (!ov.includes("salaryText") && !contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
-              if (!ov.includes("parseMeta") && !contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
-              if (!ov.includes("emailType") && parsed.emailType && contentExists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
-              if (!ov.includes("subtitle") && !contentExists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
-              if (!ov.includes("displayFields") && (!contentExists.displayFields || contentExists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
-              if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
-
-              if (!ov.includes("status")) {
-                // Status is now strictly time/action-based. We do not advance status based on classification anymore.
-              }
-
-              const eventAdded = appendApplicationEvent(contentExists, parsed, {
-                messageId: id,
-                date: new Date(parseInt(email.data.internalDate)),
-                subject: subject
-              });
-              
-              if (eventAdded) {
-                updatePayload.events = contentExists.events;
-              }
-
-              if (Object.keys(updatePayload).length > 0) {
-                await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
-                console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data and/or event history`);
-              }
-
-              console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
-              skippedCount++;
-              continue;
-            }
-
-            // Enforce all new emails to start strictly as "new"
-            const normalizedStatus = "new";
-            const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
-            const parserVer = shouldRetry ? "v1" : "v2";
-
-            const newApp = new Application({
-              company: parsed.company,
-              companyKey,
-              emailType: parsed.emailType || "job",
-              subtitle: parsed.subtitle || "",
-              displayFields: parsed.displayFields || [],
-              fieldsToDisplay: parsed.fieldsToDisplay || [],
-              role: finalRole,
-              type: parsed.type || "",
-              status: normalizedStatus,
-              link: parsed.link || "",
-              links: parsed.links || [],
-              isFormLink: parsed.isFormLink || false,
-              deadline: parsed.deadline || "",
-              deadlineISO: parsed.deadlineISO || "",
-              deadlineText: parsed.deadlineText || "",
-              programRoles: parsed.programRoles || "",
-              programDuration: parsed.programDuration || "",
-              programStipend: parsed.programStipend || "",
-              classification: parsed.classification || "",
-              confidenceScore: parsed.confidenceScore || 0,
-              jobRole: parsed.jobRole || "",
-              title: parsed.title || "",
-              processId: parsed.processId || "",
-              processName: parsed.processName || "",
-              eventDate: parsed.eventDate || null,
-              eventTime: parsed.eventTime || "",
-              reportingTime: parsed.reportingTime || "",
-              venue: parsed.venue || "",
-              durationText: parsed.durationText || "",
-              salaryText: parsed.salaryText || "",
-              parseMeta: parsed.parseMeta || {},
-              events: [{
-                messageId: id,
-                date: new Date(parseInt(email.data.internalDate)),
-                classification: parsed.classification || "",
-                title: parsed.title || "",
-                subject: subject || "",
-                status: normalizedStatus,
-                link: parsed.link || ""
-              }],
-              rawText,
-              messageId: id,
-              source: "Gmail",
-              email: acc.email,
-              date: new Date(parseInt(email.data.internalDate)),
-              parserVersion: parserVer,
-            });
-
-            await newApp.save();
-            insertedCount++;
-            console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
-          } catch (error) {
-            if (error.code === 11000) {
-              console.log(`[SKIP] ${id} | Reason: Duplicate key error (E11000)`);
-            } else {
-              console.log(`[ERROR] ${id}`, error.message);
-            }
-            skippedCount++;
-          }
-          
           if (geminiParsedCount >= 6) {
             console.log("[SYNC_PROGRESSIVE] Reached limit of 6 Gemini parses. Stopping sync to preserve quota.");
             break;
           }
         }
 
-        // Successfully updated this account
-        await Account.findOneAndUpdate(
-          { email: acc.email },
-          { syncStatus: "success", syncError: null, lastSyncTime: new Date() }
-        );
+        // ══════════════════════════════════════════════
+        // PERSIST: Update account state after sync
+        // ══════════════════════════════════════════════
+        const accountUpdate = {
+          syncStatus: "success",
+          syncError: null,
+          lastSyncTime: new Date(),
+        };
+        if (newHistoryId) {
+          accountUpdate.lastHistoryId = newHistoryId;
+          accountUpdate.syncMode = "incremental";
+          console.log(`[SYNC_CHECKPOINT] historyId saved: ${newHistoryId}`);
+        }
+        await Account.findOneAndUpdate({ email: acc.email }, accountUpdate);
+
       } catch (err) {
         console.error(`Fetch error for account ${acc.email}:`, err.message);
         let errorMsg = err.message || "Unknown sync error";
@@ -825,7 +972,7 @@ async function fetchAndProcessEmails() {
         );
       }
     }
-    console.log(`\nSUMMARY: Fetched ${fetchedCount} | Inserted ${insertedCount} | Skipped ${skippedCount}`);
+    console.log(`\n[SYNC_COMPLETE] Fetched: ${fetchedCount} | Inserted: ${insertedCount} | Skipped: ${skippedCount}`);
   } catch (err) {
     console.error("Fetch error:", err.message);
     // Removed 'throw err' to prevent unhandled rejections in background execution
@@ -839,7 +986,8 @@ async function fetchAndProcessEmails() {
 // ==========================
 app.get("/sync", (req, res) => {
   if (isProcessing) {
-    return res.status(200).send("Sync already in progress");
+    console.log(`[MANUAL_SYNC] Blocked — sync already in progress`);
+    return res.status(200).json({ success: true, message: "Sync already in progress. Please wait for it to finish." });
   }
 
   fetchAndProcessEmails()
