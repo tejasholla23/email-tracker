@@ -1,4 +1,5 @@
 require("dotenv").config();
+const config = require("./config/appConfig");
 const cron = require("node-cron");
 
 const express = require("express");
@@ -15,7 +16,7 @@ const { getCompanyInfo } = require("./utils/companyInfoService");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
 
-const ALLOWED_SENDERS = ["placement@msrit.edu", "dean.tap@msrit.edu"];
+const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 
 function getNextRetryDate(retryCount) {
   const now = new Date();
@@ -168,7 +169,7 @@ app.get("/clear-applications", async (req, res) => {
 // Sets a flag that aborts any in-progress sync, waits briefly, then wipes the DB.
 app.delete("/clear-all-applications", async (req, res) => {
   const email = req.headers["x-user-email"];
-  if (email !== "1ms23ci126@msrit.edu") {
+  if (!email || !config.ALLOWED_EMAILS.includes(email.toLowerCase())) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -242,10 +243,9 @@ app.get("/auth/google/callback", async (req, res) => {
       { upsert: true }
     );
 
-    const allowedEmail = "1ms23ci126@msrit.edu";
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
-    if (email !== allowedEmail) {
+    if (!email || !config.ALLOWED_EMAILS.includes(email.toLowerCase())) {
       console.warn(`[AUTH] Denied login attempt from: ${email}`);
       return res.redirect(`${frontendUrl}?error=unauthorized`);
     }
@@ -401,8 +401,8 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       if (missingDetails) {
         console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
         const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-        // Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
-        await new Promise(r => setTimeout(r, 6500));
+        // Sleep to safely respect Gemini RPM free tier limit
+        await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
         usedGemini = true;
         
         if (parsed) {
@@ -503,8 +503,8 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     // ── NEW EMAIL: parse and save ──
     console.log(`[PARSE_START] ${id}`);
     const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-    // Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
-    await new Promise(r => setTimeout(r, 6500));
+    // Sleep to safely respect Gemini RPM free tier limit
+    await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
     usedGemini = true;
     console.log(`[PARSE_RESULT] ${id}`, parsed);
     
@@ -768,7 +768,7 @@ async function fetchAndProcessEmails() {
     }
 
     for (let acc of accounts) {
-      if (acc.email !== "1ms23ci126@msrit.edu") continue;
+      if (!acc.email || !config.ALLOWED_EMAILS.includes(acc.email.toLowerCase())) continue;
 
       console.log(`Processing account: ${acc.email}`);
       try {
@@ -946,8 +946,8 @@ async function fetchAndProcessEmails() {
 
           if (result.usedGemini) geminiParsedCount++;
 
-          if (geminiParsedCount >= 6) {
-            console.log("[SYNC_PROGRESSIVE] Reached limit of 6 Gemini parses. Stopping sync to preserve quota.");
+          if (geminiParsedCount >= config.MAX_EMAILS_PER_SYNC) {
+            console.log(`[SYNC_PROGRESSIVE] Reached limit of ${config.MAX_EMAILS_PER_SYNC} Gemini parses. Stopping sync to preserve quota.`);
             break;
           }
         }

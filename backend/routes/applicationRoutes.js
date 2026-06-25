@@ -5,11 +5,11 @@ const Account = require("../models/Account");
 
 const router = express.Router();
 
-const ALLOWED_EMAIL = "1ms23ci126@msrit.edu";
+const config = require("../config/appConfig");
 
 const authCheck = (req, res, next) => {
   const email = req.headers["x-user-email"];
-  if (email !== ALLOWED_EMAIL) {
+  if (!email || !config.ALLOWED_EMAILS.includes(email.toLowerCase())) {
     return res.status(401).json({ message: "Unauthorized. Please log in as the administrator." });
   }
   next();
