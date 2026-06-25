@@ -452,7 +452,9 @@ function isGenericCompanyName(raw = "") {
 }
 
 const KNOWN_COMPANY_ALIASES = {
-  // â”€â”€ Established aliases â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Established aliases ────────────────────────────────────────────────
+  havells: "Havells",
+  "havells india": "Havells",
   tcs: "TCS",
   "tata consultancy services": "TCS",
   dentsu: "Dentsu",
@@ -536,6 +538,7 @@ function extractCompanyFromText(text = "") {
   if (aliasMatch) return aliasMatch;
 
   const patterns = [
+    /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\s+(?:Pvt\b\.?\s*Ltd\b\.?|Private\s+Limited|Ltd\b\.?|Limited|Inc\b\.?|Incorporated|Corp\b\.?|Corporation|LLC|India\b\s+(?:Pvt\b\.?\s*Ltd\b\.?|Ltd\b\.?|Limited))\b/,
     /(?:Company|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z][A-Za-z0-9&.\s]{1,80}?)(?:\s*(?:\.|,|;|$))/i,
     /(?:from|by|at)\s+([A-Z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:for|about|regarding|hiring|is|offers?|invites?|interview|role|drive|program|placement|campus|job|internship))/i,
     /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is|has|offers|invites|announces|conducts|hiring|drives|for|regarding|registered))/,
@@ -768,7 +771,7 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       status: "offer",
       type: "unknown",
       opportunityType: "JOB_APPLICATION",
-      regex: /\b(offer\s+letter|congratulations|selected|shortlisted|happy to inform|pleased to inform)\b/i,
+      regex: /\b(offer\s+letter|congratulations|shortlisted|happy to inform|pleased to inform)\b|\b(?:finally\s+)?selected\s+(?:students|candidates|list|rounds?)\b|\b(?:are|were|got|been)\s+selected\b/i,
       confidence: 0.95,
     },
     {

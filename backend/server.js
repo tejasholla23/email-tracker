@@ -525,8 +525,14 @@ async function fetchAndProcessEmails() {
             if (!parsed || !parsed.isRelevant || !parsed.company) {
               const reason = !parsed ? "Parsing failed" : (!parsed.isRelevant ? "Marked not relevant" : "Missing company");
               const shouldRetry = parsed?.parseMeta?.shouldRetry ?? false;
-              const parserVer = shouldRetry ? "v1" : "v2";
               
+              if (shouldRetry) {
+                console.log(`[PARSE_DEFERRED] ${id} | Reason: ${reason} (Transient error). Will retry on next sync.`);
+                skippedCount++;
+                continue;
+              }
+              
+              const parserVer = "v2";
               console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored (parserVersion=${parserVer}) to prevent re-parsing.`);
               
               try {
