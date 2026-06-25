@@ -15,6 +15,8 @@ const { getCompanyInfo } = require("./utils/companyInfoService");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
 
+const ALLOWED_SENDERS = ["placement@msrit.edu", "dean.tap@msrit.edu"];
+
 function getNextRetryDate(retryCount) {
   const now = new Date();
   let delayMs = 0;
@@ -352,6 +354,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     const headers = email.data.payload.headers;
     const fromHeader = headers.find((h) => h.name === "From")?.value || "";
     const subject = headers.find((h) => h.name === "Subject")?.value || "";
+
+    const isAllowedSender = ALLOWED_SENDERS.some(sender => 
+      fromHeader.toLowerCase().includes(sender.toLowerCase())
+    );
+    if (!isAllowedSender) {
+      console.log(`[SKIP] ${id} | Reason: Sender not in allowed list (${fromHeader})`);
+      return { action: 'skipped', usedGemini: false };
+    }
+
     const snippet = email.data.snippet || "";
     const rawText = `${subject} ${snippet}`.trim();
     
@@ -871,10 +882,11 @@ async function fetchAndProcessEmails() {
           const listTimeoutId = setTimeout(() => listController.abort(), 15000);
           let response;
           try {
+            const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:90d`;
             response = await gmail.users.messages.list({
               userId: "me",
               maxResults: 250,
-              q: "(from:placement@msrit.edu OR from:dean.tap@msrit.edu) newer_than:90d",
+              q: queryStr,
             }, {
               signal: listController.signal
             });
