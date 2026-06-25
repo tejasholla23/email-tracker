@@ -27,7 +27,8 @@ export default function JobTrackerDashboard() {
     joining: "",
     deadline: "",
     date: "",
-    link: ""
+    link: "",
+    customFields: []
   });
 
   // Edit Application Modal State
@@ -36,6 +37,11 @@ export default function JobTrackerDashboard() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editFormError, setEditFormError] = useState("");
   const [editFormData, setEditFormData] = useState({});
+
+  const [newCustomLabel, setNewCustomLabel] = useState("");
+  const [newCustomValue, setNewCustomValue] = useState("");
+  const [editCustomLabel, setEditCustomLabel] = useState("");
+  const [editCustomValue, setEditCustomValue] = useState("");
 
   // Company Info Modal State
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -302,12 +308,21 @@ export default function JobTrackerDashboard() {
     setSubmitting(true);
     try {
       const displayFields = [];
+      if (formData.role) displayFields.push({ label: "Role", value: formData.role });
       if (formData.ctc) displayFields.push({ label: "CTC", value: formData.ctc });
       if (formData.joining) displayFields.push({ label: "Joining", value: formData.joining });
       if (formData.stipend) displayFields.push({ label: "Stipend", value: formData.stipend });
       if (formData.duration) displayFields.push({ label: "Duration", value: formData.duration });
       if (formData.deadline) displayFields.push({ label: "Deadline", value: formData.deadline });
       if (formData.location) displayFields.push({ label: "Location", value: formData.location });
+
+      if (formData.customFields && formData.customFields.length > 0) {
+        formData.customFields.forEach(cf => {
+          if (cf.value && cf.label) {
+            displayFields.push({ label: cf.label, value: cf.value });
+          }
+        });
+      }
 
       const payload = {
         company: formData.company,
@@ -339,7 +354,7 @@ export default function JobTrackerDashboard() {
       }
 
       setShowAddModal(false);
-      setFormData({ company: "", subtitle: "", role: "", stipend: "", ctc: "", duration: "", location: "", joining: "", deadline: "", date: "", link: "" });
+      setFormData({ company: "", subtitle: "", role: "", stipend: "", ctc: "", duration: "", location: "", joining: "", deadline: "", date: "", link: "", customFields: [] });
       await fetchApplications();
     } catch (error) {
       console.error(error);
@@ -1669,6 +1684,96 @@ export default function JobTrackerDashboard() {
                 </div>
               </div>
 
+              <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
+                
+                {formData.customFields && formData.customFields.map((cf, index) => (
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Label"
+                        value={cf.label}
+                        onChange={(e) => {
+                          const updated = [...formData.customFields];
+                          updated[index].label = e.target.value;
+                          setFormData({ ...formData, customFields: updated });
+                        }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Value"
+                        value={cf.value}
+                        onChange={(e) => {
+                          const updated = [...formData.customFields];
+                          updated[index].value = e.target.value;
+                          setFormData({ ...formData, customFields: updated });
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-remove-custom"
+                      style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '18px', cursor: 'pointer', padding: '0 4px' }}
+                      onClick={() => {
+                        const updated = formData.customFields.filter((_, i) => i !== index);
+                        setFormData({ ...formData, customFields: updated });
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="New field label"
+                      value={newCustomLabel}
+                      onChange={(e) => setNewCustomLabel(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Value"
+                      value={newCustomValue}
+                      onChange={(e) => setNewCustomValue(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-add-custom"
+                    style={{
+                      backgroundColor: 'var(--brand-primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 14px',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      if (!newCustomLabel.trim()) return;
+                      const updated = [...(formData.customFields || []), { label: newCustomLabel.trim(), value: newCustomValue.trim() }];
+                      setFormData({ ...formData, customFields: updated });
+                      setNewCustomLabel("");
+                      setNewCustomValue("");
+                    }}
+                  >
+                    Add Field
+                  </button>
+                </div>
+              </div>
+
               <div className="form-group" style={{ marginTop: '16px' }}>
                 <label className="form-label">Link (Google Form, etc.)</label>
                 <input
@@ -1746,16 +1851,96 @@ export default function JobTrackerDashboard() {
                   <label className="form-label">Date</label>
                   <input type="date" className="form-input" value={editFormData.date || ""} onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })} />
                 </div>
+              </div>
+
+              <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
+                
                 {editFormData.dynamicFields && editFormData.dynamicFields.map((df, index) => (
-                  <div className="form-group" style={{ marginBottom: 0 }} key={df.label}>
-                    <label className="form-label">{df.label}</label>
-                    <input type="text" className="form-input" value={df.value || ""} onChange={(e) => {
-                      const newDynamicFields = [...editFormData.dynamicFields];
-                      newDynamicFields[index].value = e.target.value;
-                      setEditFormData({ ...editFormData, dynamicFields: newDynamicFields });
-                    }} />
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Label"
+                        value={df.label}
+                        onChange={(e) => {
+                          const updated = [...editFormData.dynamicFields];
+                          updated[index].label = e.target.value;
+                          setEditFormData({ ...editFormData, dynamicFields: updated });
+                        }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Value"
+                        value={df.value}
+                        onChange={(e) => {
+                          const updated = [...editFormData.dynamicFields];
+                          updated[index].value = e.target.value;
+                          setEditFormData({ ...editFormData, dynamicFields: updated });
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-remove-custom"
+                      style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '18px', cursor: 'pointer', padding: '0 4px' }}
+                      onClick={() => {
+                        const updated = editFormData.dynamicFields.filter((_, i) => i !== index);
+                        setEditFormData({ ...editFormData, dynamicFields: updated });
+                      }}
+                    >
+                      &times;
+                    </button>
                   </div>
                 ))}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="New field label"
+                      value={editCustomLabel}
+                      onChange={(e) => setEditCustomLabel(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Value"
+                      value={editCustomValue}
+                      onChange={(e) => setEditCustomValue(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-add-custom"
+                    style={{
+                      backgroundColor: 'var(--brand-primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 14px',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      if (!editCustomLabel.trim()) return;
+                      const updated = [...(editFormData.dynamicFields || []), { label: editCustomLabel.trim(), value: editCustomValue.trim() }];
+                      setEditFormData({ ...editFormData, dynamicFields: updated });
+                      setEditCustomLabel("");
+                      setEditCustomValue("");
+                    }}
+                  >
+                    Add Field
+                  </button>
+                </div>
               </div>
 
               <div className="form-group" style={{ marginTop: '16px' }}>
