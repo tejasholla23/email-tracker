@@ -18,6 +18,7 @@ export default function JobTrackerDashboard() {
   const [formError, setFormError] = useState("");
   const [formData, setFormData] = useState({
     company: "",
+    subtitle: "",
     role: "",
     stipend: "",
     ctc: "",
@@ -310,6 +311,7 @@ export default function JobTrackerDashboard() {
 
       const payload = {
         company: formData.company,
+        subtitle: formData.subtitle || "",
         role: formData.role || "Not Specified",
         programStipend: formData.stipend,
         salaryText: formData.ctc,
@@ -337,7 +339,7 @@ export default function JobTrackerDashboard() {
       }
 
       setShowAddModal(false);
-      setFormData({ company: "", role: "", stipend: "", ctc: "", duration: "", location: "", joining: "", deadline: "", date: "", link: "" });
+      setFormData({ company: "", subtitle: "", role: "", stipend: "", ctc: "", duration: "", location: "", joining: "", deadline: "", date: "", link: "" });
       await fetchApplications();
     } catch (error) {
       console.error(error);
@@ -356,9 +358,11 @@ export default function JobTrackerDashboard() {
     const original = editingApp;
 
     if (editFormData.company !== (original.company || "")) manualEdits.company = editFormData.company;
-    if (editFormData.role !== (original.subtitle || original.role || "")) {
+    if (editFormData.role !== (original.role || "")) {
       manualEdits.role = editFormData.role;
-      manualEdits.subtitle = editFormData.role;
+    }
+    if (editFormData.subtitle !== (original.subtitle || "")) {
+      manualEdits.subtitle = editFormData.subtitle;
     }
     if (editFormData.stipend !== (original.programStipend || "")) manualEdits.programStipend = editFormData.stipend;
     if (editFormData.ctc !== (original.salaryText || "")) manualEdits.salaryText = editFormData.ctc;
@@ -1477,7 +1481,8 @@ export default function JobTrackerDashboard() {
 
                               setEditFormData({
                                 company: app.company || "",
-                                role: app.subtitle || app.role || "",
+                                subtitle: app.subtitle || "",
+                                role: getField("Role", app.role),
                                 stipend: getField("Stipend", app.programStipend),
                                 ctc: getField("CTC", app.salaryText),
                                 duration: getField("Duration", app.programDuration),
@@ -1573,6 +1578,16 @@ export default function JobTrackerDashboard() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Subtitle</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. IoT Team (Agentic AI) unpaid intern"
+                    value={formData.subtitle}
+                    onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
+                  />
+                </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Role</label>
                   <input
@@ -1695,6 +1710,10 @@ export default function JobTrackerDashboard() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Subtitle</label>
+                  <input type="text" className="form-input" value={editFormData.subtitle || ""} onChange={(e) => setEditFormData({ ...editFormData, subtitle: e.target.value })} />
+                </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Role</label>
                   <input type="text" className="form-input" value={editFormData.role || ""} onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })} />
