@@ -41,7 +41,7 @@ router.get("/sync-status", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const applications = await Application.aggregate([
-      { $match: { isDeleted: { $ne: true } } },
+      { $match: { isDeleted: { $ne: true }, status: { $nin: ["pending", "failed_retryable"] } } },
       { $sort: { date: -1 } },
       {
         $lookup: {

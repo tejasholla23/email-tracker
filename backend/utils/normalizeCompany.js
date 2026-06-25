@@ -51,6 +51,9 @@ const INVALID_COMPANY_KEYS = new Set([
   "our company",
   "hiring team",
   "unknown role",
+  "pending parse",
+  "pending_parse",
+  "ignored",
 ]);
 
 /**

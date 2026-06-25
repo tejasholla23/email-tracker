@@ -15,6 +15,18 @@ const { getCompanyInfo } = require("./utils/companyInfoService");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
 
+function getNextRetryDate(retryCount) {
+  const now = new Date();
+  let delayMs = 0;
+  if (retryCount === 1) delayMs = 15 * 60 * 1000; // 15 mins
+  else if (retryCount === 2) delayMs = 60 * 60 * 1000; // 1 hour
+  else if (retryCount === 3) delayMs = 4 * 60 * 60 * 1000; // 4 hours
+  else if (retryCount === 4) delayMs = 12 * 60 * 60 * 1000; // 12 hours
+  else delayMs = 24 * 60 * 60 * 1000; // 24 hours (once per day forever)
+  
+  return new Date(now.getTime() + delayMs);
+}
+
 // Helper to extract full body text from Gmail payload
 function extractText(payload) {
   if (payload.mimeType === "text/plain" && payload.body.data) {
@@ -381,16 +393,26 @@ async function fetchAndProcessEmails() {
             // FAST PATH: Skip fetching the heavy email body from Google if it's already processed in the DB
             const existingFast = await Application.findOne({ 
               $or: [{ messageId: id }, { "events.messageId": id }] 
-            }, { parserVersion: 1, isDeleted: 1 });
+            }, { parserVersion: 1, isDeleted: 1, "parseMeta.nextRetryAt": 1 });
             
-            if (existingFast && existingFast.parserVersion === "v2") {
-              if (existingFast.isDeleted) {
-                console.log(`[SKIP_FAST] ${id} | Reason: Message already deleted by user`);
+            if (existingFast) {
+              if (existingFast.parserVersion === "v2") {
+                if (existingFast.isDeleted) {
+                  console.log(`[SKIP_FAST] ${id} | Reason: Message already deleted by user`);
+                } else {
+                  console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (v2)`);
+                }
+                skippedCount++;
+                continue;
               } else {
-                console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (v2)`);
+                // Check if backoff retry window has elapsed
+                const nextRetry = existingFast.parseMeta?.nextRetryAt ? new Date(existingFast.parseMeta.nextRetryAt) : null;
+                if (nextRetry && new Date() < nextRetry) {
+                  console.log(`[SKIP_FAST] ${id} | Reason: Backoff active (retry deferred until ${nextRetry.toISOString()})`);
+                  skippedCount++;
+                  continue;
+                }
               }
-              skippedCount++;
-              continue;
             }
 
             const getController = new AbortController();
@@ -426,9 +448,10 @@ async function fetchAndProcessEmails() {
             
             console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
 
-            const exists = await Application.findOne({ messageId: id });
+            const exists = existingFast ? await Application.findOne({ messageId: id }) : null;
             if (exists) {
-              // Skip if this messageId was already marked as deleted
+              // Skip if this messageId was already marked as deleted (and is a normal application)
+              // Note: PENDING_PARSE is not deleted (isDeleted is false). But IGNORED is.
               if (exists.isDeleted) {
                 console.log(`[SKIP] ${id} | Reason: Message already deleted by user`);
                 skippedCount++;
@@ -465,7 +488,21 @@ async function fetchAndProcessEmails() {
                     const updatePayload = {};
                     updatePayload.parserVersion = "v2"; // Safely lock version now
 
-                    if (parsed.isRelevant) {
+                    if (!parsed.isRelevant || !parsed.company) {
+                      if (exists.company === "PENDING_PARSE") {
+                        updatePayload.company = "IGNORED";
+                        updatePayload.role = "IGNORED";
+                        updatePayload.isDeleted = true;
+                      }
+                    } else {
+                      if (exists.company === "PENDING_PARSE") {
+                        updatePayload.company = parsed.company;
+                        updatePayload.companyKey = normalizeCompany(parsed.company);
+                        updatePayload.role = parsed.role || "Unknown Role";
+                        updatePayload.status = "new";
+                        updatePayload.isDeleted = false;
+                      }
+
                       const ov = exists.manualOverrides || [];
                       if (!ov.includes("programRoles") && !exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
                       if (!ov.includes("programDuration") && !exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
@@ -500,11 +537,36 @@ async function fetchAndProcessEmails() {
                     await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
                     console.log(`[UPDATED] ${id} | Existing application enriched & locked (v2)`);
                   } else {
-                    console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error, will retry on next sync`);
+                    const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
+                    const nextRetry = getNextRetryDate(currentAttempts);
+                    const newStatus = currentAttempts >= 5 ? "failed_retryable" : "pending";
+                    
+                    const updateObj = {
+                      status: newStatus,
+                      "parseMeta.retryCount": currentAttempts,
+                      "parseMeta.lastRetryAt": new Date(),
+                      "parseMeta.nextRetryAt": nextRetry,
+                      "parseMeta.shouldRetry": true
+                    };
                     if (eventAdded) {
-                      await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
+                      updateObj.events = exists.events;
                     }
+                    await Application.findByIdAndUpdate(exists._id, updateObj, { new: true });
+                    console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
                   }
+                } else {
+                  // Fatal parsing error (parseEmailWithLLM returned null)
+                  const updatePayload = { parserVersion: "v2" };
+                  if (eventAdded) updatePayload.events = exists.events;
+                  
+                  if (exists.company === "PENDING_PARSE") {
+                    updatePayload.company = "IGNORED";
+                    updatePayload.role = "IGNORED";
+                    updatePayload.isDeleted = true;
+                  }
+                  
+                  await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
+                  console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to v2`);
                 }
               } else if (eventAdded) {
                 await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
@@ -527,7 +589,34 @@ async function fetchAndProcessEmails() {
               const shouldRetry = parsed?.parseMeta?.shouldRetry ?? false;
               
               if (shouldRetry) {
-                console.log(`[PARSE_DEFERRED] ${id} | Reason: ${reason} (Transient error). Will retry on next sync.`);
+                const nextRetry = getNextRetryDate(1);
+                console.log(`[PARSE_DEFERRED] ${id} | Reason: ${reason} (Transient error). Saving as pending (deferred until ${nextRetry.toISOString()}).`);
+                try {
+                  const pendingApp = new Application({
+                    company: "PENDING_PARSE",
+                    role: "PENDING_PARSE",
+                    messageId: id,
+                    source: "Gmail",
+                    email: acc.email,
+                    date: new Date(parseInt(email.data.internalDate)),
+                    parserVersion: "v1",
+                    status: "pending",
+                    isDeleted: false,
+                    parseMeta: {
+                      shouldRetry: true,
+                      retryCount: 1,
+                      lastRetryAt: new Date(),
+                      nextRetryAt: nextRetry,
+                      llmProvider: parsed?.parseMeta?.llmProvider || "gemini-3.5-flash",
+                      llmStatus: parsed?.parseMeta?.llmStatus || "transport_error"
+                    }
+                  });
+                  await pendingApp.save();
+                } catch (e) {
+                  if (e.code !== 11000) {
+                    console.error(`[PENDING_SAVE_ERROR] ${id}`, e.message);
+                  }
+                }
                 skippedCount++;
                 continue;
               }

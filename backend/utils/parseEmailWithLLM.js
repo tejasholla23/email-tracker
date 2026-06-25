@@ -736,6 +736,8 @@ const INTENT_TIER = {
   pptAnnouncement:        "standard",
   newOpportunity:         "standard",
   workshopWebinar:        "standard",
+  internshipOpportunity:  "standard",
+  jobOpportunity:         "standard",
   registrationLink:       "secondary",
   applicationReminder:    "secondary",
   venueUpdate:            "secondary",
@@ -810,6 +812,24 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
       opportunityType: "WEBINAR",
       regex: /\b(seminar|guest lecture|workshop\s+invitation|webinar\s+invitation|webinar|workshop|expert talk)\b/i,
       confidence: 0.88,
+    },
+    {
+      category: "internshipOpportunity",
+      classification: "Internship Opportunity",
+      status: "new",
+      type: "unknown",
+      opportunityType: "JOB_APPLICATION",
+      regex: /\b(internship\s+opportunity|internship\s+program|internship\s+drive|hiring\s+interns|intern\s+hiring|internship\s+role)\b/i,
+      confidence: 0.85,
+    },
+    {
+      category: "jobOpportunity",
+      classification: "Job Opportunity",
+      status: "new",
+      type: "unknown",
+      opportunityType: "JOB_APPLICATION",
+      regex: /\b(job\s+opportunity|job\s+opening|hiring\s+opportunity|recruitment\s+drive|campus\s+recruitment|placement\s+drive|full\s+time\s+employment|fte\s+opportunity|fte\s+hiring)\b/i,
+      confidence: 0.85,
     },
     {
       category: "registrationLink",
@@ -1075,6 +1095,33 @@ function extractSalary(text = "") {
       if (cleanedValue && cleanedValue.length > 1) return cleanedValue;
     }
   }
+  return "";
+}
+
+function extractFallbackRole(subject = "", body = "") {
+  // 1. Check subject for patterns like "Hiring for [Role]" or "Opportunity for [Role]"
+  const subjectPatterns = [
+    /(?:hiring|recruitment|opportunity for|opening for|requirement for)\s+([A-Z][a-zA-Z0-9&.\-\s]{2,50}?\s+Role)\b/i,
+    /(?:hiring|recruitment|opportunity for|opening for|requirement for)\s+([A-Z][a-zA-Z0-9&.\-\s]{2,50}?)(?=\s+(?:at|program|opportunity|hiring|drive|placement|campus|job|internship|with))/i,
+    /\b(?:role|profile|designation|job\s+title)\s*[:\-]\s*([A-Z][a-zA-Z0-9&.\-\s]{2,50}?)(?:\s*(?:\.|,|;|$|\r|\n))/i
+  ];
+
+  for (const pattern of subjectPatterns) {
+    const match = subject.match(pattern);
+    if (match && match[1]) {
+      const cleaned = cleanProgramValue(match[1]);
+      if (cleaned && cleaned.length > 2 && !/^(?:intern|internship|job|opportunity|drive|hiring)$/i.test(cleaned)) {
+        return cleaned;
+      }
+    }
+  }
+
+  // 2. Fall back to extracting roles from body
+  const bodyRole = extractProgramRoles(body);
+  if (bodyRole && bodyRole !== "Internship" && bodyRole !== "Apprentice" && bodyRole.length > 3) {
+    return bodyRole;
+  }
+
   return "";
 }
 
@@ -1618,7 +1665,8 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
 }
 
 async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", referenceDate = new Date(), rawText = "") {
-  const preprocessed = preprocessBody(fullBodyText || rawText || "");
+  try {
+    const preprocessed = preprocessBody(fullBodyText || rawText || "");
   const body = preprocessed.text;
   const forwarded = parseForwardedEmail(body);
   const sourceBody    = forwarded.body || body;
@@ -1772,7 +1820,8 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   // For job emails: the classification or "Unknown Role" (never the subtitle).
   // For event emails: "Event" as a neutral placeholder.
   const isJobEmail = emailType === "job";
-  const roleField = isJobEmail ? "Unknown Role" : (emailType === "event" ? "Event" : "Unknown Role");
+  const fallbackRole = extractFallbackRole(sourceSubject, sourceBody);
+  const roleField = isJobEmail ? (fallbackRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
 
   // ── Step 7: displayFields — flexible [{label,value}] from Gemini ─────────────
   let displayFields = gemini?.displayFields || [];
@@ -1949,6 +1998,30 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   }
 
   return parsed;
+  } catch (error) {
+    console.error("[PARSE_FATAL_ERROR]", error);
+    return {
+      emailType: "job",
+      opportunityType: "JOB_APPLICATION",
+      isRelevant: false,
+      classification: "Generic Placement Notice",
+      type: "unknown",
+      status: "new",
+      confidenceScore: 0,
+      company: "",
+      subtitle: "",
+      role: "Unknown Role",
+      title: "Parsing Failed",
+      displayFields: [],
+      fieldsToDisplay: [],
+      parseMeta: {
+        shouldRetry: false,
+        llmProvider: "unknown",
+        llmStatus: "fatal_error",
+        geminiUsed: false
+      }
+    };
+  }
 }
 
 module.exports = {
