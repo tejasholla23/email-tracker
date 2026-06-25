@@ -451,15 +451,16 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           } else {
             const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
             const nextRetry = getNextRetryDate(currentAttempts);
-            const newStatus = currentAttempts >= 5 ? "failed_retryable" : "pending";
             
             const updateObj = {
-              status: newStatus,
               "parseMeta.retryCount": currentAttempts,
               "parseMeta.lastRetryAt": new Date(),
               "parseMeta.nextRetryAt": nextRetry,
               "parseMeta.shouldRetry": true
             };
+            if (exists.company === "PENDING_PARSE") {
+              updateObj.status = currentAttempts >= 5 ? "failed_retryable" : "pending";
+            }
             if (eventAdded) {
               updateObj.events = exists.events;
             }
