@@ -15,6 +15,9 @@ const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmail
 const { getCompanyInfo } = require("./utils/companyInfoService");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
+const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
+const authenticate = require("./middleware/authenticate");
+const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 
@@ -262,12 +265,99 @@ app.get("/auth/google/callback", async (req, res) => {
       return res.redirect(`${frontendUrl}?error=unauthorized`);
     }
 
-    res.redirect(`${frontendUrl}?auth_success=true&email=${encodeURIComponent(email)}`);
+    // Generate short-lived auth code and redirect frontend
+    const authCode = generateAuthCode(email);
+    res.redirect(`${frontendUrl}?auth_code=${authCode}`);
   } catch (err) {
     console.error("Google Auth Callback Error:", err.message);
     res.status(500).send(`Auth failed: ${err.message}`);
   }
 });
+
+// POST /auth/token - exchange temporary auth code for access and refresh tokens
+app.post("/auth/token", async (req, res) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ message: "Authorization code is required" });
+  }
+
+  const email = consumeAuthCode(code);
+  if (!email) {
+    return res.status(400).json({ message: "Invalid or expired authorization code" });
+  }
+
+  try {
+    const account = await Account.findOne({ email });
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    const accessToken = generateAccessToken(account);
+    const rawRefreshToken = generateRefreshToken();
+    const hashedToken = hashRefreshToken(rawRefreshToken);
+
+    // Save hashed refresh token and expiry (7 days)
+    account.refreshTokenHash = hashedToken;
+    account.refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await account.save();
+
+    res.json({
+      accessToken,
+      refreshToken: rawRefreshToken,
+      email: account.email
+    });
+  } catch (error) {
+    console.error("Token Exchange Error:", error.message);
+    res.status(500).json({ message: "Failed to exchange authorization code" });
+  }
+});
+
+// POST /auth/refresh - rotate refresh token and issue new access token
+app.post("/auth/refresh", async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(400).json({ message: "Refresh token is required" });
+  }
+
+  const hashedToken = hashRefreshToken(refreshToken);
+
+  try {
+    const account = await Account.findOne({
+      refreshTokenHash: hashedToken,
+      refreshTokenExpiresAt: { $gt: new Date() }
+    });
+
+    if (!account) {
+      return res.status(401).json({ message: "Invalid or expired refresh token" });
+    }
+
+    const newAccessToken = generateAccessToken(account);
+    const newRawRefreshToken = generateRefreshToken();
+    const newHashedToken = hashRefreshToken(newRawRefreshToken);
+
+    // Rotate refresh token
+    account.refreshTokenHash = newHashedToken;
+    account.refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await account.save();
+
+    res.json({
+      accessToken: newAccessToken,
+      refreshToken: newRawRefreshToken
+    });
+  } catch (error) {
+    console.error("Token Refresh Error:", error.message);
+    res.status(500).json({ message: "Failed to refresh token" });
+  }
+});
+
+// GET /auth/me - get current user context from JWT
+app.get("/auth/me", authenticate, async (req, res) => {
+  res.json({
+    _id: req.userId,
+    email: req.userEmail
+  });
+});
+
 
 // ==========================
 // 🚪 LOGOUT
@@ -1060,6 +1150,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  app,
   mergeAlternativeTexts,
   fetchAndProcessEmails
 };
