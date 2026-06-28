@@ -1278,22 +1278,22 @@ export default function JobTrackerDashboard() {
         
         /* Dark Mode Extensions */
         .dark .app-card {
-          background: #090d16;
-          border-color: #1b2535;
+          background: #111827;
+          border-color: #1f2937;
         }
-        .dark .app-card.status-outline-new { border-color: rgba(52, 211, 153, 0.22); }
-        .dark .app-card.status-outline-unmarked { border-color: rgba(251, 191, 36, 0.22); }
-        .dark .app-card.status-outline-applied { border-color: rgba(129, 140, 248, 0.22); }
-        .dark .app-card.status-outline-done { border-color: rgba(156, 163, 175, 0.12); }
-        .dark .app-card.is-urgent { border-color: rgba(239, 68, 68, 0.35); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.1); }
+        .dark .app-card.status-outline-new { border-color: rgba(52, 211, 153, 0.4); }
+        .dark .app-card.status-outline-unmarked { border-color: rgba(251, 191, 36, 0.4); }
+        .dark .app-card.status-outline-applied { border-color: rgba(129, 140, 248, 0.45); }
+        .dark .app-card.status-outline-done { border-color: rgba(156, 163, 175, 0.25); }
+        .dark .app-card.is-urgent { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15); }
         
         .dark .app-card:hover {
-          border-color: #2b384e;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+          border-color: #374151;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
         .dark .company-logo-container {
-          background: #05080f;
-          border-color: #1b2535;
+          background: #111827;
+          border-color: #1f2937;
         }
         .dark .company-logo-fallback {
           color: #94a3b8;
@@ -1319,18 +1319,18 @@ export default function JobTrackerDashboard() {
         .dark .form-input:focus, .dark .form-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .dark .btn-cancel { background: transparent; border-color: var(--border-color); color: var(--text-primary); }
         .dark .btn-cancel:hover { background: #27272a; border-color: #3f3f46; color: #fff; }
-        .dark .note-input { background: #05080f; border-color: #1b2535; color: var(--text-primary); }
-        .dark .note-input:focus { background: #090d16; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .dark .note-input { background: #111827; border-color: #1f2937; color: var(--text-primary); }
+        .dark .note-input:focus { background: #111827; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         
-        .dark .card-actions { border-color: #1b2535; }
+        .dark .card-actions { border-color: #1f2937; }
         .dark .card-btn-done { background: #27272a; border-color: transparent; color: #fafafa; }
         .dark .card-btn-done:hover:not(:disabled) { background: #3f3f46; border-color: #52525b; }
         .dark .card-btn-remove { background: transparent; border-color: #7f1d1d; color: #fca5a5; }
         .dark .card-btn-remove:hover { background: rgba(153, 27, 27, 0.2); border-color: #991b1b; }
         .dark .card-btn-apply { background: var(--brand-primary); border-color: transparent; color: #ffffff; }
         .dark .card-btn-apply:hover { background: var(--brand-primary-hover); }
-        .dark .card-btn-edit { background: transparent; border-color: #1b2535; color: var(--text-secondary); }
-        .dark .card-btn-edit:hover { background: #27272a; border-color: #3f3f46; color: var(--text-primary); }
+        .dark .card-btn-edit { background: transparent; border-color: #1f2937; color: var(--text-secondary); }
+        .dark .card-btn-edit:hover { background: #1f2937; border-color: #374151; color: var(--text-primary); }
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
         .dark .app-card.is-done:hover { opacity: 0.6; filter: blur(0.5px); }
