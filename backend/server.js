@@ -169,7 +169,7 @@ app.get("/clear-applications", async (req, res) => {
 // Sets a flag that aborts any in-progress sync, waits briefly, then wipes the DB.
 app.delete("/clear-all-applications", async (req, res) => {
   const email = req.headers["x-user-email"];
-  if (!email || !config.ALLOWED_EMAILS.includes(email.toLowerCase())) {
+  if (!email || !config.isAllowedEmail(email)) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -245,7 +245,7 @@ app.get("/auth/google/callback", async (req, res) => {
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
-    if (!email || !config.ALLOWED_EMAILS.includes(email.toLowerCase())) {
+    if (!email || !config.isAllowedEmail(email)) {
       console.warn(`[AUTH] Denied login attempt from: ${email}`);
       return res.redirect(`${frontendUrl}?error=unauthorized`);
     }
@@ -768,7 +768,7 @@ async function fetchAndProcessEmails() {
     }
 
     for (let acc of accounts) {
-      if (!acc.email || !config.ALLOWED_EMAILS.includes(acc.email.toLowerCase())) continue;
+      if (!acc.email || !config.isAllowedEmail(acc.email)) continue;
 
       console.log(`Processing account: ${acc.email}`);
       try {

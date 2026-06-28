@@ -50,12 +50,163 @@ export default function JobTrackerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showThemeSubmenu, setShowThemeSubmenu] = useState(false);
 
   const [userEmail, setUserEmail] = useState(null);
-  //test comment
+
+  const containerRef = React.useRef(null);
+  const cardRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
+  const glowRef = React.useRef(null);
+
+  useEffect(() => {
+    if (userEmail) return;
+
+    const container = containerRef.current;
+    const card = cardRef.current;
+    const canvas = canvasRef.current;
+    const glow = glowRef.current;
+
+    if (!container || !canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    let width = (canvas.width = container.clientWidth);
+    let height = (canvas.height = container.clientHeight);
+
+    const handleResize = () => {
+      if (!container || !canvas) return;
+      width = canvas.width = container.clientWidth;
+      height = canvas.height = container.clientHeight;
+    };
+    window.addEventListener("resize", handleResize);
+
+    let mouse = { x: 0, y: 0 };
+    let targetMouse = { x: 0, y: 0 };
+    let currentX = 0;
+    let currentY = 0;
+    const ease = 0.08;
+
+    const handleMouseMove = (e) => {
+      if (glow && !prefersReducedMotion) {
+        glow.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
+      }
+      targetMouse.x = e.clientX - window.innerWidth / 2;
+      targetMouse.y = e.clientY - window.innerHeight / 2;
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+
+    const particles = [];
+    const particleCount = prefersReducedMotion ? 0 : 45;
+
+    class Particle {
+      constructor() {
+        this.reset(true);
+      }
+
+      reset(init = false) {
+        this.x = Math.random() * width;
+        this.y = init ? Math.random() * height : height + 10;
+        this.size = Math.random() * 1.8 + 0.8;
+        this.speedY = -(Math.random() * 0.2 + 0.08);
+        this.speedX = (Math.random() - 0.5) * 0.15;
+        this.opacity = Math.random() * 0.12 + 0.04;
+        
+        const colors = [
+          "rgba(34, 211, 238,",
+          "rgba(59, 130, 246,",
+          "rgba(139, 92, 246,"
+        ];
+        this.colorPrefix = colors[Math.floor(Math.random() * colors.length)];
+        
+        this.offsetX = 0;
+        this.offsetY = 0;
+      }
+
+      update() {
+        this.x += this.speedX + this.offsetX;
+        this.y += this.speedY + this.offsetY;
+
+        this.offsetX *= 0.92;
+        this.offsetY *= 0.92;
+
+        if (mouse.x && mouse.y) {
+          const dx = this.x - mouse.x;
+          const dy = this.y - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const repelRadius = 110;
+
+          if (dist < repelRadius) {
+            const force = (repelRadius - dist) / repelRadius;
+            const angle = Math.atan2(dy, dx);
+            const repelStrength = 1.8;
+            this.offsetX += Math.cos(angle) * force * repelStrength;
+            this.offsetY += Math.sin(angle) * force * repelStrength;
+          }
+        }
+
+        if (this.y < -10 || this.x < -10 || this.x > width + 10) {
+          this.reset(false);
+        }
+      }
+
+      draw() {
+        ctx.fillStyle = `${this.colorPrefix}${this.opacity})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push(new Particle());
+    }
+
+    let rafId;
+    let isTabVisible = true;
+
+    const tick = () => {
+      if (!isTabVisible) return;
+
+      ctx.clearRect(0, 0, width, height);
+
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].update();
+        particles[i].draw();
+      }
+
+
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        cancelAnimationFrame(rafId);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      cancelAnimationFrame(rafId);
+    };
+  }, [userEmail]);
   useEffect(() => {
     // Check URL for auth params
     const params = new URLSearchParams(window.location.search);
@@ -79,7 +230,9 @@ export default function JobTrackerDashboard() {
 
     // Check local storage for dark mode preference
     const savedMode = localStorage.getItem("darkMode");
-    if (savedMode === "true") {
+    if (savedMode === "false") {
+      setIsDarkMode(false);
+    } else {
       setIsDarkMode(true);
     }
   }, []);
@@ -480,12 +633,214 @@ export default function JobTrackerDashboard() {
 
   if (!userEmail) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '32px', marginBottom: '16px' }}>Email Job Tracker</h1>
-        <p style={{ marginBottom: '32px', color: '#6b7280' }}>Sign in to track your job applications via Gmail.</p>
-        <a href={`${BASE_URL}/auth/google`} style={{ padding: '12px 24px', backgroundColor: '#0d9488', color: 'white', borderRadius: '8px', textDecoration: 'none', fontWeight: 600 }}>
-          Sign in with Google
-        </a>
+      <div className="login-container" ref={containerRef}>
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+            
+            .login-container {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: flex-start;
+              min-height: 100vh;
+              padding: 0 24px;
+              text-align: center;
+              background: radial-gradient(circle at 50% 50%, #081229 0%, #030610 100%);
+              font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              color: #f8fafc;
+              position: relative;
+              overflow: hidden;
+              perspective: 1000px;
+            }
+
+            .glow-primary {
+              position: fixed;
+              width: 600px;
+              height: 600px;
+              border-radius: 50%;
+              background: radial-gradient(circle, rgba(34, 211, 238, 0.12) 0%, rgba(34, 211, 238, 0) 70%);
+              filter: blur(80px);
+              pointer-events: none;
+              z-index: 2;
+              left: 0;
+              top: 0;
+              transform: translate3d(-50%, -50%, 0);
+              will-change: transform;
+            }
+
+            .glow-secondary {
+              position: absolute;
+              width: 850px;
+              height: 850px;
+              border-radius: 50%;
+              background: radial-gradient(circle, rgba(59, 130, 246, 0.04) 0%, rgba(59, 130, 246, 0) 70%);
+              filter: blur(100px);
+              pointer-events: none;
+              z-index: 1;
+              left: 70%;
+              top: 40%;
+              transform: translate(-50%, -50%);
+            }
+
+            .particle-canvas {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              pointer-events: none;
+              z-index: 3;
+            }
+
+            .login-card {
+              background: rgba(10, 18, 40, 0.65);
+              backdrop-filter: blur(16px);
+              -webkit-backdrop-filter: blur(16px);
+              border: 1px solid rgba(34, 211, 238, 0.15);
+              border-top: none;
+              box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+              border-bottom-left-radius: 20px;
+              border-bottom-right-radius: 20px;
+              border-top-left-radius: 0;
+              border-top-right-radius: 0;
+              padding: 64px 40px 48px 40px;
+              width: 100%;
+              max-width: 420px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              margin-top: 0;
+              position: relative;
+              z-index: 10;
+            }
+
+            .logo-box {
+              width: 64px;
+              height: 64px;
+              border-radius: 16px;
+              background: rgba(34, 211, 238, 0.08);
+              border: 1px solid rgba(34, 211, 238, 0.25);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin-bottom: 28px;
+              box-shadow: 0 0 20px rgba(34, 211, 238, 0.1);
+            }
+
+            .login-title {
+              font-size: 28px;
+              font-weight: 700;
+              margin-bottom: 12px;
+              color: #ffffff;
+              letter-spacing: -0.5px;
+            }
+
+            .login-subtitle {
+              font-size: 14px;
+              color: #94a3b8;
+              line-height: 1.6;
+              margin-bottom: 32px;
+              max-width: 320px;
+            }
+
+            .login-btn {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 100%;
+              padding: 14px 24px;
+              background: #3df6d3;
+              color: #040814;
+              border-radius: 12px;
+              text-decoration: none;
+              font-weight: 600;
+              font-size: 15px;
+              transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+              box-shadow: 0 4px 15px rgba(61, 246, 211, 0.15);
+            }
+
+            .login-btn:hover {
+              background: #2ce0be;
+              transform: translateY(-2px);
+              box-shadow: 0 8px 25px rgba(61, 246, 211, 0.35);
+            }
+
+            .login-btn:active {
+              transform: translateY(0);
+            }
+
+            .login-domain-tip {
+              font-size: 13px;
+              color: #64748b;
+              margin-top: 20px;
+              font-weight: 500;
+            }
+
+            .login-domain-highlight {
+              color: #3df6d3;
+              font-weight: 600;
+            }
+
+            .login-divider {
+              width: 100%;
+              height: 1px;
+              background: rgba(30, 41, 73, 0.5);
+              margin: 32px 0 20px 0;
+            }
+
+            .login-footer-links {
+              display: flex;
+              gap: 16px;
+              font-size: 12px;
+              color: #475569;
+            }
+
+            .login-footer-link {
+              color: #475569;
+              text-decoration: none;
+              transition: color 0.15s ease;
+            }
+
+            .login-footer-link:hover {
+              color: #94a3b8;
+            }
+          `
+        }} />
+
+        <div className="glow-primary" ref={glowRef}></div>
+        <div className="glow-secondary"></div>
+        <canvas className="particle-canvas" ref={canvasRef}></canvas>
+
+        <div className="login-card" ref={cardRef}>
+          <div className="logo-box">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3df6d3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+              <rect x="9" y="11" width="6" height="5" rx="1" fill="#0a1228" stroke="#3df6d3" strokeWidth="1.5" />
+              <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#3df6d3" strokeWidth="1.5" />
+            </svg>
+          </div>
+
+          <h1 className="login-title">Email Tracker</h1>
+          <p className="login-subtitle">Track placement related emails from your college Gmail account.</p>
+
+          <a href={`${BASE_URL}/auth/google`} className="login-btn">
+            Continue with Google
+          </a>
+
+          <p className="login-domain-tip">
+            Sign in using your <span className="login-domain-highlight">@msrit.edu</span> account
+          </p>
+
+          <div className="login-divider"></div>
+
+          <div className="login-footer-links">
+            <a href="/privacy" className="login-footer-link">Privacy Policy</a>
+            <span>·</span>
+            <a href="/terms" className="login-footer-link">Terms of Service</a>
+          </div>
+        </div>
       </div>
     );
   }
@@ -494,7 +849,7 @@ export default function JobTrackerDashboard() {
     <>
       <style dangerouslySetInnerHTML={{
         __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
         
         :root {
           /* Light Mode Tokens */
@@ -507,7 +862,7 @@ export default function JobTrackerDashboard() {
           --brand-primary: #2563eb;
           --brand-primary-hover: #1d4ed8;
           --sidebar-bg: #f9fafb;
-          --font-geist: 'Geist', 'Inter', sans-serif;
+          --font-geist: 'IBM Plex Sans', -apple-system, sans-serif;
           --radius-card: 16px;
           --radius-btn: 8px;
         }
@@ -521,7 +876,7 @@ export default function JobTrackerDashboard() {
         .sidebar { width: 280px; background-color: #f3f4f6a6; border-right: 1px solid #e5e7eb; padding: 24px 16px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 50; }
         .sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; padding: 0 8px; }
         .logo-box { width: 40px; height: 40px; background: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 700; font-size: 16px; }
-        .logo-text { font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 700; color: #0d9488; line-height: 1.2; }
+        .logo-text { font-family: 'IBM Plex Sans', sans-serif; font-size: 20px; font-weight: 700; color: #0d9488; line-height: 1.2; }
         .logo-sub { font-size: 12px; color: #6b7280; }
         
         .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: #475569; text-decoration: none; font-weight: 500; margin-bottom: 8px; cursor: pointer; transition: background-color 0.15s ease-out, color 0.15s ease-out; font-size: 15px; }
@@ -923,16 +1278,22 @@ export default function JobTrackerDashboard() {
         
         /* Dark Mode Extensions */
         .dark .app-card {
-          background: #111827;
-          border-color: var(--border-color);
+          background: #090d16;
+          border-color: #1b2535;
         }
+        .dark .app-card.status-outline-new { border-color: rgba(52, 211, 153, 0.22); }
+        .dark .app-card.status-outline-unmarked { border-color: rgba(251, 191, 36, 0.22); }
+        .dark .app-card.status-outline-applied { border-color: rgba(129, 140, 248, 0.22); }
+        .dark .app-card.status-outline-done { border-color: rgba(156, 163, 175, 0.12); }
+        .dark .app-card.is-urgent { border-color: rgba(239, 68, 68, 0.35); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.1); }
+        
         .dark .app-card:hover {
-          border-color: #3f3f46;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+          border-color: #2b384e;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         }
         .dark .company-logo-container {
-          background: #0f172a;
-          border-color: #334155;
+          background: #05080f;
+          border-color: #1b2535;
         }
         .dark .company-logo-fallback {
           color: #94a3b8;
@@ -958,17 +1319,17 @@ export default function JobTrackerDashboard() {
         .dark .form-input:focus, .dark .form-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .dark .btn-cancel { background: transparent; border-color: var(--border-color); color: var(--text-primary); }
         .dark .btn-cancel:hover { background: #27272a; border-color: #3f3f46; color: #fff; }
-        .dark .note-input { background: var(--bg-color); border-color: var(--border-color); color: var(--text-primary); }
-        .dark .note-input:focus { background: var(--surface-color); border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .dark .note-input { background: #05080f; border-color: #1b2535; color: var(--text-primary); }
+        .dark .note-input:focus { background: #090d16; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         
-        .dark .card-actions { border-color: var(--border-color); }
+        .dark .card-actions { border-color: #1b2535; }
         .dark .card-btn-done { background: #27272a; border-color: transparent; color: #fafafa; }
         .dark .card-btn-done:hover:not(:disabled) { background: #3f3f46; border-color: #52525b; }
         .dark .card-btn-remove { background: transparent; border-color: #7f1d1d; color: #fca5a5; }
         .dark .card-btn-remove:hover { background: rgba(153, 27, 27, 0.2); border-color: #991b1b; }
         .dark .card-btn-apply { background: var(--brand-primary); border-color: transparent; color: #ffffff; }
         .dark .card-btn-apply:hover { background: var(--brand-primary-hover); }
-        .dark .card-btn-edit { background: transparent; border-color: var(--border-color); color: var(--text-secondary); }
+        .dark .card-btn-edit { background: transparent; border-color: #1b2535; color: var(--text-secondary); }
         .dark .card-btn-edit:hover { background: #27272a; border-color: #3f3f46; color: var(--text-primary); }
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }

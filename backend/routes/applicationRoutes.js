@@ -9,7 +9,7 @@ const config = require("../config/appConfig");
 
 const authCheck = (req, res, next) => {
   const email = req.headers["x-user-email"];
-  if (!email || !config.ALLOWED_EMAILS.includes(email.toLowerCase())) {
+  if (!email || !config.isAllowedEmail(email)) {
     return res.status(401).json({ message: "Unauthorized. Please log in as the administrator." });
   }
   next();
