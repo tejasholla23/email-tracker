@@ -7,21 +7,15 @@ const router = express.Router();
 
 const config = require("../config/appConfig");
 
-const authCheck = (req, res, next) => {
-  const email = req.headers["x-user-email"];
-  if (!email || !config.isAllowedEmail(email)) {
-    return res.status(401).json({ message: "Unauthorized. Please log in as the administrator." });
-  }
-  next();
-};
+const authenticate = require("../middleware/authenticate");
 
 // Protect all routes below
-router.use(authCheck);
+router.use(authenticate);
 
 // GET /applications/sync-status - return Google sync status
 router.get("/sync-status", async (req, res) => {
   try {
-    const email = req.headers["x-user-email"];
+    const email = req.userEmail;
     const account = await Account.findOne({ email });
     if (!account) {
       return res.status(404).json({ message: "Account not found" });

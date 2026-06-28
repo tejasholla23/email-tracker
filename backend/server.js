@@ -171,7 +171,7 @@ app.get("/", (req, res) => {
 // ==========================
 
 // GET /clear-applications — legacy convenience endpoint (browser-accessible)
-app.get("/clear-applications", async (req, res) => {
+app.get("/clear-applications", authenticate, async (req, res) => {
   try {
     await Application.deleteMany({});
     res.send("All applications deleted");
@@ -182,9 +182,8 @@ app.get("/clear-applications", async (req, res) => {
 
 // DELETE /clear-all-applications — used by the frontend "Clear All" button.
 // Sets a flag that aborts any in-progress sync, waits briefly, then wipes the DB.
-app.delete("/clear-all-applications", async (req, res) => {
-  const email = req.headers["x-user-email"];
-  if (!email || !config.isAllowedEmail(email)) {
+app.delete("/clear-all-applications", authenticate, async (req, res) => {
+  if (!config.isAllowedEmail(req.userEmail)) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -362,9 +361,12 @@ app.get("/auth/me", authenticate, async (req, res) => {
 // ==========================
 // 🚪 LOGOUT
 // ==========================
-app.get("/logout", async (req, res) => {
+app.get("/logout", authenticate, async (req, res) => {
   try {
-    await Account.deleteMany({});
+    await Account.findByIdAndUpdate(req.userId, {
+      refreshTokenHash: null,
+      refreshTokenExpiresAt: null
+    });
     res.send("Logged out successfully");
   } catch (err) {
     console.error(err);
@@ -1099,7 +1101,19 @@ async function fetchAndProcessEmails() {
 // ==========================
 // 🔘 MANUAL TRIGGER (SYNC BUTTON)
 // ==========================
-app.get("/sync", (req, res) => {
+// Middleware to validate static CRON_API_KEY
+const requireCronKey = (req, res, next) => {
+  const cronKey = req.headers["x-cron-key"] || req.query.cron_key;
+  if (!cronKey || cronKey !== process.env.CRON_API_KEY) {
+    return res.status(401).json({ message: "Unauthorized. Invalid cron key." });
+  }
+  next();
+};
+
+// ==========================
+// 🔘 MANUAL TRIGGER (SYNC BUTTON)
+// ==========================
+app.get("/sync", authenticate, (req, res) => {
   if (isProcessing) {
     console.log(`[MANUAL_SYNC] Blocked — sync already in progress`);
     return res.status(200).json({ success: true, message: "Sync already in progress. Please wait for it to finish." });
@@ -1115,7 +1129,7 @@ app.get("/sync", (req, res) => {
 // ==========================
 // 🧪 MANUAL CRON TRIGGER
 // ==========================
-app.get("/run-cron", (req, res) => {
+app.get("/run-cron", requireCronKey, (req, res) => {
   if (isProcessing) {
     return res.status(200).json({ success: true, message: "Sync already in progress" });
   }
