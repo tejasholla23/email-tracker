@@ -25,6 +25,14 @@ const accountSchema = new mongoose.Schema({
     enum: ["full", "incremental"],
     default: "full",
   },
+  refreshTokenHash: {
+    type: String,
+    default: null,
+  },
+  refreshTokenExpiresAt: {
+    type: Date,
+    default: null,
+  },
 });
 
 module.exports = mongoose.model("Account", accountSchema);
