@@ -110,6 +110,18 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !proce
   console.log("Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI");
 }
 
+// JWT and Cron Key Validation
+if (!process.env.JWT_SECRET) {
+  console.error("CRITICAL ERROR: JWT_SECRET environment variable is missing!");
+  console.error("The application cannot start without a valid JWT_SECRET.");
+  process.exit(1);
+}
+
+if (!process.env.CRON_API_KEY) {
+  console.warn("WARNING: CRON_API_KEY environment variable is missing!");
+  console.warn("Requests to /run-cron will be rejected.");
+}
+
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
