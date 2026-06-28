@@ -207,26 +207,113 @@ export default function JobTrackerDashboard() {
       cancelAnimationFrame(rafId);
     };
   }, [userEmail]);
-  useEffect(() => {
-    // Check URL for auth params
-    const params = new URLSearchParams(window.location.search);
-    const emailFromUrl = params.get("email");
-    const authSuccess = params.get("auth_success");
-    const error = params.get("error");
 
-    if (error === "unauthorized") {
-      alert("Access Denied: Your account is not authorized to view this dashboard.");
-      window.history.replaceState({}, document.title, "/");
-    } else if (authSuccess && emailFromUrl) {
-      localStorage.setItem("userEmail", emailFromUrl);
-      setUserEmail(emailFromUrl);
-      window.history.replaceState({}, document.title, "/");
-    } else {
-      const savedEmail = localStorage.getItem("userEmail");
-      if (savedEmail) {
-        setUserEmail(savedEmail);
+  const handleLocalLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    setUserEmail(null);
+    setApplications([]);
+  };
+
+  const apiFetch = async (url, options = {}) => {
+    if (!options.headers) {
+      options.headers = {};
+    }
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      options.headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    let response = await fetch(url, options);
+
+    if (response.status === 401) {
+      console.warn("Access token expired, attempting refresh...");
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (!refreshToken) {
+        handleLocalLogout();
+        return response;
+      }
+
+      try {
+        const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken })
+        });
+
+        if (!refreshRes.ok) {
+          throw new Error("Refresh failed");
+        }
+
+        const data = await refreshRes.json();
+        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
+
+        // Retry the original request once
+        options.headers["Authorization"] = `Bearer ${data.accessToken}`;
+        response = await fetch(url, options);
+      } catch (err) {
+        console.error("Refresh failed, logging out:", err);
+        handleLocalLogout();
       }
     }
+
+    return response;
+  };
+
+  useEffect(() => {
+    const initializeSession = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const authCode = params.get("auth_code");
+      const error = params.get("error");
+
+      if (error === "unauthorized") {
+        alert("Access Denied: Your account is not authorized to view this dashboard.");
+        window.history.replaceState({}, document.title, "/");
+        return;
+      }
+
+      if (authCode) {
+        try {
+          const res = await fetch(`${BASE_URL}/auth/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: authCode })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem("accessToken", data.accessToken);
+            localStorage.setItem("refreshToken", data.refreshToken);
+            setUserEmail(data.email);
+          } else {
+            console.error("Token exchange failed");
+          }
+        } catch (err) {
+          console.error("Error exchanging token:", err);
+        }
+        window.history.replaceState({}, document.title, "/");
+        return;
+      }
+
+      // Check existing session
+      const savedAccessToken = localStorage.getItem("accessToken");
+      if (savedAccessToken) {
+        try {
+          const res = await apiFetch(`${BASE_URL}/auth/me`);
+          if (res.ok) {
+            const data = await res.json();
+            setUserEmail(data.email);
+          } else {
+            handleLocalLogout();
+          }
+        } catch (err) {
+          console.error("Session verification failed:", err);
+          handleLocalLogout();
+        }
+      }
+    };
+
+    initializeSession();
 
     // Check local storage for dark mode preference
     const savedMode = localStorage.getItem("darkMode");
@@ -240,9 +327,7 @@ export default function JobTrackerDashboard() {
   const fetchSyncStatus = async () => {
     if (!userEmail) return;
     try {
-      const response = await fetch(`${BASE_URL}/applications/sync-status`, {
-        headers: { "x-user-email": userEmail }
-      });
+      const response = await apiFetch(`${BASE_URL}/applications/sync-status`);
       if (response.ok) {
         const data = await response.json();
         setSyncStatus(data.syncStatus);
@@ -282,9 +367,7 @@ export default function JobTrackerDashboard() {
     if (!userEmail) return;
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/applications`, {
-        headers: { "x-user-email": userEmail }
-      });
+      const response = await apiFetch(`${BASE_URL}/applications`);
       if (response.status === 401) {
         handleLogout();
         return;
@@ -307,9 +390,7 @@ export default function JobTrackerDashboard() {
   const fetchApplicationsSilent = async () => {
     if (!userEmail) return;
     try {
-      const response = await fetch(`${BASE_URL}/applications`, {
-        headers: { "x-user-email": userEmail }
-      });
+      const response = await apiFetch(`${BASE_URL}/applications`);
       if (response.status === 401) {
         handleLogout();
         return;
@@ -324,9 +405,7 @@ export default function JobTrackerDashboard() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await fetch(`${BASE_URL}/sync`, {
-        headers: { "x-user-email": userEmail }
-      });
+      await apiFetch(`${BASE_URL}/sync`);
       await fetchSyncStatus();
       await fetchApplications();
     } catch (error) {
@@ -344,9 +423,8 @@ export default function JobTrackerDashboard() {
 
     setClearing(true);
     try {
-      const response = await fetch(`${BASE_URL}/clear-all-applications`, {
-        method: "DELETE",
-        headers: { "x-user-email": userEmail }
+      const response = await apiFetch(`${BASE_URL}/clear-all-applications`, {
+        method: "DELETE"
       });
       if (!response.ok) throw new Error("Clear failed");
       const data = await response.json();
@@ -362,11 +440,10 @@ export default function JobTrackerDashboard() {
 
   const handleMarkDone = async (id) => {
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ status: "done" }),
       });
@@ -382,11 +459,10 @@ export default function JobTrackerDashboard() {
 
   const handleApply = async (id) => {
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ status: "applied" }),
       });
@@ -404,9 +480,8 @@ export default function JobTrackerDashboard() {
     setApplications((prev) => prev.filter((app) => app._id !== id));
 
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
-        method: "DELETE",
-        headers: { "x-user-email": userEmail }
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
+        method: "DELETE"
       });
       if (!response.ok) throw new Error("Failed to delete");
     } catch (error) {
@@ -424,11 +499,10 @@ export default function JobTrackerDashboard() {
 
   const handleSaveNote = async (id, note) => {
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ note }),
       });
@@ -438,14 +512,14 @@ export default function JobTrackerDashboard() {
       alert("Could not save note. Please try again.");
     }
   };
+
   const handleLogout = async () => {
-    localStorage.removeItem("userEmail");
-    setUserEmail(null);
     try {
-      await fetch(`${BASE_URL}/logout`);
-      setApplications([]);
+      await apiFetch(`${BASE_URL}/logout`);
     } catch (error) {
       console.error("Logout failed:", error);
+    } finally {
+      handleLocalLogout();
     }
   };
 
@@ -493,11 +567,10 @@ export default function JobTrackerDashboard() {
         status: "new"
       };
 
-      const response = await fetch(`${BASE_URL}/applications`, {
+      const response = await apiFetch(`${BASE_URL}/applications`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
       });
@@ -573,11 +646,10 @@ export default function JobTrackerDashboard() {
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/applications/${editingApp._id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${editingApp._id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ manualEdits })
       });
