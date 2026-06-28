@@ -1278,7 +1278,7 @@ export default function JobTrackerDashboard() {
         
         /* Dark Mode Extensions */
         .dark .app-card {
-          background: #111827;
+          background: #0d1321;
           border-color: #1f2937;
         }
         .dark .app-card.status-outline-new { border-color: rgba(52, 211, 153, 0.4); }
@@ -1292,7 +1292,7 @@ export default function JobTrackerDashboard() {
           box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
         .dark .company-logo-container {
-          background: #111827;
+          background: #0d1321;
           border-color: #1f2937;
         }
         .dark .company-logo-fallback {
@@ -1319,8 +1319,8 @@ export default function JobTrackerDashboard() {
         .dark .form-input:focus, .dark .form-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .dark .btn-cancel { background: transparent; border-color: var(--border-color); color: var(--text-primary); }
         .dark .btn-cancel:hover { background: #27272a; border-color: #3f3f46; color: #fff; }
-        .dark .note-input { background: #111827; border-color: #1f2937; color: var(--text-primary); }
-        .dark .note-input:focus { background: #111827; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .dark .note-input { background: #0d1321; border-color: #1f2937; color: var(--text-primary); }
+        .dark .note-input:focus { background: #0d1321; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         
         .dark .card-actions { border-color: #1f2937; }
         .dark .card-btn-done { background: #27272a; border-color: transparent; color: #fafafa; }
