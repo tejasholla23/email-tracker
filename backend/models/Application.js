@@ -66,6 +66,10 @@ const applicationSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Account"
+    },
   },
   { timestamps: true }
 );
