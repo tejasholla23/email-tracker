@@ -877,6 +877,21 @@ async function fetchAndProcessEmails(targetUserId = null) {
     isCronProcessing = true;
   }
 
+  const formatDuration = (ms) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  };
+
+  const cronStartTime = Date.now();
+  let accountsProcessed = 0;
+  let accountsSkipped = 0;
+  let accountsFailed = 0;
+
   let insertedCount = 0;
   let skippedCount = 0;
   let fetchedCount = 0;
@@ -884,6 +899,14 @@ async function fetchAndProcessEmails(targetUserId = null) {
   try {
     const query = targetUserId ? { _id: targetUserId } : {};
     const accounts = await Account.find(query);
+
+    if (!targetUserId) {
+      console.log("==================================================");
+      console.log("[CRON START]");
+      console.log(`Time: ${new Date().toISOString()}`);
+      console.log(`Accounts Found: ${accounts.length}`);
+      console.log("==================================================");
+    }
 
     if (!accounts.length) {
       console.log("No accounts connected");
@@ -897,11 +920,13 @@ async function fetchAndProcessEmails(targetUserId = null) {
       if (!targetUserId) {
         if (activeSyncs.has(accIdStr)) {
           console.log(`[CRON] Skipping account ${acc.email} - sync already in progress`);
+          accountsSkipped++;
           continue;
         }
         activeSyncs.add(accIdStr);
       }
 
+      const accountStartTime = Date.now();
       console.log(`Processing account: ${acc.email}`);
       try {
         await Account.findOneAndUpdate({ email: acc.email }, { syncStatus: "pending" });
@@ -980,6 +1005,11 @@ async function fetchAndProcessEmails(targetUserId = null) {
             newHistoryId = latestHistoryId;
 
             if (allAddedMessageIds.length === 0) {
+              console.log(`[ACCOUNT START]\nEmail: ${acc.email}\nMode: Incremental\nHistoryId: ${acc.lastHistoryId}`);
+              const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
+              console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: 0\nInserted: 0\nSkipped: 0\nMode: Incremental`);
+              accountsProcessed++;
+
               console.log(`[INCREMENTAL] No new messages since last sync.`);
               console.log(`[INCREMENTAL_SUMMARY] History events: 0 | New messages: 0 | historyId: ${acc.lastHistoryId} → ${newHistoryId}`);
               // Update historyId even when nothing changed
@@ -1050,6 +1080,8 @@ async function fetchAndProcessEmails(targetUserId = null) {
           console.log(`[FULL_SYNC] Messages listed: ${messageIdsToProcess.length} | historyId: ${newHistoryId || 'unavailable'}`);
         }
 
+        console.log(`[ACCOUNT START]\nEmail: ${acc.email}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}${syncPath === "incremental" ? `\nHistoryId: ${acc.lastHistoryId}` : ""}`);
+
         // ══════════════════════════════════════════════
         // COMMON: Process the collected message IDs
         // ══════════════════════════════════════════════
@@ -1061,6 +1093,8 @@ async function fetchAndProcessEmails(targetUserId = null) {
         const newCount = messageIdsToProcess.length - knownDocs.size;
         console.log(`[BATCH_LOOKUP] Already known: ${knownDocs.size} | New: ${newCount} | Total: ${messageIdsToProcess.length}`);
 
+        let accInserted = 0;
+        let accSkipped = 0;
         let geminiParsedCount = 0;
 
         for (const msgId of messageIdsToProcess) {
@@ -1073,8 +1107,13 @@ async function fetchAndProcessEmails(targetUserId = null) {
           const existingFast = knownDocs.get(msgId) || null;
           const result = await processMessage(gmail, acc, msgId, null, existingFast, geminiParsedCount);
 
-          if (result.action === 'inserted') insertedCount++;
-          else skippedCount++;
+          if (result.action === 'inserted') {
+            accInserted++;
+            insertedCount++;
+          } else {
+            accSkipped++;
+            skippedCount++;
+          }
 
           if (result.usedGemini) geminiParsedCount++;
 
@@ -1099,7 +1138,15 @@ async function fetchAndProcessEmails(targetUserId = null) {
         }
         await Account.findOneAndUpdate({ email: acc.email }, accountUpdate);
 
+        const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
+        console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: ${messageIdsToProcess.length}\nInserted: ${accInserted}\nSkipped: ${accSkipped}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}`);
+        accountsProcessed++;
+
       } catch (err) {
+        const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
+        console.log(`[ACCOUNT FAILURE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nError: ${err.message}`);
+        accountsFailed++;
+
         console.error(`Fetch error for account ${acc.email}:`, err.message);
         let errorMsg = err.message || "Unknown sync error";
         if (
@@ -1130,6 +1177,17 @@ async function fetchAndProcessEmails(targetUserId = null) {
       activeSyncs.delete(targetUserId.toString());
     } else {
       isCronProcessing = false;
+      const totalDuration = Date.now() - cronStartTime;
+      console.log("==================================================");
+      console.log("[CRON COMPLETE]");
+      console.log(`Duration: ${formatDuration(totalDuration)}`);
+      console.log(`Accounts Processed: ${accountsProcessed}`);
+      console.log(`Accounts Skipped: ${accountsSkipped}`);
+      console.log(`Accounts Failed: ${accountsFailed}`);
+      console.log(`Emails Fetched: ${fetchedCount}`);
+      console.log(`Inserted: ${insertedCount}`);
+      console.log(`Skipped: ${skippedCount}`);
+      console.log("==================================================");
     }
   }
 }
