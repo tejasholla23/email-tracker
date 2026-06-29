@@ -126,14 +126,14 @@ export default function JobTrackerDashboard() {
         this.speedY = -(Math.random() * 0.2 + 0.08);
         this.speedX = (Math.random() - 0.5) * 0.15;
         this.opacity = Math.random() * 0.12 + 0.04;
-        
+
         const colors = [
           "rgba(34, 211, 238,",
           "rgba(59, 130, 246,",
           "rgba(139, 92, 246,"
         ];
         this.colorPrefix = colors[Math.floor(Math.random() * colors.length)];
-        
+
         this.offsetX = 0;
         this.offsetY = 0;
       }
@@ -1779,21 +1779,21 @@ export default function JobTrackerDashboard() {
                       <div className="settings-card">
                         <h3 className="settings-title">
                           <span className="settings-title-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="11" r="3"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><circle cx="12" cy="11" r="3" /></svg>
                           </span>
                           <span>Support</span>
                         </h3>
                         <div className="settings-list">
                           <button className="settings-item" onClick={() => alert("Report an Issue functionality coming soon!")}>
                             <span className="settings-item-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
                             </span>
                             <span className="settings-item-label">Report an Issue</span>
                             <span className="settings-item-arrow">❯</span>
                           </button>
                           <button className="settings-item" onClick={() => alert("Send Feedback functionality coming soon!")}>
                             <span className="settings-item-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
                             </span>
                             <span className="settings-item-label">Send Feedback</span>
                             <span className="settings-item-arrow">❯</span>
@@ -1804,21 +1804,21 @@ export default function JobTrackerDashboard() {
                       <div className="settings-card">
                         <h3 className="settings-title">
                           <span className="settings-title-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="5" y1="7" x2="19" y2="7"/><path d="M5 9c0 3 1.5 5 3.5 5S12 12 12 9"/><path d="M12 9c0 3 1.5 5 3.5 5S19 12 19 9"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22" /><line x1="5" y1="7" x2="19" y2="7" /><path d="M5 9c0 3 1.5 5 3.5 5S12 12 12 9" /><path d="M12 9c0 3 1.5 5 3.5 5S19 12 19 9" /></svg>
                           </span>
                           <span>Legal</span>
                         </h3>
                         <div className="settings-list">
                           <button className="settings-item" onClick={() => setSettingsSubView("privacy")}>
                             <span className="settings-item-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
                             </span>
                             <span className="settings-item-label">Privacy Policy</span>
                             <span className="settings-item-arrow">❯</span>
                           </button>
                           <button className="settings-item" onClick={() => setSettingsSubView("terms")}>
                             <span className="settings-item-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
                             </span>
                             <span className="settings-item-label">Terms of Service</span>
                             <span className="settings-item-arrow">❯</span>
@@ -1830,11 +1830,9 @@ export default function JobTrackerDashboard() {
                     <div className="settings-about-card">
                       <div className="about-info-box">
                         <h3>About Email Tracker</h3>
-                        <span className="about-version-badge">VERSION 1.0.0 STABLE</span>
+                        <span className="about-version-badge">VERSION 2.0.0 STABLE</span>
                         <p className="about-desc">
-                          Email Tracker is an AI-powered placement assistant designed for high-performance students. 
-                          It automatically categorizes and monitors incoming university placement emails, extracting deadlines, 
-                          role details, and application statuses into a unified productivity dashboard.
+                          Email Tracker automatically tracks and organizes emails from the placement department. It extracts important information such as company details, deadlines, eligibility criteria, and application links, presenting everything in a centralized dashboard for quick access and easy tracking.
                         </p>
                         <div className="about-tech-container">
                           <span className="about-tech-label">Built with:</span>
@@ -2054,335 +2052,335 @@ export default function JobTrackerDashboard() {
             ) : (
               <>
                 <div className="page-header">
-              <div>
-                <h2 className="page-title">Applications Overview</h2>
-                <p className="page-subtitle">Track and manage emails from placement@msrit.edu</p>
-              </div>
-            </div>
-
-            <div className="stats-grid">
-              <div className="stat-card total">
-                <div className="stat-icon">📊</div>
-                <div className="stat-content">
-                  <span className="stat-label">Total Applications</span>
-                  <div className="stat-main">
-                    <span className="stat-value">{total}</span>
-                    {newThisWeek > 0 && <span className="stat-trend">+{newThisWeek} this week</span>}
+                  <div>
+                    <h2 className="page-title">Applications Overview</h2>
+                    <p className="page-subtitle">Track and manage emails from placement@msrit.edu</p>
                   </div>
                 </div>
-              </div>
 
-              <div className="stat-card urgent">
-                <div className="stat-icon">🔔</div>
-                <div className="stat-content">
-                  <span className="stat-label">Deadlines Today</span>
-                  <div className="stat-main">
-                    <span className="stat-value">{urgentDeadlines}</span>
-                    <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                <div className="stats-grid">
+                  <div className="stat-card total">
+                    <div className="stat-icon">📊</div>
+                    <div className="stat-content">
+                      <span className="stat-label">Total Applications</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{total}</span>
+                        {newThisWeek > 0 && <span className="stat-trend">+{newThisWeek} this week</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="stat-card urgent">
+                    <div className="stat-icon">🔔</div>
+                    <div className="stat-content">
+                      <span className="stat-label">Deadlines Today</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{urgentDeadlines}</span>
+                        <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="stat-card unmarked">
+                    <div className="stat-icon">📝</div>
+                    <div className="stat-content">
+                      <span className="stat-label">Unmarked</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{unmarkedCount}</span>
+                        <span className="stat-subtext">Needs review</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="stat-card unmarked">
-                <div className="stat-icon">📝</div>
-                <div className="stat-content">
-                  <span className="stat-label">Unmarked</span>
-                  <div className="stat-main">
-                    <span className="stat-value">{unmarkedCount}</span>
-                    <span className="stat-subtext">Needs review</span>
-                  </div>
-                </div>
-              </div>
-            </div>
 
 
 
-            {loading && applications.length === 0 ? (
-              <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
-            ) : (
-              <div className="app-grid">
-                {applications
-                  .map(app => {
-                    let derivedStatus = (app.status || "new").toLowerCase();
-                    if (derivedStatus === "new") {
-                      const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
-                      if (ageInMs > 24 * 60 * 60 * 1000) {
-                        derivedStatus = "unmarked";
-                      }
-                    }
-                    return { ...app, derivedStatus };
-                  })
-                  .filter((app) => {
-                    const query = searchQuery.toLowerCase();
-                    const matchesSearch =
-                      (app.company || "").toLowerCase().includes(query) ||
-                      (app.role || "").toLowerCase().includes(query);
+                {loading && applications.length === 0 ? (
+                  <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
+                ) : (
+                  <div className="app-grid">
+                    {applications
+                      .map(app => {
+                        let derivedStatus = (app.status || "new").toLowerCase();
+                        if (derivedStatus === "new") {
+                          const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
+                          if (ageInMs > 24 * 60 * 60 * 1000) {
+                            derivedStatus = "unmarked";
+                          }
+                        }
+                        return { ...app, derivedStatus };
+                      })
+                      .filter((app) => {
+                        const query = searchQuery.toLowerCase();
+                        const matchesSearch =
+                          (app.company || "").toLowerCase().includes(query) ||
+                          (app.role || "").toLowerCase().includes(query);
 
-                    const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
-                    const matchesFilter =
-                      activeFilter === "all" ||
-                      (activeFilter === "deadlines" && isDeadlineToday) ||
-                      activeFilter === app.derivedStatus;
+                        const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
+                        const matchesFilter =
+                          activeFilter === "all" ||
+                          (activeFilter === "deadlines" && isDeadlineToday) ||
+                          activeFilter === app.derivedStatus;
 
-                    return matchesSearch && matchesFilter;
-                  })
-                  .sort((a, b) => {
-                    const dateA = new Date(a.date || a.createdAt || 0);
-                    const dateB = new Date(b.date || b.createdAt || 0);
-                    return dateB - dateA;
-                  })
-                  .map((app) => {
-                    const dateToShow = app.deadlineISO || app.date || app.testDate || app.createdAt;
-                    const formattedDate = dateToShow
-                      ? new Date(dateToShow).toLocaleString(undefined, app.deadlineISO ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' })
-                      : "N/A";
-                    const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                    const statusKey = app.derivedStatus;
-                    const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
-                    const isDone = statusKey === "done";
+                        return matchesSearch && matchesFilter;
+                      })
+                      .sort((a, b) => {
+                        const dateA = new Date(a.date || a.createdAt || 0);
+                        const dateB = new Date(b.date || b.createdAt || 0);
+                        return dateB - dateA;
+                      })
+                      .map((app) => {
+                        const dateToShow = app.deadlineISO || app.date || app.testDate || app.createdAt;
+                        const formattedDate = dateToShow
+                          ? new Date(dateToShow).toLocaleString(undefined, app.deadlineISO ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' })
+                          : "N/A";
+                        const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
+                        const statusKey = app.derivedStatus;
+                        const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
+                        const isDone = statusKey === "done";
 
-                    const getDeterministicColor = (str) => {
-                      let hash = 0;
-                      for (let i = 0; i < str.length; i++) {
-                        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                      }
-                      const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-                      return "00000".substring(0, 6 - c.length) + c;
-                    };
-                    const fallbackColor = getDeterministicColor(app.company || "Unknown");
-                    const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
+                        const getDeterministicColor = (str) => {
+                          let hash = 0;
+                          for (let i = 0; i < str.length; i++) {
+                            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                          }
+                          const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                          return "00000".substring(0, 6 - c.length) + c;
+                        };
+                        const fallbackColor = getDeterministicColor(app.company || "Unknown");
+                        const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
 
-                    return (
-                      <div
-                        key={app._id}
-                        className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
-                        style={{ cursor: "pointer" }}
-                        onClick={(e) => {
-                          if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
-                          setSelectedApp(app);
-                          setShowInfoModal(true);
-                        }}
-                      >
-                        <div className="app-header">
-                          <div className="app-info">
-                            <div className="company-logo-container">
-                              {app.companyInfo?.logo || app.companyInfo?.domain ? (
-                                <img
-                                  src={app.companyInfo?.logo || uiAvatarUrl}
-                                  alt={app.company}
-                                  className="company-logo-img"
-                                  onError={(e) => {
-                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
-                                    const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-                                    if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
-                                      e.target.src = googleFallback;
-                                    } else if (!e.target.src.includes('ui-avatars.com')) {
-                                      e.target.src = uiAvatarUrl;
-                                    } else {
-                                      e.target.onerror = null;
-                                      e.target.style.display = 'none';
-                                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                    }
-                                  }}
-                                />
-                              ) : null}
-                              <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
-                                {companyInitials}
+                        return (
+                          <div
+                            key={app._id}
+                            className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
+                            style={{ cursor: "pointer" }}
+                            onClick={(e) => {
+                              if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
+                              setSelectedApp(app);
+                              setShowInfoModal(true);
+                            }}
+                          >
+                            <div className="app-header">
+                              <div className="app-info">
+                                <div className="company-logo-container">
+                                  {app.companyInfo?.logo || app.companyInfo?.domain ? (
+                                    <img
+                                      src={app.companyInfo?.logo || uiAvatarUrl}
+                                      alt={app.company}
+                                      className="company-logo-img"
+                                      onError={(e) => {
+                                        const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                                        const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                        if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
+                                          e.target.src = googleFallback;
+                                        } else if (!e.target.src.includes('ui-avatars.com')) {
+                                          e.target.src = uiAvatarUrl;
+                                        } else {
+                                          e.target.onerror = null;
+                                          e.target.style.display = 'none';
+                                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                        }
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
+                                    {companyInitials}
+                                  </div>
+                                </div>
+                                <div className="role-company">
+                                  <div className="role-title">{app.company || "Unknown Company"}</div>
+                                  {/* Show subtitle (new records) or fall back to role (legacy records) */}
+                                  {(() => {
+                                    const sub = app.subtitle
+                                      || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
+                                    return sub ? <div className="company-name">{sub}</div> : null;
+                                  })()}
+                                </div>
+                              </div>
+                              <div className="status-badge-container">
+                                <span className={`status-badge status-${app.derivedStatus}`}>
+                                  {app.derivedStatus}
+                                </span>
                               </div>
                             </div>
-                            <div className="role-company">
-                              <div className="role-title">{app.company || "Unknown Company"}</div>
-                              {/* Show subtitle (new records) or fall back to role (legacy records) */}
-                              {(() => {
-                                const sub = app.subtitle
-                                  || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
-                                return sub ? <div className="company-name">{sub}</div> : null;
-                              })()}
-                            </div>
-                          </div>
-                          <div className="status-badge-container">
-                            <span className={`status-badge status-${app.derivedStatus}`}>
-                              {app.derivedStatus}
-                            </span>
-                          </div>
-                        </div>
 
 
 
-                        {/* ── Display fields ─────────────────────────────────────────────────────
+                            {/* ── Display fields ─────────────────────────────────────────────────────
                              NEW records: app.displayFields = [{label, value}] — rendered directly.
                              LEGACY records: app.fieldsToDisplay = ["role","stipend",...] — rendered
                              using FIELD_CONFIG lookup from individual programRoles/programStipend etc.
                         ── */}
-                        {(() => {
-                          // NEW flexible format — [{label, value}]
+                            {(() => {
+                              // NEW flexible format — [{label, value}]
 
-                          const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
-                            ? app.displayFields.filter(f => f && f.label && f.value)
-                            : null;
+                              const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
+                                ? app.displayFields.filter(f => f && f.label && f.value)
+                                : null;
 
-                          if (flexFields && flexFields.length > 0) {
-                            return (
-                              <div className="program-details">
-                                {flexFields.map(({ label, value }) => (
-                                  <div key={label} className="program-detail">
-                                    <span className="program-detail-label">{label}</span>
-                                    <span className="program-detail-value">{value}</span>
+                              if (flexFields && flexFields.length > 0) {
+                                return (
+                                  <div className="program-details">
+                                    {flexFields.map(({ label, value }) => (
+                                      <div key={label} className="program-detail">
+                                        <span className="program-detail-label">{label}</span>
+                                        <span className="program-detail-value">{value}</span>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
-                              </div>
-                            );
-                          }
-
-                          // LEGACY format — string array + fixed FIELD_CONFIG lookup
-                          let legacyFields = app.fieldsToDisplay;
-                          if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
-                            legacyFields = [];
-                            if (app.programRoles) legacyFields.push("role");
-                            if (app.programStipend) legacyFields.push("stipend");
-                            if (app.deadlineText) legacyFields.push("deadline");
-                            if (app.programDuration) legacyFields.push("duration");
-                            if (app.venue) legacyFields.push("venue");
-                          }
-                          if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
-
-                          const FIELD_CONFIG = {
-                            role: { label: "Roles", value: app.programRoles },
-                            stipend: { label: "Stipend", value: app.programStipend },
-                            deadline: { label: "Deadline", value: app.deadlineText },
-                            duration: { label: "Duration", value: app.programDuration },
-                            venue: { label: "Venue", value: app.venue },
-                            eventName: { label: "Event", value: app.subtitle },
-                          };
-                          const rows = legacyFields
-                            .map(f => FIELD_CONFIG[f])
-                            .filter(r => r && r.value && r.value.trim().length > 0);
-                          if (rows.length === 0) return null;
-                          return (
-                            <div className="program-details">
-                              {rows.map(({ label, value }) => (
-                                <div key={label} className="program-detail">
-                                  <span className="program-detail-label">{label}</span>
-                                  <span className="program-detail-value">{value}</span>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-
-                        {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
-                        {app.deadline && !app.deadlineText && (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && (
-                          <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
-                            ? 'urgent' : ''
-                            }`}>
-                            Deadline: {app.deadline}
-                          </div>
-                        )}
-
-                        <div className="app-footer">
-                          <div className="email-info">
-                            <span style={{ fontSize: 16 }}>✉️</span>
-                            <span>{app.email || "user@gmail.com"}</span>
-                          </div>
-                          <span>{formattedDate}</span>
-                        </div>
-
-                        <div className="note-container">
-                          <textarea
-                            className="note-input"
-                            placeholder="Add a personal note..."
-                            value={app.note || ""}
-                            onChange={(e) => handleUpdateNote(app._id, e.target.value)}
-                            onBlur={(e) => handleSaveNote(app._id, e.target.value)}
-                          />
-                          <div className="note-save-hint">Auto-saves on blur</div>
-                        </div>
-
-                        <div className="card-actions">
-                          <button
-                            className="card-btn card-btn-edit"
-                            onClick={() => {
-                              setEditingApp(app);
-
-                              const getField = (label, dbField) => {
-                                if (app.displayFields && app.displayFields.length > 0) {
-                                  const f = app.displayFields.find(df => df.label === label);
-                                  if (f) return f.value;
-                                }
-                                return dbField || "";
-                              };
-
-                              const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
-                              const dynamicFields = [];
-                              if (app.displayFields && app.displayFields.length > 0) {
-                                app.displayFields.forEach(df => {
-                                  if (!standardLabels.includes(df.label)) {
-                                    dynamicFields.push({ label: df.label, value: df.value });
-                                  }
-                                });
+                                );
                               }
 
-                              setEditFormData({
-                                company: app.company || "",
-                                subtitle: app.subtitle || "",
-                                role: getField("Role", app.role),
-                                stipend: getField("Stipend", app.programStipend),
-                                ctc: getField("CTC", app.salaryText),
-                                duration: getField("Duration", app.programDuration),
-                                location: getField("Location", app.venue),
-                                joining: getField("Joining", ""),
-                                deadline: getField("Deadline", app.deadlineText),
-                                date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
-                                link: app.link || "",
-                                dynamicFields: dynamicFields
-                              });
-                              setShowEditModal(true);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          {app.link && !isDone && (
-                            <a
-                              className="card-btn card-btn-apply"
-                              href={app.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => {
-                                if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
-                                  handleApply(app._id);
-                                }
-                              }}
-                            >
-                              {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
-                            </a>
-                          )}
-                          <button
-                            className="card-btn card-btn-done"
-                            onClick={() => handleMarkDone(app._id)}
-                            disabled={isDone}
-                          >
-                            {isDone ? "Done" : "Mark Done"}
-                          </button>
-                          <button
-                            className="card-btn card-btn-remove"
-                            onClick={() => handleDeleteOne(app._id)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
+                              // LEGACY format — string array + fixed FIELD_CONFIG lookup
+                              let legacyFields = app.fieldsToDisplay;
+                              if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
+                                legacyFields = [];
+                                if (app.programRoles) legacyFields.push("role");
+                                if (app.programStipend) legacyFields.push("stipend");
+                                if (app.deadlineText) legacyFields.push("deadline");
+                                if (app.programDuration) legacyFields.push("duration");
+                                if (app.venue) legacyFields.push("venue");
+                              }
+                              if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
 
-            {!loading && applications.length === 0 && (
-              <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
-                {syncStatus === "pending"
-                  ? "Emails are being synced in the background. Please wait..."
-                  : "No applications found. Try syncing emails."}
-              </p>
-            )}
+                              const FIELD_CONFIG = {
+                                role: { label: "Roles", value: app.programRoles },
+                                stipend: { label: "Stipend", value: app.programStipend },
+                                deadline: { label: "Deadline", value: app.deadlineText },
+                                duration: { label: "Duration", value: app.programDuration },
+                                venue: { label: "Venue", value: app.venue },
+                                eventName: { label: "Event", value: app.subtitle },
+                              };
+                              const rows = legacyFields
+                                .map(f => FIELD_CONFIG[f])
+                                .filter(r => r && r.value && r.value.trim().length > 0);
+                              if (rows.length === 0) return null;
+                              return (
+                                <div className="program-details">
+                                  {rows.map(({ label, value }) => (
+                                    <div key={label} className="program-detail">
+                                      <span className="program-detail-label">{label}</span>
+                                      <span className="program-detail-value">{value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
+                            {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
+                            {app.deadline && !app.deadlineText && (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && (
+                              <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
+                                ? 'urgent' : ''
+                                }`}>
+                                Deadline: {app.deadline}
+                              </div>
+                            )}
+
+                            <div className="app-footer">
+                              <div className="email-info">
+                                <span style={{ fontSize: 16 }}>✉️</span>
+                                <span>{app.email || "user@gmail.com"}</span>
+                              </div>
+                              <span>{formattedDate}</span>
+                            </div>
+
+                            <div className="note-container">
+                              <textarea
+                                className="note-input"
+                                placeholder="Add a personal note..."
+                                value={app.note || ""}
+                                onChange={(e) => handleUpdateNote(app._id, e.target.value)}
+                                onBlur={(e) => handleSaveNote(app._id, e.target.value)}
+                              />
+                              <div className="note-save-hint">Auto-saves on blur</div>
+                            </div>
+
+                            <div className="card-actions">
+                              <button
+                                className="card-btn card-btn-edit"
+                                onClick={() => {
+                                  setEditingApp(app);
+
+                                  const getField = (label, dbField) => {
+                                    if (app.displayFields && app.displayFields.length > 0) {
+                                      const f = app.displayFields.find(df => df.label === label);
+                                      if (f) return f.value;
+                                    }
+                                    return dbField || "";
+                                  };
+
+                                  const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
+                                  const dynamicFields = [];
+                                  if (app.displayFields && app.displayFields.length > 0) {
+                                    app.displayFields.forEach(df => {
+                                      if (!standardLabels.includes(df.label)) {
+                                        dynamicFields.push({ label: df.label, value: df.value });
+                                      }
+                                    });
+                                  }
+
+                                  setEditFormData({
+                                    company: app.company || "",
+                                    subtitle: app.subtitle || "",
+                                    role: getField("Role", app.role),
+                                    stipend: getField("Stipend", app.programStipend),
+                                    ctc: getField("CTC", app.salaryText),
+                                    duration: getField("Duration", app.programDuration),
+                                    location: getField("Location", app.venue),
+                                    joining: getField("Joining", ""),
+                                    deadline: getField("Deadline", app.deadlineText),
+                                    date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
+                                    link: app.link || "",
+                                    dynamicFields: dynamicFields
+                                  });
+                                  setShowEditModal(true);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              {app.link && !isDone && (
+                                <a
+                                  className="card-btn card-btn-apply"
+                                  href={app.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => {
+                                    if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
+                                      handleApply(app._id);
+                                    }
+                                  }}
+                                >
+                                  {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
+                                </a>
+                              )}
+                              <button
+                                className="card-btn card-btn-done"
+                                onClick={() => handleMarkDone(app._id)}
+                                disabled={isDone}
+                              >
+                                {isDone ? "Done" : "Mark Done"}
+                              </button>
+                              <button
+                                className="card-btn card-btn-remove"
+                                onClick={() => handleDeleteOne(app._id)}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+
+                {!loading && applications.length === 0 && (
+                  <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
+                    {syncStatus === "pending"
+                      ? "Emails are being synced in the background. Please wait..."
+                      : "No applications found. Try syncing emails."}
+                  </p>
+                )}
               </>
             )}
           </main>
@@ -2515,7 +2513,7 @@ export default function JobTrackerDashboard() {
 
               <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                 <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
-                
+
                 {formData.customFields && formData.customFields.map((cf, index) => (
                   <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <div style={{ flex: 1 }}>
@@ -2684,7 +2682,7 @@ export default function JobTrackerDashboard() {
 
               <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                 <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
-                
+
                 {editFormData.dynamicFields && editFormData.dynamicFields.map((df, index) => (
                   <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <div style={{ flex: 1 }}>
