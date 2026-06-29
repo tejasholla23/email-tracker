@@ -60,6 +60,7 @@ export default function JobTrackerDashboard() {
   const cardRef = React.useRef(null);
   const canvasRef = React.useRef(null);
   const glowRef = React.useRef(null);
+  const exchangeInProgress = React.useRef(false);
 
   useEffect(() => {
     if (userEmail) return;
@@ -274,6 +275,8 @@ export default function JobTrackerDashboard() {
       }
 
       if (authCode) {
+        if (exchangeInProgress.current) return;
+        exchangeInProgress.current = true;
         try {
           const res = await fetch(`${BASE_URL}/auth/token`, {
             method: "POST",
@@ -286,7 +289,8 @@ export default function JobTrackerDashboard() {
             localStorage.setItem("refreshToken", data.refreshToken);
             setUserEmail(data.email);
           } else {
-            console.error("Token exchange failed");
+            const errorData = await res.json().catch(() => ({}));
+            console.error("Token exchange failed:", res.status, errorData.message || errorData);
           }
         } catch (err) {
           console.error("Error exchanging token:", err);

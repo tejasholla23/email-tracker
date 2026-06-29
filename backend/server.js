@@ -476,7 +476,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
 
     // ── EXISTING RECORD: enrich or skip ──
-    const exists = existingFast ? await Application.findOne({ messageId: id }) : null;
+    const exists = existingFast ? await Application.findOne({ userId: acc._id, messageId: id }) : null;
     if (exists) {
       // Skip if this messageId was already marked as deleted (and is a normal application)
       if (exists.isDeleted) {
@@ -686,6 +686,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     let contentExists = null;
     if (isValid) {
       contentExists = await Application.findOne({
+        userId: acc._id,
         companyKey,
         isDeleted: { $ne: true }
       });
@@ -824,12 +825,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
 // --- Batch DB lookup helper ---
 // Returns a Map of messageId -> { parserVersion, isDeleted, parseMeta } for all known IDs
-async function batchLookupMessageIds(messageIds) {
+async function batchLookupMessageIds(messageIds, userId) {
   const results = await Application.find(
-    { $or: [
-      { messageId: { $in: messageIds } },
-      { "events.messageId": { $in: messageIds } }
-    ]},
+    {
+      userId,
+      $or: [
+        { messageId: { $in: messageIds } },
+        { "events.messageId": { $in: messageIds } }
+      ]
+    },
     { messageId: 1, parserVersion: 1, isDeleted: 1, "parseMeta.nextRetryAt": 1, "events.messageId": 1 }
   );
   
@@ -1029,7 +1033,7 @@ async function fetchAndProcessEmails() {
         console.log(`\n--- STARTING SYNC FOR ${acc.email} (${syncPath}) ---`);
 
         // BATCH DB LOOKUP: Replace N individual findOne() calls with one $in query
-        const knownDocs = await batchLookupMessageIds(messageIdsToProcess);
+        const knownDocs = await batchLookupMessageIds(messageIdsToProcess, acc._id);
         const newCount = messageIdsToProcess.length - knownDocs.size;
         console.log(`[BATCH_LOOKUP] Already known: ${knownDocs.size} | New: ${newCount} | Total: ${messageIdsToProcess.length}`);
 

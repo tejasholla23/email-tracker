@@ -5,7 +5,7 @@ const accountSchema = new mongoose.Schema({
   tokens: Object,
   syncStatus: {
     type: String,
-    enum: ["success", "failed", "pending"],
+    enum: ["success", "failed", "pending", "idle"],
     default: "success",
   },
   syncError: {
