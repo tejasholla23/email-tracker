@@ -1067,7 +1067,7 @@ export default function JobTrackerDashboard() {
         .page-subtitle { color: #64748b; font-size: 15px; }
 
         /* Settings Page */
-        .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 900px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+        .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 100%; margin: 0 auto; width: 100%; padding-bottom: 40px; }
         .settings-header { margin-bottom: 8px; }
         .settings-main-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px; }
         .settings-main-subtitle { color: var(--text-secondary); font-size: 15px; }
