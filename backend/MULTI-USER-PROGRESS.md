@@ -9,6 +9,7 @@ This file tracks the status of the multi-user architecture migration phases.
 - [x] **Phase 4**: User Ownership & Database Scoping (completed)
 - [x] **Phase 5**: Multi-User Gmail Integration (completed)
 - [x] **Phase 6**: Background Synchronization Scoping & Operational Metrics (completed)
+- [x] **Phase 7**: Frontend Multi-User Refinements & Secure Account Deletion (completed)
 
 ---
 
@@ -50,3 +51,10 @@ This file tracks the status of the multi-user architecture migration phases.
   - Added structured operational logs: cron runs print starting metrics, per-account start/completion blocks (with duration, fetch/insert/skip counts, and modes), failed runs log durations and exception context, and final execution summary blocks.
   - Confirmed that single-instance startup recovery behaves correctly on server reboots.
   - Completed production-readiness check for Render + cron-job.org + 10-20 users.
+
+- **Phase 7**:
+  - Audited frontend API layers to confirm that all requests use JWT header values rather than email values, verifying multi-user isolation.
+  - Refined sidebar navigation menu layout (renaming `Support ⚙️` to `Settings ⚙️` and highlighting it when active) and rebuilt avatar dropdown menus with structured divider sections, a personal email header, and a `Delete Account` action trigger.
+  - Designed card-based sub-views containing Support contact actions, Legal privacy/terms document pages (fully written to match application architecture in plain, readable style), and About system parameters.
+  - Implemented `DELETE /auth/account` backend endpoint to wipe a user's associated applications and account info from MongoDB Atlas while leaving shared global `CompanyInfo` intact.
+  - Built a 2-step confirmation delete account modal requiring users to type "DELETE" before permanently erasing data, signing out, clearing local JWT tokens, and redirecting them safely back to login.
