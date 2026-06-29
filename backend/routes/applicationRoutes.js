@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Application = require("../models/Application");
 const CompanyInfo = require("../models/CompanyInfo");
 const Account = require("../models/Account");
@@ -35,7 +36,13 @@ router.get("/sync-status", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const applications = await Application.aggregate([
-      { $match: { isDeleted: { $ne: true }, status: { $nin: ["pending", "failed_retryable"] } } },
+      { 
+        $match: { 
+          userId: new mongoose.Types.ObjectId(req.userId),
+          isDeleted: { $ne: true }, 
+          status: { $nin: ["pending", "failed_retryable"] } 
+        } 
+      },
       { $sort: { date: -1 } },
       {
         $lookup: {
