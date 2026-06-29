@@ -1660,7 +1660,99 @@ export default function JobTrackerDashboard() {
               </div>
             )}
 
-            <div className="page-header">
+            {activeFilter === "settings" ? (
+              <div className="settings-container">
+                {settingsSubView === "main" && (
+                  <>
+                    <div className="settings-card">
+                      <h3 className="settings-title">Support</h3>
+                      <div className="settings-list">
+                        <button className="settings-item" onClick={() => alert("Report an Issue functionality coming soon!")}>
+                          <span>Report an Issue</span>
+                          <span className="settings-item-arrow">❯</span>
+                        </button>
+                        <button className="settings-item" onClick={() => alert("Send Feedback functionality coming soon!")}>
+                          <span>Send Feedback</span>
+                          <span className="settings-item-arrow">❯</span>
+                        </button>
+                        <button className="settings-item" onClick={() => alert("Contact Developer details coming soon!")}>
+                          <span>Contact Developer</span>
+                          <span className="settings-item-arrow">❯</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-card">
+                      <h3 className="settings-title">Legal</h3>
+                      <div className="settings-list">
+                        <button className="settings-item" onClick={() => setSettingsSubView("privacy")}>
+                          <span>Privacy Policy</span>
+                          <span className="settings-item-arrow">❯</span>
+                        </button>
+                        <button className="settings-item" onClick={() => setSettingsSubView("terms")}>
+                          <span>Terms of Service</span>
+                          <span className="settings-item-arrow">❯</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-card">
+                      <h3 className="settings-title">About</h3>
+                      <div className="about-list">
+                        <div className="about-item">
+                          <span className="about-label">Product:</span>
+                          <span>Email Tracker</span>
+                        </div>
+                        <div className="about-item">
+                          <span className="about-label">Version:</span>
+                          <span>1.0.0</span>
+                        </div>
+                        <div className="about-item">
+                          <span className="about-label">Description:</span>
+                          <span>AI-powered placement email tracker.</span>
+                        </div>
+                        <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                          <span className="about-label" style={{ display: 'block', marginBottom: '8px' }}>Built with:</span>
+                          <ul className="about-tech-list">
+                            <li>React</li>
+                            <li>Node.js</li>
+                            <li>MongoDB</li>
+                            <li>Gemini</li>
+                            <li>Google OAuth</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {settingsSubView === "privacy" && (
+                  <div className="settings-card">
+                    <button className="btn-outline-primary" style={{ marginBottom: '16px' }} onClick={() => setSettingsSubView("main")}>
+                      ❮ Back to Settings
+                    </button>
+                    <h3 className="settings-title">Privacy Policy</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', lineHeight: '1.6' }}>
+                      Privacy Policy content will be detailed in Phase 7.3.
+                    </p>
+                  </div>
+                )}
+
+                {settingsSubView === "terms" && (
+                  <div className="settings-card">
+                    <button className="btn-outline-primary" style={{ marginBottom: '16px' }} onClick={() => setSettingsSubView("main")}>
+                      ❮ Back to Settings
+                    </button>
+                    <h3 className="settings-title">Terms of Service</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', lineHeight: '1.6' }}>
+                      Terms of Service content will be detailed in Phase 7.3.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="page-header">
               <div>
                 <h2 className="page-title">Applications Overview</h2>
                 <p className="page-subtitle">Track and manage emails from placement@msrit.edu</p>
@@ -1995,15 +2087,19 @@ export default function JobTrackerDashboard() {
                   : "No applications found. Try syncing emails."}
               </p>
             )}
+              </>
+            )}
           </main>
 
-          <button
-            className="floating-add-btn"
-            onClick={() => setShowAddModal(true)}
-            title="Add Application"
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </button>
+          {activeFilter !== "settings" && (
+            <button
+              className="floating-add-btn"
+              onClick={() => setShowAddModal(true)}
+              title="Add Application"
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+          )}
         </div>
       </div>
 
