@@ -7,7 +7,8 @@ This file tracks the status of the multi-user architecture migration phases.
 - [x] **Phase 2**: Multi-user account modeling & DB scoping (completed)
 - [x] **Phase 3**: Authentication implementation & UI integration (completed)
 - [x] **Phase 4**: User Ownership & Database Scoping (completed)
-- [ ] **Phase 5**: Cleanup & Final Testing (planned)
+- [x] **Phase 5**: Multi-User Gmail Integration (completed)
+- [x] **Phase 6**: Background Synchronization Scoping & Operational Metrics (completed)
 
 ---
 
@@ -37,3 +38,15 @@ This file tracks the status of the multi-user architecture migration phases.
   - Re-indexed database schemas by replacing the global unique `messageId` field with a compound unique `{ userId: 1, messageId: 1 }` index and prepended `userId` to all existing compound indexes for performance.
   - Performed a security audit validating ownership isolation.
 
+- **Phase 5**:
+  - Scoped manual Gmail synchronization triggers (`GET /sync`) to target only the requesting user's account ID.
+  - Substituted the single-user global `isProcessing` sync lock with a Set-based `activeSyncs` lock tracker, allowing concurrent user manual syncs.
+  - Converted the global clear-all sync abort flag (`clearRequested`) to a user-scoped Set (`activeClearRequests`) to isolate clear actions.
+  - Scoped account sync statuses, error reports, history IDs, and timestamps strictly to their respective `Account` document fields in MongoDB.
+  - Confirmed the secure flow of Google OAuth credentials and token refresh operations.
+
+- **Phase 6**:
+  - Audited sequential background cron execution (`GET /run-cron`) for multi-user durability, checking concurrency overlaps, locks, and failure recovery.
+  - Added structured operational logs: cron runs print starting metrics, per-account start/completion blocks (with duration, fetch/insert/skip counts, and modes), failed runs log durations and exception context, and final execution summary blocks.
+  - Confirmed that single-instance startup recovery behaves correctly on server reboots.
+  - Completed production-readiness check for Render + cron-job.org + 10-20 users.
