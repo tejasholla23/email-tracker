@@ -1288,10 +1288,6 @@ export default function JobTrackerDashboard() {
         .status-unmarked { background: #fef3c7; color: #92400e; border-color: #fde68a; }
         .status-applied { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
         .status-done { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
-        .app-card.status-outline-new { border-color: #a7f3d0; }
-        .app-card.status-outline-unmarked { border-color: #fde68a; }
-        .app-card.status-outline-applied { border-color: #c7d2fe; }
-        .app-card.status-outline-done { border-color: #e5e7eb; }
         .app-card.is-urgent { border-color: #dc2626; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18); }
         
         .app-footer { border-top: 1px solid #eaefed; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #6d7a77; }
@@ -1464,10 +1460,6 @@ export default function JobTrackerDashboard() {
           background: #0d1321;
           border-color: #1f2937;
         }
-        .dark .app-card.status-outline-new { border-color: rgba(52, 211, 153, 0.4); }
-        .dark .app-card.status-outline-unmarked { border-color: rgba(251, 191, 36, 0.4); }
-        .dark .app-card.status-outline-applied { border-color: rgba(129, 140, 248, 0.45); }
-        .dark .app-card.status-outline-done { border-color: rgba(156, 163, 175, 0.25); }
         .dark .app-card.is-urgent { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15); }
         
         .dark .app-card:hover {
