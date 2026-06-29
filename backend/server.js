@@ -173,7 +173,7 @@ app.get("/", (req, res) => {
 // GET /clear-applications — legacy convenience endpoint (browser-accessible)
 app.get("/clear-applications", authenticate, async (req, res) => {
   try {
-    await Application.deleteMany({});
+    await Application.deleteMany({ userId: req.userId });
     res.send("All applications deleted");
   } catch (err) {
     res.status(500).send(err.message);
@@ -205,7 +205,7 @@ app.delete("/clear-all-applications", authenticate, async (req, res) => {
   }
 
   try {
-    const result = await Application.deleteMany({});
+    const result = await Application.deleteMany({ userId: req.userId });
     console.log(`[CLEAR_ALL] Deleted ${result.deletedCount} application(s)`);
     clearRequested = false;
     isProcessing = false; // Reset in case sync was stuck

@@ -107,8 +107,8 @@ router.patch("/:id", async (req, res) => {
       }
     }
 
-    const updatedApplication = await Application.findByIdAndUpdate(
-      req.params.id,
+    const updatedApplication = await Application.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       update,
       { new: true, runValidators: true }
     );
@@ -126,7 +126,7 @@ router.patch("/:id", async (req, res) => {
 // DELETE /applications/clear - delete all applications
 router.delete("/clear", async (req, res) => {
   try {
-    await Application.deleteMany({});
+    await Application.deleteMany({ userId: req.userId });
     res.json({ message: "All applications permanently cleared" });
   } catch (error) {
     res.status(500).json({ message: "Failed to clear applications" });
@@ -136,8 +136,8 @@ router.delete("/clear", async (req, res) => {
 // DELETE /applications/:id - soft-delete a single application
 router.delete("/:id", async (req, res) => {
   try {
-    const deleted = await Application.findByIdAndUpdate(
-      req.params.id,
+    const deleted = await Application.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       { isDeleted: true },
       { new: true }
     );

@@ -36,7 +36,7 @@ const applicationSchema = new mongoose.Schema(
     isDeleted: { type: Boolean, default: false },
     rawText: { type: String },
     note: { type: String, default: "" },
-    messageId: { type: String, unique: true, sparse: true },
+    messageId: { type: String, sparse: true },
     classification: { type: String },
     confidenceScore: { type: Number },
     parserVersion: { type: String, default: "v2" },
@@ -74,9 +74,13 @@ const applicationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Company-level identity index: one Application per normalized company (one hiring process)applicationSchema.index({ companyKey: 1, isDeleted: 1 });
+// Unique messageId per user index to prevent duplicate imports for the same user
+applicationSchema.index({ userId: 1, messageId: 1 }, { unique: true, sparse: true });
+
+// Company-level identity index: one Application per normalized company (one hiring process)
+applicationSchema.index({ userId: 1, companyKey: 1, isDeleted: 1 });
 
 // Compound index for primary dashboard query: Application.find({ isDeleted: false }).sort({ date: -1 })
-applicationSchema.index({ isDeleted: 1, date: -1 });
+applicationSchema.index({ userId: 1, isDeleted: 1, date: -1 });
 
 module.exports = mongoose.model("Application", applicationSchema);
