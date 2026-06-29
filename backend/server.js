@@ -187,16 +187,17 @@ app.delete("/clear-all-applications", authenticate, async (req, res) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  console.log("[CLEAR_ALL] Requested — setting clearRequested flag");
-  clearRequested = true;
+  const userIdStr = req.userId.toString();
+  console.log(`[CLEAR_ALL] Requested for user ${userIdStr} — setting activeClearRequests`);
+  activeClearRequests.add(userIdStr);
 
   // Give the sync loop up to 3 s to notice the flag and break out of the current email
-  if (isProcessing) {
-    console.log("[CLEAR_ALL] Sync in progress — waiting up to 3 s for it to abort...");
+  if (activeSyncs.has(userIdStr)) {
+    console.log("[CLEAR_ALL] Sync in progress for this user — waiting up to 3 s for it to abort...");
     await new Promise((resolve) => {
       const deadline = Date.now() + 3000;
       const poll = setInterval(() => {
-        if (!isProcessing || Date.now() >= deadline) {
+        if (!activeSyncs.has(userIdStr) || Date.now() >= deadline) {
           clearInterval(poll);
           resolve();
         }
@@ -207,11 +208,11 @@ app.delete("/clear-all-applications", authenticate, async (req, res) => {
   try {
     const result = await Application.deleteMany({ userId: req.userId });
     console.log(`[CLEAR_ALL] Deleted ${result.deletedCount} application(s)`);
-    clearRequested = false;
-    isProcessing = false; // Reset in case sync was stuck
+    activeClearRequests.delete(userIdStr);
+    activeSyncs.delete(userIdStr); // Reset lock in case sync was stuck
     res.json({ message: "All applications permanently cleared", deletedCount: result.deletedCount });
   } catch (err) {
-    clearRequested = false;
+    activeClearRequests.delete(userIdStr);
     res.status(500).json({ message: "Failed to clear applications: " + err.message });
   }
 });
@@ -374,8 +375,9 @@ app.get("/logout", authenticate, async (req, res) => {
   }
 });
 
-let isProcessing = false;
-let clearRequested = false; // Set to true to abort an in-progress sync during Clear All
+const activeSyncs = new Set();
+const activeClearRequests = new Set();
+let isCronProcessing = false;
 
 function appendApplicationEvent(application, parsed, emailMetadata) {
   const { messageId, date, subject } = emailMetadata;
@@ -860,12 +862,21 @@ async function batchLookupMessageIds(messageIds, userId) {
 
 // --- Main sync orchestrator ---
 async function fetchAndProcessEmails(targetUserId = null) {
-  if (isProcessing) {
-    console.log("Cron already running, skipping...");
-    return;
+  if (targetUserId) {
+    const userIdStr = targetUserId.toString();
+    if (activeSyncs.has(userIdStr)) {
+      console.log(`[SYNC] Blocked - sync already in progress for user: ${userIdStr}`);
+      return;
+    }
+    activeSyncs.add(userIdStr);
+  } else {
+    if (isCronProcessing) {
+      console.log("Cron already running, skipping...");
+      return;
+    }
+    isCronProcessing = true;
   }
 
-  isProcessing = true;
   let insertedCount = 0;
   let skippedCount = 0;
   let fetchedCount = 0;
@@ -881,6 +892,15 @@ async function fetchAndProcessEmails(targetUserId = null) {
 
     for (let acc of accounts) {
       if (!acc.email || !config.isAllowedEmail(acc.email)) continue;
+
+      const accIdStr = acc._id.toString();
+      if (!targetUserId) {
+        if (activeSyncs.has(accIdStr)) {
+          console.log(`[CRON] Skipping account ${acc.email} - sync already in progress`);
+          continue;
+        }
+        activeSyncs.add(accIdStr);
+      }
 
       console.log(`Processing account: ${acc.email}`);
       try {
@@ -1044,9 +1064,9 @@ async function fetchAndProcessEmails(targetUserId = null) {
         let geminiParsedCount = 0;
 
         for (const msgId of messageIdsToProcess) {
-          // Abort the loop immediately if a Clear All was requested while sync was running
-          if (clearRequested) {
-            console.log("[SYNC_ABORTED] Clear All requested — aborting sync loop");
+          // Abort the loop immediately if a Clear All was requested for this account while sync was running
+          if (activeClearRequests.has(acc._id.toString())) {
+            console.log(`[SYNC_ABORTED] Clear All requested for user ${acc.email} — aborting sync loop`);
             break;
           }
 
@@ -1095,6 +1115,10 @@ async function fetchAndProcessEmails(targetUserId = null) {
           { email: acc.email },
           { syncStatus: "failed", syncError: errorMsg }
         );
+      } finally {
+        if (!targetUserId) {
+          activeSyncs.delete(accIdStr);
+        }
       }
     }
     console.log(`\n[SYNC_COMPLETE] Fetched: ${fetchedCount} | Inserted: ${insertedCount} | Skipped: ${skippedCount}`);
@@ -1102,7 +1126,11 @@ async function fetchAndProcessEmails(targetUserId = null) {
     console.error("Fetch error:", err.message);
     // Removed 'throw err' to prevent unhandled rejections in background execution
   } finally {
-    isProcessing = false;
+    if (targetUserId) {
+      activeSyncs.delete(targetUserId.toString());
+    } else {
+      isCronProcessing = false;
+    }
   }
 }
 
@@ -1122,8 +1150,9 @@ const requireCronKey = (req, res, next) => {
 // 🔘 MANUAL TRIGGER (SYNC BUTTON)
 // ==========================
 app.get("/sync", authenticate, (req, res) => {
-  if (isProcessing) {
-    console.log(`[MANUAL_SYNC] Blocked — sync already in progress`);
+  const userIdStr = req.userId.toString();
+  if (activeSyncs.has(userIdStr)) {
+    console.log(`[MANUAL_SYNC] Blocked for user ${userIdStr} — sync already in progress`);
     return res.status(200).json({ success: true, message: "Sync already in progress. Please wait for it to finish." });
   }
 
@@ -1138,7 +1167,7 @@ app.get("/sync", authenticate, (req, res) => {
 // 🧪 MANUAL CRON TRIGGER
 // ==========================
 app.get("/run-cron", requireCronKey, (req, res) => {
-  if (isProcessing) {
+  if (isCronProcessing) {
     return res.status(200).json({ success: true, message: "Sync already in progress" });
   }
 
