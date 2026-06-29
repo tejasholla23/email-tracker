@@ -1067,17 +1067,38 @@ export default function JobTrackerDashboard() {
         .page-subtitle { color: #64748b; font-size: 15px; }
 
         /* Settings Page */
-        .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 800px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
-        .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .settings-title { font-size: 18px; font-weight: 700; color: var(--text-heading); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 900px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+        .settings-header { margin-bottom: 8px; }
+        .settings-main-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px; }
+        .settings-main-subtitle { color: var(--text-secondary); font-size: 15px; }
+        .settings-grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (max-width: 768px) {
+          .settings-grid-row { grid-template-columns: 1fr; }
+        }
+        .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .settings-title { font-size: 20px; font-weight: 700; color: var(--text-heading); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+        .settings-title-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(13, 148, 136, 0.1); color: #0d9488; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .dark .settings-title-icon { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
+        
         .settings-list { display: flex; flex-direction: column; gap: 12px; }
-        .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: 8px; background: var(--bg-color); cursor: pointer; transition: background-color 0.15s ease-out; border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 500; font-size: 14px; text-align: left; width: 100%; }
-        .settings-item:hover { background: var(--border-color); color: var(--text-heading); }
-        .settings-item-arrow { color: var(--text-secondary); font-size: 12px; }
-        .about-list { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--text-primary); line-height: 1.6; }
-        .about-item { display: flex; justify-content: space-between; }
-        .about-label { font-weight: 600; color: var(--text-heading); }
-        .about-tech-list { margin-top: 4px; padding-left: 20px; list-style-type: disc; color: var(--text-secondary); }
+        .settings-item { display: flex; align-items: center; padding: 14px 18px; border-radius: 12px; background: var(--bg-color); cursor: pointer; transition: all 0.2s ease; border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 500; font-size: 14.5px; text-align: left; width: 100%; gap: 12px; }
+        .settings-item:hover { background: var(--border-color); color: var(--text-heading); transform: translateY(-1px); }
+        .settings-item-label { flex: 1; }
+        .settings-item-icon { color: var(--text-secondary); display: flex; align-items: center; font-size: 16px; width: 24px; justify-content: center; }
+        .settings-item-arrow { color: var(--text-secondary); font-size: 12px; margin-left: auto; }
+        
+        /* Settings About Section (Clean style) */
+        .settings-about-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .about-info-box { display: flex; flex-direction: column; gap: 12px; }
+        .about-info-box h3 { font-size: 20px; font-weight: 700; color: var(--text-heading); margin: 0; }
+        .about-version-badge { display: inline-block; font-size: 11px; font-weight: 700; color: #0d9488; background: rgba(13, 148, 136, 0.1); padding: 4px 10px; border-radius: 999px; width: fit-content; letter-spacing: 0.05em; margin-top: -4px; }
+        .dark .about-version-badge { color: #2dd4bf; background: rgba(45, 212, 191, 0.15); }
+        .about-desc { font-size: 14.5px; line-height: 1.6; color: var(--text-primary); margin: 0; text-align: justify; }
+        .about-tech-container { margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 16px; }
+        .about-tech-label { font-weight: 600; color: var(--text-heading); font-size: 14px; display: block; margin-bottom: 8px; }
+        .about-tech-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+        .about-tech-tag { font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--bg-color); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 6px; }
+        
         .legal-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); }
         .legal-content h2 { font-size: 17px; font-weight: 700; color: var(--text-heading); margin-top: 28px; margin-bottom: 10px; }
         .legal-content h2:first-of-type { margin-top: 8px; }
@@ -1758,62 +1779,80 @@ export default function JobTrackerDashboard() {
               <div className="settings-container">
                 {settingsSubView === "main" && (
                   <>
-                    <div className="settings-card">
-                      <h3 className="settings-title">Support</h3>
-                      <div className="settings-list">
-                        <button className="settings-item" onClick={() => alert("Report an Issue functionality coming soon!")}>
-                          <span>Report an Issue</span>
-                          <span className="settings-item-arrow">❯</span>
-                        </button>
-                        <button className="settings-item" onClick={() => alert("Send Feedback functionality coming soon!")}>
-                          <span>Send Feedback</span>
-                          <span className="settings-item-arrow">❯</span>
-                        </button>
-                        <button className="settings-item" onClick={() => alert("Contact Developer details coming soon!")}>
-                          <span>Contact Developer</span>
-                          <span className="settings-item-arrow">❯</span>
-                        </button>
+                    <div className="settings-header">
+                      <h1 className="settings-main-title">Settings & Help</h1>
+                    </div>
+
+                    <div className="settings-grid-row">
+                      <div className="settings-card">
+                        <h3 className="settings-title">
+                          <span className="settings-title-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="11" r="3"/></svg>
+                          </span>
+                          <span>Support</span>
+                        </h3>
+                        <div className="settings-list">
+                          <button className="settings-item" onClick={() => alert("Report an Issue functionality coming soon!")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            </span>
+                            <span className="settings-item-label">Report an Issue</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                          <button className="settings-item" onClick={() => alert("Send Feedback functionality coming soon!")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                            </span>
+                            <span className="settings-item-label">Send Feedback</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="settings-card">
+                        <h3 className="settings-title">
+                          <span className="settings-title-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="5" y1="7" x2="19" y2="7"/><path d="M5 9c0 3 1.5 5 3.5 5S12 12 12 9"/><path d="M12 9c0 3 1.5 5 3.5 5S19 12 19 9"/></svg>
+                          </span>
+                          <span>Legal</span>
+                        </h3>
+                        <div className="settings-list">
+                          <button className="settings-item" onClick={() => setSettingsSubView("privacy")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            </span>
+                            <span className="settings-item-label">Privacy Policy</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                          <button className="settings-item" onClick={() => setSettingsSubView("terms")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            </span>
+                            <span className="settings-item-label">Terms of Service</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="settings-card">
-                      <h3 className="settings-title">Legal</h3>
-                      <div className="settings-list">
-                        <button className="settings-item" onClick={() => setSettingsSubView("privacy")}>
-                          <span>Privacy Policy</span>
-                          <span className="settings-item-arrow">❯</span>
-                        </button>
-                        <button className="settings-item" onClick={() => setSettingsSubView("terms")}>
-                          <span>Terms of Service</span>
-                          <span className="settings-item-arrow">❯</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="settings-card">
-                      <h3 className="settings-title">About</h3>
-                      <div className="about-list">
-                        <div className="about-item">
-                          <span className="about-label">Product:</span>
-                          <span>Email Tracker</span>
-                        </div>
-                        <div className="about-item">
-                          <span className="about-label">Version:</span>
-                          <span>1.0.0</span>
-                        </div>
-                        <div className="about-item">
-                          <span className="about-label">Description:</span>
-                          <span>AI-powered placement email tracker.</span>
-                        </div>
-                        <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                          <span className="about-label" style={{ display: 'block', marginBottom: '8px' }}>Built with:</span>
-                          <ul className="about-tech-list">
-                            <li>React</li>
-                            <li>Node.js</li>
-                            <li>MongoDB</li>
-                            <li>Gemini</li>
-                            <li>Google OAuth</li>
-                          </ul>
+                    <div className="settings-about-card">
+                      <div className="about-info-box">
+                        <h3>About Email Tracker</h3>
+                        <span className="about-version-badge">VERSION 1.0.0 STABLE</span>
+                        <p className="about-desc">
+                          Email Tracker is an AI-powered placement assistant designed for high-performance students. 
+                          It automatically categorizes and monitors incoming university placement emails, extracting deadlines, 
+                          role details, and application statuses into a unified productivity dashboard.
+                        </p>
+                        <div className="about-tech-container">
+                          <span className="about-tech-label">Built with:</span>
+                          <div className="about-tech-tags">
+                            <span className="about-tech-tag">React</span>
+                            <span className="about-tech-tag">Node.js</span>
+                            <span className="about-tech-tag">MongoDB</span>
+                            <span className="about-tech-tag">Gemini</span>
+                            <span className="about-tech-tag">Google OAuth</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1920,7 +1959,7 @@ export default function JobTrackerDashboard() {
                       <h2>9. Contact</h2>
                       <p>
                         If you have questions about this Privacy Policy or how your data is handled, reach out to us at{" "}
-                        <strong>contact@emailtracker.app</strong>.
+                        <strong>tejasholla23@gmail.com</strong>.
                       </p>
                     </div>
                   </div>
@@ -2014,7 +2053,7 @@ export default function JobTrackerDashboard() {
                       <h2>9. Contact</h2>
                       <p>
                         Questions about these terms? Reach out at{" "}
-                        <strong>contact@emailtracker.app</strong>.
+                        <strong>tejasholla23@gmail.com</strong>.
                       </p>
                     </div>
                   </div>
@@ -2185,8 +2224,6 @@ export default function JobTrackerDashboard() {
                         ── */}
                         {(() => {
                           // NEW flexible format — [{label, value}]
-                          // DEV DEBUG: Log display fields
-                          console.log("CARD_DISPLAY_FIELDS", app.displayFields);
 
                           const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
                             ? app.displayFields.filter(f => f && f.label && f.value)
@@ -2319,9 +2356,6 @@ export default function JobTrackerDashboard() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => {
-                                console.log("[DEBUG_LINK] Clicked app ID:", app._id);
-                                console.log("[DEBUG_LINK] Original app.link value:", app.link);
-                                console.log("[DEBUG_LINK] Rendered href on click:", e.currentTarget.href);
                                 if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
                                   handleApply(app._id);
                                 }
