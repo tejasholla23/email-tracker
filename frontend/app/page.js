@@ -1000,6 +1000,27 @@ export default function JobTrackerDashboard() {
         .page-header { margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end; }
         .page-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 4px; }
         .page-subtitle { color: #64748b; font-size: 15px; }
+
+        /* Settings Page */
+        .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 800px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+        .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .settings-title { font-size: 18px; font-weight: 700; color: var(--text-heading); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .settings-list { display: flex; flex-direction: column; gap: 12px; }
+        .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: 8px; background: var(--bg-color); cursor: pointer; transition: background-color 0.15s ease-out; border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 500; font-size: 14px; text-align: left; width: 100%; }
+        .settings-item:hover { background: var(--border-color); color: var(--text-heading); }
+        .settings-item-arrow { color: var(--text-secondary); font-size: 12px; }
+        .about-list { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--text-primary); line-height: 1.6; }
+        .about-item { display: flex; justify-content: space-between; }
+        .about-label { font-weight: 600; color: var(--text-heading); }
+        .about-tech-list { margin-top: 4px; padding-left: 20px; list-style-type: disc; color: var(--text-secondary); }
+        .legal-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); }
+        .legal-content h2 { font-size: 17px; font-weight: 700; color: var(--text-heading); margin-top: 28px; margin-bottom: 10px; }
+        .legal-content h2:first-of-type { margin-top: 8px; }
+        .legal-content p { margin-bottom: 12px; }
+        .legal-content ul { margin: 8px 0 16px 20px; list-style-type: disc; }
+        .legal-content ul li { margin-bottom: 4px; }
+        .legal-content strong { color: var(--text-heading); }
+        .legal-last-updated { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; font-style: italic; }
         
         /* Stats Section */
         .stats-grid { 
@@ -1732,9 +1753,103 @@ export default function JobTrackerDashboard() {
                       ❮ Back to Settings
                     </button>
                     <h3 className="settings-title">Privacy Policy</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', lineHeight: '1.6' }}>
-                      Privacy Policy content will be detailed in Phase 7.3.
-                    </p>
+                    <p className="legal-last-updated">Last updated: June 2026</p>
+                    <div className="legal-content">
+                      <h2>1. What is Email Tracker?</h2>
+                      <p>
+                        Email Tracker is an AI-powered tool that helps students track placement-related emails.
+                        It connects to your Gmail account, identifies emails from your college placement department,
+                        and organizes them into an actionable dashboard — so you never miss a deadline or opportunity.
+                      </p>
+
+                      <h2>2. What information do we collect?</h2>
+                      <p>When you use Email Tracker, we collect and store the following:</p>
+                      <ul>
+                        <li><strong>Your Google account email address</strong> — used to identify your account.</li>
+                        <li><strong>Google OAuth credentials</strong> — securely stored tokens that let us access your Gmail on your behalf. We never see or store your Google password.</li>
+                        <li><strong>Placement-related Gmail messages</strong> — we read emails matching specific criteria (e.g., from your placement department) to extract application details.</li>
+                        <li><strong>Parsed application data</strong> — company names, roles, deadlines, stipends, and other structured information extracted from your emails.</li>
+                        <li><strong>Personal notes</strong> — any notes you add to applications within the dashboard.</li>
+                        <li><strong>Synchronization metadata</strong> — timestamps and history IDs that help us sync efficiently without re-processing old emails.</li>
+                      </ul>
+
+                      <h2>3. How do we use your information?</h2>
+                      <p>Everything we collect serves one purpose: making your placement tracking easier. Specifically, we use your data to:</p>
+                      <ul>
+                        <li>Synchronize placement emails from your Gmail inbox.</li>
+                        <li>Extract and organize application details using AI.</li>
+                        <li>Display your applications on a personal dashboard.</li>
+                        <li>Show summary statistics (total applications, upcoming deadlines, etc.).</li>
+                        <li>Let you add notes, mark applications as done, and manage your workflow.</li>
+                      </ul>
+                      <p>We do not use your emails for advertising, profiling, or any purpose unrelated to placement tracking.</p>
+
+                      <h2>4. AI processing</h2>
+                      <p>
+                        When we sync your emails, relevant message content is sent to <strong>Google's Gemini API</strong> for processing.
+                        Gemini extracts structured placement information — company name, role, deadline, application link, and so on.
+                      </p>
+                      <p>
+                        This processing happens solely to turn unstructured email text into organized application cards.
+                        We do not use your email content for training AI models, advertising, or any other purpose.
+                      </p>
+
+                      <h2>5. Where is your data stored?</h2>
+                      <p>
+                        Your account and application data is stored in <strong>MongoDB Atlas</strong>, a cloud-hosted database service.
+                        Authentication is handled using <strong>JWT (JSON Web Tokens)</strong> — your session is verified on every request.
+                      </p>
+                      <p>
+                        Each user's application data is fully isolated. One user cannot access another user's applications, notes, or sync history.
+                      </p>
+                      <p>
+                        We do maintain a shared cache of company metadata (logos, domains) to improve loading performance.
+                        This cache contains no user-specific information.
+                      </p>
+
+                      <h2>6. Do we share your data?</h2>
+                      <p><strong>No.</strong> We do not sell your data. We do not share it with third parties for their own purposes.</p>
+                      <p>The only external services that interact with your data are:</p>
+                      <ul>
+                        <li><strong>Google OAuth & Gmail API</strong> — to authenticate you and read your emails.</li>
+                        <li><strong>Google Gemini API</strong> — to parse email content into structured data.</li>
+                        <li><strong>MongoDB Atlas</strong> — to store your data.</li>
+                      </ul>
+                      <p>These services are necessary for Email Tracker to function. We do not send your data anywhere else.</p>
+
+                      <h2>7. Deleting your account</h2>
+                      <p>
+                        You can delete your account at any time. When you do, we permanently remove:
+                      </p>
+                      <ul>
+                        <li>Your account information and OAuth credentials.</li>
+                        <li>All synchronized applications.</li>
+                        <li>All personal notes.</li>
+                        <li>All synchronization history and metadata.</li>
+                      </ul>
+                      <p>
+                        Globally cached company metadata (logos, domains) is retained because it contains no user-specific information and is shared across the platform.
+                      </p>
+
+                      <h2>8. Security</h2>
+                      <p>We take reasonable steps to protect your data:</p>
+                      <ul>
+                        <li>Authentication uses <strong>JWT tokens</strong> with short-lived access tokens and secure refresh rotation.</li>
+                        <li>Google OAuth follows the standard secure authorization code flow — we never handle your Google password.</li>
+                        <li>All API endpoints verify your identity before returning data.</li>
+                        <li>User data is isolated at the database level — queries are scoped to your account.</li>
+                      </ul>
+                      <p>
+                        That said, no system is perfectly secure. We do our best, but we cannot guarantee absolute security.
+                        If you discover a vulnerability, please let us know.
+                      </p>
+
+                      <h2>9. Contact</h2>
+                      <p>
+                        If you have questions about this Privacy Policy or how your data is handled, reach out to us at{" "}
+                        <strong>contact@emailtracker.app</strong>.
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -1744,9 +1859,91 @@ export default function JobTrackerDashboard() {
                       ❮ Back to Settings
                     </button>
                     <h3 className="settings-title">Terms of Service</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', lineHeight: '1.6' }}>
-                      Terms of Service content will be detailed in Phase 7.3.
-                    </p>
+                    <p className="legal-last-updated">Last updated: June 2026</p>
+                    <div className="legal-content">
+                      <h2>1. Acceptance</h2>
+                      <p>
+                        By signing in and using Email Tracker, you agree to these Terms of Service.
+                        If you don't agree, please don't use the application.
+                      </p>
+
+                      <h2>2. What Email Tracker does</h2>
+                      <p>
+                        Email Tracker connects to your Gmail account and scans for placement-related emails
+                        from your college placement department. It uses AI to extract structured information —
+                        company names, roles, deadlines, application links — and displays everything on a personal dashboard.
+                      </p>
+                      <p>
+                        It's designed to help you stay organized during placement season. That's it.
+                      </p>
+
+                      <h2>3. Your responsibilities</h2>
+                      <p>When using Email Tracker, you agree to:</p>
+                      <ul>
+                        <li>Use your own Google account. Don't sign in with someone else's credentials.</li>
+                        <li>Comply with Google's Terms of Service and acceptable use policies.</li>
+                        <li>Not attempt to abuse, reverse-engineer, or interfere with the service.</li>
+                        <li>Not use the application for any purpose other than tracking placement-related communications.</li>
+                      </ul>
+
+                      <h2>4. Availability</h2>
+                      <p>
+                        Email Tracker is provided on a <strong>best-effort basis</strong>.
+                        We aim to keep it running reliably, but we can't guarantee 100% uptime.
+                        Temporary downtime may occur for maintenance, updates, or unforeseen technical issues.
+                      </p>
+                      <p>
+                        We won't be liable for any inconvenience caused by service interruptions.
+                      </p>
+
+                      <h2>5. AI-generated information</h2>
+                      <p>
+                        The application data displayed on your dashboard — company names, deadlines, roles, stipends —
+                        is <strong>extracted by AI</strong> (Google Gemini). While we work to make this as accurate as possible,
+                        AI extraction is not perfect.
+                      </p>
+                      <p>
+                        <strong>Always verify important deadlines, application links, and details from the original email.</strong>{" "}
+                        Don't rely solely on AI-extracted information for critical decisions.
+                      </p>
+
+                      <h2>6. Intellectual property</h2>
+                      <p>
+                        Email Tracker — including its design, branding, code, and user interface — belongs to its developer.
+                        You may not copy, redistribute, or create derivative works from the application without permission.
+                      </p>
+                      <p>
+                        Your data remains yours. We don't claim ownership over your emails, notes, or application records.
+                        If you delete your account, your data is removed (see our Privacy Policy for details).
+                      </p>
+
+                      <h2>7. Limitation of liability</h2>
+                      <p>
+                        Email Tracker is a productivity tool, not a replacement for reading your emails.
+                        We are <strong>not responsible</strong> for:
+                      </p>
+                      <ul>
+                        <li>Missed deadlines due to incorrect or incomplete AI extraction.</li>
+                        <li>Opportunities lost because of delayed synchronization or service downtime.</li>
+                        <li>Any decisions you make based on information displayed in the dashboard.</li>
+                      </ul>
+                      <p>
+                        Use Email Tracker as a helpful supplement — but always double-check anything important.
+                      </p>
+
+                      <h2>8. Changes to these terms</h2>
+                      <p>
+                        We may update these Terms of Service from time to time.
+                        If we make significant changes, we'll update the "Last updated" date at the top of this page.
+                        Continued use of Email Tracker after changes are posted constitutes acceptance of the updated terms.
+                      </p>
+
+                      <h2>9. Contact</h2>
+                      <p>
+                        Questions about these terms? Reach out at{" "}
+                        <strong>contact@emailtracker.app</strong>.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
