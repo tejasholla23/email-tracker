@@ -54,6 +54,7 @@ export default function JobTrackerDashboard() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [accountDeletedJustNow, setAccountDeletedJustNow] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -559,7 +560,7 @@ export default function JobTrackerDashboard() {
       setApplications([]);
       setShowDeleteModal(false);
       setDeleteConfirmText("");
-      alert("Your account and all associated applications have been permanently deleted.");
+      setAccountDeletedJustNow(true);
     } catch (error) {
       console.error("Account deletion failed:", error);
       setDeleteError(error.message || "Failed to delete account. Please try again.");
@@ -929,35 +930,58 @@ export default function JobTrackerDashboard() {
         <div className="glow-secondary"></div>
         <canvas className="particle-canvas" ref={canvasRef}></canvas>
 
-        <div className="login-card" ref={cardRef}>
-          <div className="logo-box">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3df6d3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-              <polyline points="22,6 12,13 2,6" />
-              <rect x="9" y="11" width="6" height="5" rx="1" fill="#0a1228" stroke="#3df6d3" strokeWidth="1.5" />
-              <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#3df6d3" strokeWidth="1.5" />
-            </svg>
+        {accountDeletedJustNow ? (
+          <div className="login-card" ref={cardRef}>
+            <div className="logo-box" style={{ borderColor: '#ef4444', background: 'rgba(239, 68, 68, 0.08)' }}>
+              <span style={{ fontSize: '28px' }}>👋</span>
+            </div>
+
+            <h1 className="login-title">Account Deleted</h1>
+            <p className="login-subtitle" style={{ marginBottom: '28px', maxWidth: '340px' }}>
+              Your account has been deleted.
+              <br />
+              Thank you for using Email Tracker.
+            </p>
+
+            <button
+              onClick={() => setAccountDeletedJustNow(false)}
+              className="login-btn"
+              style={{ cursor: 'pointer', border: 'none' }}
+            >
+              Sign in again
+            </button>
           </div>
+        ) : (
+          <div className="login-card" ref={cardRef}>
+            <div className="logo-box">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3df6d3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+                <rect x="9" y="11" width="6" height="5" rx="1" fill="#0a1228" stroke="#3df6d3" strokeWidth="1.5" />
+                <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#3df6d3" strokeWidth="1.5" />
+              </svg>
+            </div>
 
-          <h1 className="login-title">Email Tracker</h1>
-          <p className="login-subtitle">Track placement related emails from your college Gmail account.</p>
+            <h1 className="login-title">Email Tracker</h1>
+            <p className="login-subtitle">Track placement related emails from your college Gmail account.</p>
 
-          <a href={`${BASE_URL}/auth/google`} className="login-btn">
-            Continue with Google
-          </a>
+            <a href={`${BASE_URL}/auth/google`} className="login-btn">
+              Continue with Google
+            </a>
 
-          <p className="login-domain-tip">
-            Sign in using your <span className="login-domain-highlight">@msrit.edu</span> account
-          </p>
+            <p className="login-domain-tip">
+              Sign in using your <span className="login-domain-highlight">@msrit.edu</span> account
+            </p>
 
-          <div className="login-divider"></div>
+            <div className="login-divider"></div>
 
-          <div className="login-footer-links">
-            <a href="/privacy" className="login-footer-link">Privacy Policy</a>
-            <span>·</span>
-            <a href="/terms" className="login-footer-link">Terms of Service</a>
+            <div className="login-footer-links">
+              <a href="/privacy" className="login-footer-link">Privacy Policy</a>
+              <span>·</span>
+              <a href="/terms" className="login-footer-link">Terms of Service</a>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
