@@ -859,7 +859,7 @@ async function batchLookupMessageIds(messageIds, userId) {
 }
 
 // --- Main sync orchestrator ---
-async function fetchAndProcessEmails() {
+async function fetchAndProcessEmails(targetUserId = null) {
   if (isProcessing) {
     console.log("Cron already running, skipping...");
     return;
@@ -871,7 +871,8 @@ async function fetchAndProcessEmails() {
   let fetchedCount = 0;
 
   try {
-    const accounts = await Account.find();
+    const query = targetUserId ? { _id: targetUserId } : {};
+    const accounts = await Account.find(query);
 
     if (!accounts.length) {
       console.log("No accounts connected");
@@ -1126,7 +1127,7 @@ app.get("/sync", authenticate, (req, res) => {
     return res.status(200).json({ success: true, message: "Sync already in progress. Please wait for it to finish." });
   }
 
-  fetchAndProcessEmails()
+  fetchAndProcessEmails(req.userId)
     .then(() => console.log("Manual sync completed"))
     .catch((err) => console.error("Manual sync failed:", err.message));
 
