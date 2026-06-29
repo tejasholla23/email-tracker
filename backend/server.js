@@ -621,6 +621,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         console.log(`[PARSE_DEFERRED] ${id} | Reason: ${reason} (Transient error). Saving as pending (deferred until ${nextRetry.toISOString()}).`);
         try {
           const pendingApp = new Application({
+            userId: acc._id,
             company: "PENDING_PARSE",
             role: "PENDING_PARSE",
             messageId: id,
@@ -653,6 +654,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       
       try {
         const ignoredApp = new Application({
+          userId: acc._id,
           company: "IGNORED",
           role: "IGNORED",
           messageId: id,
@@ -762,6 +764,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     const parserVer = shouldRetry ? "v1" : "v2";
 
     const newApp = new Application({
+      userId: acc._id,
       company: parsed.company,
       companyKey,
       emailType: parsed.emailType || "job",

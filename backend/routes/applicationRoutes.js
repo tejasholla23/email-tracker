@@ -66,9 +66,12 @@ router.get("/", async (req, res) => {
 // POST /applications - add a new application
 router.post("/", async (req, res) => {
   try {
-    // Remove companyInfo from body if passed manually (should be fetched/generated during sync)
-    const { companyInfo, ...appData } = req.body;
-    const newApplication = await Application.create(appData);
+    // Remove companyInfo and userId from body if passed manually (should be fetched/generated during sync)
+    const { companyInfo, userId, ...appData } = req.body;
+    const newApplication = await Application.create({
+      ...appData,
+      userId: req.userId
+    });
     res.status(201).json(newApplication);
   } catch (error) {
     res.status(400).json({ message: "Failed to create application" });
