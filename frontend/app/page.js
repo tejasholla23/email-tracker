@@ -49,6 +49,11 @@ export default function JobTrackerDashboard() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [settingsSubView, setSettingsSubView] = useState("main");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -524,6 +529,42 @@ export default function JobTrackerDashboard() {
       console.error("Logout failed:", error);
     } finally {
       handleLocalLogout();
+    }
+  };
+
+  const handleDeleteSubmit = async (e) => {
+    e.preventDefault();
+    if (deleteConfirmText !== "DELETE") {
+      setDeleteError("Please type DELETE to confirm account deletion.");
+      return;
+    }
+
+    setDeletingAccount(true);
+    setDeleteError("");
+
+    try {
+      const response = await apiFetch(`${BASE_URL}/auth/account`, {
+        method: "DELETE"
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to delete account");
+      }
+
+      // Successful Deletion: sign out user completely
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      setUserEmail(null);
+      setApplications([]);
+      setShowDeleteModal(false);
+      setDeleteConfirmText("");
+      alert("Your account and all associated applications have been permanently deleted.");
+    } catch (error) {
+      console.error("Account deletion failed:", error);
+      setDeleteError(error.message || "Failed to delete account. Please try again.");
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -1595,8 +1636,12 @@ export default function JobTrackerDashboard() {
           </nav>
 
           <div className="sidebar-bottom">
-            <div className="nav-item" style={{ marginTop: 0 }}>
-              <span>Support ⚙️</span>
+            <div
+              className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
+              style={{ marginTop: 0 }}
+              onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setIsSidebarOpen(false); }}
+            >
+              <span>Settings ⚙️</span>
             </div>
           </div>
         </aside>
@@ -1643,6 +1688,10 @@ export default function JobTrackerDashboard() {
                         <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
                           Theme ❯
                         </button>
+                        <button className="user-dropdown-item" onClick={() => { setShowDeleteModal(true); setShowUserDropdown(false); }}>
+                          Delete Account
+                        </button>
+                        <div style={{ borderBottom: '1px solid var(--border-color)', margin: '4px 0' }} />
                         <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>
                           Logout
                         </button>
@@ -2771,6 +2820,78 @@ export default function JobTrackerDashboard() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="modal-overlay" onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}>
+          <div className="modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#dc2626' }}>Delete Account</h3>
+              <button className="modal-close" onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleDeleteSubmit} style={{ marginTop: '16px' }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                <p style={{ marginBottom: '12px', fontWeight: '600' }}>
+                  Warning: This action is permanent and irreversible.
+                </p>
+                <p style={{ marginBottom: '12px' }}>
+                  The following data associated with your account will be permanently deleted:
+                </p>
+                <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
+                  <li>Your user account and credentials</li>
+                  <li>All synced job applications</li>
+                  <li>Any custom notes you have written</li>
+                  <li>Your synchronization log history</li>
+                </ul>
+                <p style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>
+                  Note: Shared company metadata (such as logos and company domains) is not affected.
+                </p>
+              </div>
+
+              {deleteError && (
+                <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', fontWeight: '500' }}>
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                  To confirm, type <strong style={{ color: '#dc2626' }}>DELETE</strong> in the box below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="DELETE"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  disabled={deletingAccount}
+                  required
+                  style={{ borderColor: deleteConfirmText === "DELETE" ? '#dc2626' : 'var(--border-color)', outline: 'none' }}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}
+                  disabled={deletingAccount}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  style={{ backgroundColor: deleteConfirmText === "DELETE" ? '#dc2626' : '#ef4444', opacity: deleteConfirmText === "DELETE" ? 1 : 0.6 }}
+                  disabled={deletingAccount || deleteConfirmText !== "DELETE"}
+                >
+                  {deletingAccount ? "Deleting..." : "Permanently Delete"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

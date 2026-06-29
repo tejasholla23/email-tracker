@@ -375,6 +375,40 @@ app.get("/logout", authenticate, async (req, res) => {
   }
 });
 
+// ==========================
+// ❌ DELETE ACCOUNT
+// ==========================
+app.delete("/auth/account", authenticate, async (req, res) => {
+  try {
+    const userId = req.userId;
+    console.log(`[ACCOUNT_DELETION] Initiating deletion for userId: ${userId}`);
+
+    // 1. Delete all applications belonging to this user
+    const appsDeleteResult = await Application.deleteMany({ userId });
+    console.log(`[ACCOUNT_DELETION] Deleted ${appsDeleteResult.deletedCount} applications for userId: ${userId}`);
+
+    // 2. Delete the account document
+    const accountDeleteResult = await Account.findByIdAndDelete(userId);
+    if (!accountDeleteResult) {
+      console.warn(`[ACCOUNT_DELETION] Account not found for userId: ${userId}`);
+      return res.status(404).json({ success: false, message: "Account not found." });
+    }
+
+    console.log(`[ACCOUNT_DELETION] Successfully deleted account for userId: ${userId}`);
+
+    res.json({
+      success: true,
+      message: "Account deleted successfully."
+    });
+  } catch (error) {
+    console.error(`[ACCOUNT_DELETION] Failed to delete account for userId: ${req.userId}:`, error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete account. Please try again."
+    });
+  }
+});
+
 const activeSyncs = new Set();
 const activeClearRequests = new Set();
 let isCronProcessing = false;
