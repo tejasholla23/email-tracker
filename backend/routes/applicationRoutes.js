@@ -150,5 +150,56 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+const { enrichCompanyProfile } = require("../utils/enrichCompanyProfile");
+
+// GET /applications/:id/company-profile
+// Returns enriched company profile immediately if available.
+// If not yet enriched, kicks off fire-and-forget enrichment and returns { status: "processing" }.
+// Frontend should poll every ~2s until isEnriched is true.
+router.get("/:id/company-profile", async (req, res) => {
+  try {
+    const app = await Application.findOne({ _id: req.params.id, userId: req.userId });
+    if (!app || !app.company) {
+      return res.status(404).json({ message: "Application or company not found" });
+    }
+
+    const companyInfo = await CompanyInfo.findOne({ name: app.company.trim() });
+    if (!companyInfo) {
+      return res.status(404).json({ message: "Company info not available" });
+    }
+
+    // Already enriched — return full profile immediately
+    if (companyInfo.isEnriched) {
+      return res.json({
+        status: "ready",
+        name: companyInfo.name,
+        domain: companyInfo.domain,
+        logo: companyInfo.logo,
+        industry: companyInfo.industry || "",
+        companyType: companyInfo.companyType || "",
+        headquarters: companyInfo.headquarters || "",
+        description: companyInfo.description || "",
+        website: companyInfo.website || "",
+        knownFor: companyInfo.knownFor || [],
+        isEnriched: true,
+      });
+    }
+
+    // Not yet enriched — trigger fire-and-forget enrichment (never await it here)
+    if (!companyInfo.isEnriching) {
+      enrichCompanyProfile(companyInfo).catch(err =>
+        console.error(`[COMPANY_PROFILE_ROUTE_ENRICH] "${companyInfo.name}":`, err.message)
+      );
+    }
+
+    // Return immediately — frontend will poll
+    return res.json({ status: "processing", isEnriched: false });
+
+  } catch (error) {
+    console.error("[COMPANY_PROFILE_ROUTE]", error.message);
+    res.status(500).json({ message: "Failed to fetch company profile" });
+  }
+});
+
 module.exports = router;
 

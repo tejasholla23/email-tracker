@@ -46,6 +46,9 @@ export default function JobTrackerDashboard() {
   // Company Info Modal State
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
+  const [companyProfile, setCompanyProfile] = useState(null);
+  const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
+  const companyProfilePollRef = React.useRef(null); // holds setInterval id for polling
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -1580,8 +1583,65 @@ export default function JobTrackerDashboard() {
         }
 
         .info-modal-content {
-          max-width: 550px;
+          max-width: 620px;
+          max-height: 85vh;
+          display: flex;
+          flex-direction: column;
+          padding: 0;
+          overflow: hidden;
         }
+        .info-modal-header {
+          padding: 24px 28px 16px;
+          border-bottom: 1px solid var(--border-color, #e2e8f0);
+          flex-shrink: 0;
+        }
+        .info-modal-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .info-modal-company-row { display: flex; align-items: center; gap: 14px; }
+        .info-modal-logo { width: 44px; height: 44px; border-radius: 10px; object-fit: contain; background: #f1f5f9; padding: 4px; }
+        .info-modal-company-name { font-family: 'Manrope', sans-serif; font-size: 22px; font-weight: 700; color: var(--text-heading, #0f172a); margin: 0; }
+        .info-modal-subtitle { font-size: 13px; color: #64748b; margin: 2px 0 0; }
+        .info-modal-meta-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .meta-chip { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color, #e2e8f0); color: var(--text-secondary, #64748b); background: var(--bg-color, #f8fafc); }
+        .meta-chip.urgent { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+        .meta-chip.status-new { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+        .meta-chip.status-applied { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .meta-chip.status-interview { background: #fefce8; border-color: #fde68a; color: #92400e; }
+        .meta-chip.status-offer { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+        .meta-chip.status-done { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+
+        .info-modal-body { overflow-y: auto; flex: 1; padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
+        .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: hidden; }
+        .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); }
+        .info-modal-section-body { padding: 16px 18px; }
+
+        .info-detail-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color, #f1f5f9); }
+        .info-detail-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .info-detail-label { font-size: 13px; font-weight: 600; color: var(--text-secondary, #64748b); min-width: 90px; flex-shrink: 0; }
+        .info-detail-value { font-size: 13.5px; color: var(--text-primary, #1e293b); line-height: 1.5; }
+
+        .company-description { font-size: 13.5px; color: var(--text-primary, #1e293b); line-height: 1.65; margin: 0 0 12px; }
+        .known-for-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+        .known-for-list li { font-size: 13px; color: var(--text-secondary, #64748b); display: flex; align-items: flex-start; gap: 8px; }
+        .known-for-list li::before { content: "•"; color: #3b82f6; font-weight: 700; flex-shrink: 0; }
+
+        .skills-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .skill-chip { font-size: 12.5px; font-weight: 500; padding: 5px 12px; border-radius: 20px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; display: flex; align-items: center; gap: 6px; }
+        .skill-chip::before { content: "✓"; font-weight: 700; }
+
+        .company-skeleton { display: flex; flex-direction: column; gap: 10px; }
+        .skeleton-line { height: 14px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .info-modal-footer { padding: 16px 28px; border-top: 1px solid var(--border-color, #e2e8f0); display: flex; justify-content: flex-end; flex-shrink: 0; background: var(--surface-color, #fff); }
+
+        .dark .info-modal-section { background: var(--surface-color); border-color: var(--border-color); }
+        .dark .info-modal-section-header { background: rgba(255,255,255,0.04); }
+        .dark .info-modal-section-body { background: var(--surface-color); }
+        .dark .info-detail-row { border-color: var(--border-color); }
+        .dark .meta-chip { background: rgba(255,255,255,0.06); border-color: var(--border-color); }
+        .dark .skill-chip { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); }
+        .dark .skeleton-line { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; }
 
         
         /* Sync Warning Banner */
@@ -2158,7 +2218,45 @@ export default function JobTrackerDashboard() {
                             onClick={(e) => {
                               if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
                               setSelectedApp(app);
+                              setCompanyProfile(null);
                               setShowInfoModal(true);
+                              setCompanyProfileLoading(true);
+
+                              // Clear any existing poll
+                              if (companyProfilePollRef.current) {
+                                clearInterval(companyProfilePollRef.current);
+                                companyProfilePollRef.current = null;
+                              }
+
+                              const appId = app._id;
+                              const fetchProfile = () =>
+                                fetch(`${BASE_URL}/applications/${appId}/company-profile`, { credentials: 'include' })
+                                  .then(r => r.ok ? r.json() : null)
+                                  .catch(() => null);
+
+                              // Initial fetch — returns immediately
+                              fetchProfile().then(data => {
+                                if (!data) { setCompanyProfileLoading(false); return; }
+                                if (data.status === 'ready') {
+                                  // Profile already enriched — show immediately
+                                  setCompanyProfile(data);
+                                  setCompanyProfileLoading(false);
+                                } else {
+                                  // status === 'processing' — poll every 2s
+                                  companyProfilePollRef.current = setInterval(() => {
+                                    fetchProfile().then(polled => {
+                                      if (!polled) return; // network error — keep polling
+                                      if (polled.status === 'ready') {
+                                        clearInterval(companyProfilePollRef.current);
+                                        companyProfilePollRef.current = null;
+                                        setCompanyProfile(polled);
+                                        setCompanyProfileLoading(false);
+                                      }
+                                      // else still processing — next tick will retry
+                                    });
+                                  }, 2000);
+                                }
+                              });
                             }}
                           >
                             <div className="app-header">
@@ -2786,93 +2884,231 @@ export default function JobTrackerDashboard() {
         </div>
       )}
 
-      {showInfoModal && selectedApp && (
-        <div className="modal-overlay" onClick={() => setShowInfoModal(false)}>
-          <div className="modal-content info-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">{selectedApp.company}</h3>
-                <p style={{ fontSize: '14px', color: '#64748b' }}>Application Details</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowInfoModal(false)}>&times;</button>
-            </div>
+      {showInfoModal && selectedApp && (() => {
+        const app = selectedApp;
+        const closeInfoModal = () => {
+          // Cancel any in-flight poll before closing
+          if (companyProfilePollRef.current) {
+            clearInterval(companyProfilePollRef.current);
+            companyProfilePollRef.current = null;
+          }
+          setShowInfoModal(false);
+          setCompanyProfile(null);
+        };
+        const statusKey = (app.status || 'new').toLowerCase().replace(/\s+/g, '-');
+        const isUrgent = app.deadlineISO && new Date(app.deadlineISO) - Date.now() < 72 * 60 * 60 * 1000;
+        const logoSrc = companyProfile?.logo || app.companyInfo?.logo;
+        const FIELD_CONFIG = {
+          role:      { label: "Role(s)",   value: app.programRoles    },
+          stipend:   { label: "Stipend",   value: app.programStipend  },
+          deadline:  { label: "Deadline",  value: app.deadlineText    },
+          duration:  { label: "Duration",  value: app.programDuration },
+          venue:     { label: "Venue",     value: app.venue           },
+          eventName: { label: "Event",     value: app.subtitle        },
+        };
+        const displayRowsFromFields = Array.isArray(app.fieldsToDisplay)
+          ? app.fieldsToDisplay.map(f => FIELD_CONFIG[f]).filter(r => r && r.value?.trim())
+          : [];
+        const displayFieldRows = Array.isArray(app.displayFields)
+          ? app.displayFields.filter(f => f?.label && f?.value?.trim())
+          : [];
+        const skills = Array.isArray(app.skills) ? app.skills : [];
 
-            {/* Info modal details — also driven by fieldsToDisplay */}
-            {(() => {
-              let displayFields = selectedApp.fieldsToDisplay;
-              if ((!Array.isArray(displayFields) || displayFields.length === 0) && selectedApp.emailType !== "event" && selectedApp.emailType !== "nonRecruitment") {
-                displayFields = [];
-                if (selectedApp.programRoles) displayFields.push("role");
-                if (selectedApp.programStipend) displayFields.push("stipend");
-                if (selectedApp.deadlineText) displayFields.push("deadline");
-                if (selectedApp.programDuration) displayFields.push("duration");
-                if (selectedApp.venue) displayFields.push("venue");
-              }
-              if (!Array.isArray(displayFields) || displayFields.length === 0) return null;
-              const FIELD_CONFIG = {
-                role: { label: "Roles", value: selectedApp.programRoles },
-                stipend: { label: "Stipend", value: selectedApp.programStipend },
-                deadline: { label: "Deadline", value: selectedApp.deadlineText },
-                duration: { label: "Duration", value: selectedApp.programDuration },
-                venue: { label: "Venue", value: selectedApp.venue },
-                eventName: { label: "Event", value: selectedApp.subtitle },
-              };
-              const rows = displayFields
-                .map(f => FIELD_CONFIG[f])
-                .filter(r => r && r.value && r.value.trim().length > 0);
-              if (rows.length === 0) return null;
-              return (
-                <div className="program-details" style={{ marginBottom: '20px' }}>
-                  {rows.map(({ label, value }) => (
-                    <div key={label} className="program-detail">
-                      <span className="program-detail-label">{label}:</span>
-                      <span>{value}</span>
+        return (
+          <div className="modal-overlay" onClick={closeInfoModal}>
+            <div className="modal-content info-modal-content" onClick={e => e.stopPropagation()}>
+
+              {/* ── Header ── */}
+              <div className="info-modal-header">
+                <div className="info-modal-header-top">
+                  <div className="info-modal-company-row">
+                    {logoSrc && (
+                      <img src={logoSrc} alt={app.company} className="info-modal-logo"
+                        onError={e => { e.currentTarget.style.display = 'none'; }} />
+                    )}
+                    <div>
+                      <h3 className="info-modal-company-name">{app.company}</h3>
+                      {app.subtitle && <p className="info-modal-subtitle">{app.subtitle}</p>}
                     </div>
-                  ))}
+                  </div>
+                  <button className="modal-close" onClick={closeInfoModal}>&times;</button>
                 </div>
-              );
-            })()}
-
-            {selectedApp.events && selectedApp.events.length > 0 && (
-              <div className="event-timeline" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                <h4 style={{ marginTop: '0', marginBottom: '16px', fontSize: '16px', color: '#1e293b', fontWeight: '600' }}>Application Timeline</h4>
-                <div className="timeline-container" style={{ position: 'relative', marginLeft: '8px' }}>
-                  {selectedApp.events.map((ev, i) => {
-                    const d = new Date(ev.date);
-                    const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
-                    return (
-                      <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === selectedApp.events.length - 1 ? '0' : '16px' }}>
-                        <div className="timeline-date" style={{ width: '48px', fontSize: '13px', color: '#64748b', textAlign: 'right', marginRight: '16px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
-                          {formattedD}
-                        </div>
-                        <div className="timeline-dot" style={{ position: 'absolute', left: '59px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
-                        {i !== selectedApp.events.length - 1 && (
-                          <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-16px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
-                        )}
-                        <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
-                          <div className="timeline-title" style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                            {ev.title || "Email Notification"}
-                          </div>
-                          <div className="timeline-subtitle" style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', lineHeight: '1.4' }}>
-                            {ev.status && <span style={{ textTransform: 'capitalize', marginRight: '6px', fontWeight: '600', color: '#3b82f6' }}>[{ev.status}]</span>}
-                            <span style={{ opacity: 0.9 }}>{ev.subject ? (ev.subject.length > 60 ? ev.subject.substring(0, 60) + "..." : ev.subject) : ""}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="info-modal-meta-chips">
+                  <span className={`meta-chip status-${statusKey}`} style={{ textTransform: 'capitalize' }}>
+                    {app.status || 'New'}
+                  </span>
+                  {app.type && app.type !== 'unknown' && app.type !== app.emailType && (
+                    <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.type}</span>
+                  )}
+                  {app.deadlineText && (
+                    <span className={`meta-chip${isUrgent ? ' urgent' : ''}`}>
+                      {isUrgent ? '⚡ ' : '🗓 '}Deadline: {app.deadlineText}
+                    </span>
+                  )}
+                  {app.emailType && app.emailType !== 'job' && (
+                    <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.emailType}</span>
+                  )}
                 </div>
               </div>
-            )}
 
-            <div className="modal-actions">
-              <button className="btn-primary" onClick={() => setShowInfoModal(false)}>
-                Close
-              </button>
+              {/* ── Scrollable body ── */}
+              <div className="info-modal-body">
+
+                {/* Job Details section */}
+                {(displayFieldRows.length > 0 || displayRowsFromFields.length > 0) && (
+                  <div className="info-modal-section">
+                    <div className="info-modal-section-header">Job Details</div>
+                    <div className="info-modal-section-body">
+                      {displayFieldRows.length > 0
+                        ? displayFieldRows.map(({ label, value }) => (
+                            <div key={label} className="info-detail-row">
+                              <span className="info-detail-label">{label}</span>
+                              <span className="info-detail-value">{value}</span>
+                            </div>
+                          ))
+                        : displayRowsFromFields.map(({ label, value }) => (
+                            <div key={label} className="info-detail-row">
+                              <span className="info-detail-label">{label}</span>
+                              <span className="info-detail-value">{value}</span>
+                            </div>
+                          ))
+                      }
+                      {app.link && (
+                        <div className="info-detail-row">
+                          <span className="info-detail-label">Apply</span>
+                          <span className="info-detail-value">
+                            <a href={app.link} target="_blank" rel="noopener noreferrer"
+                              style={{ color: '#3b82f6', textDecoration: 'underline' }}
+                              onClick={e => e.stopPropagation()}>
+                              {app.isFormLink ? 'Open Form ↗' : 'Apply Now ↗'}
+                            </a>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Company Snapshot section */}
+                <div className="info-modal-section">
+                  <div className="info-modal-section-header">Company Snapshot</div>
+                  <div className="info-modal-section-body">
+                    {companyProfileLoading && !companyProfile && (
+                      <div className="company-skeleton">
+                        <div className="skeleton-line" style={{ width: '70%' }}></div>
+                        <div className="skeleton-line" style={{ width: '90%' }}></div>
+                        <div className="skeleton-line" style={{ width: '55%' }}></div>
+                        <div className="skeleton-line" style={{ width: '80%' }}></div>
+                      </div>
+                    )}
+                    {companyProfile && companyProfile.isEnriched && (
+                      <>
+                        {companyProfile.description && (
+                          <p className="company-description">{companyProfile.description}</p>
+                        )}
+                        <div className="info-detail-row">
+                          <span className="info-detail-label">Industry</span>
+                          <span className="info-detail-value">{companyProfile.industry || '—'}</span>
+                        </div>
+                        <div className="info-detail-row">
+                          <span className="info-detail-label">Type</span>
+                          <span className="info-detail-value">{companyProfile.companyType || '—'}</span>
+                        </div>
+                        <div className="info-detail-row">
+                          <span className="info-detail-label">HQ</span>
+                          <span className="info-detail-value">{companyProfile.headquarters || '—'}</span>
+                        </div>
+                        {companyProfile.website && (
+                          <div className="info-detail-row">
+                            <span className="info-detail-label">Website</span>
+                            <span className="info-detail-value">
+                              <a href={companyProfile.website.startsWith('http') ? companyProfile.website : `https://${companyProfile.website}`}
+                                target="_blank" rel="noopener noreferrer"
+                                style={{ color: '#3b82f6', textDecoration: 'underline' }}
+                                onClick={e => e.stopPropagation()}>
+                                {companyProfile.website.replace(/^https?:\/\//, '')}
+                              </a>
+                            </span>
+                          </div>
+                        )}
+                        {companyProfile.knownFor?.length > 0 && (
+                          <div style={{ marginTop: '10px' }}>
+                            <ul className="known-for-list">
+                              {companyProfile.knownFor.map((item, i) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {!companyProfileLoading && (!companyProfile || !companyProfile.isEnriched) && (
+                      <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>
+                        Company profile is being generated — check back in a moment.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Skills section */}
+                {skills.length > 0 && (
+                  <div className="info-modal-section">
+                    <div className="info-modal-section-header">Skills & Requirements</div>
+                    <div className="info-modal-section-body">
+                      <div className="skills-grid">
+                        {skills.map((s, i) => <span key={i} className="skill-chip">{s}</span>)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Application Timeline */}
+                {app.events && app.events.length > 0 && (
+                  <div className="info-modal-section">
+                    <div className="info-modal-section-header">Application Timeline</div>
+                    <div className="info-modal-section-body">
+                      <div className="timeline-container" style={{ position: 'relative', marginLeft: '8px' }}>
+                        {app.events.map((ev, i) => {
+                          const d = new Date(ev.date);
+                          const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
+                          return (
+                            <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === app.events.length - 1 ? '0' : '16px' }}>
+                              <div className="timeline-date" style={{ width: '48px', fontSize: '13px', color: '#64748b', textAlign: 'right', marginRight: '16px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
+                                {formattedD}
+                              </div>
+                              <div className="timeline-dot" style={{ position: 'absolute', left: '59px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
+                              {i !== app.events.length - 1 && (
+                                <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-16px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
+                              )}
+                              <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
+                                <div className="timeline-title" style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
+                                  {ev.title || 'Email Notification'}
+                                </div>
+                                <div className="timeline-subtitle" style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', lineHeight: '1.4' }}>
+                                  {ev.status && <span style={{ textTransform: 'capitalize', marginRight: '6px', fontWeight: '600', color: '#3b82f6' }}>[{ev.status}]</span>}
+                                  <span style={{ opacity: 0.9 }}>{ev.subject ? (ev.subject.length > 60 ? ev.subject.substring(0, 60) + '...' : ev.subject) : ''}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* ── Footer ── */}
+              <div className="info-modal-footer">
+                <button className="btn-primary" onClick={closeInfoModal}>
+                  Close
+                </button>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
 
       {showDeleteModal && (
         <div className="modal-overlay" onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}>

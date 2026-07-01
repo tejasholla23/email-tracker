@@ -786,6 +786,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       if (!ov.includes("subtitle") && !contentExists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
       if (!ov.includes("displayFields") && (!contentExists.displayFields || contentExists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
       if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+      if (!ov.includes("skills") && (!contentExists.skills || contentExists.skills.length === 0) && parsed.skills?.length) updatePayload.skills = parsed.skills;
 
       if (!ov.includes("status")) {
         // Status is now strictly time/action-based. We do not advance status based on classification anymore.
@@ -823,6 +824,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       subtitle: parsed.subtitle || "",
       displayFields: parsed.displayFields || [],
       fieldsToDisplay: parsed.fieldsToDisplay || [],
+      skills: parsed.skills || [],
       role: finalRole,
       type: parsed.type || "",
       status: normalizedStatus,

@@ -13,6 +13,8 @@ const applicationSchema = new mongoose.Schema(
       type: [{ label: { type: String }, value: { type: String } }],
       default: [],
     },
+    // Skills extracted from email body by Gemini (e.g. ["Python", "Machine Learning"])
+    skills: { type: [String], default: [] },
     companyKey: { type: String, default: "" }, // normalized key for company-level dedup
     role: { type: String, required: true },
     type: { type: String },

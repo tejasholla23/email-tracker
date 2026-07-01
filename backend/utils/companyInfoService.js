@@ -1,11 +1,14 @@
 const CompanyInfo = require("../models/CompanyInfo");
+const { enrichCompanyProfile } = require("./enrichCompanyProfile");
 
 /**
  * Get company information (domain and logo only).
  * Checks CompanyInfo collection for cached info first.
  * If not found, generates a domain/logo deterministically and saves it.
+ * Then triggers background enrichment (non-blocking) for new records.
  * 
  * @param {string} companyName - Name of the company to look up
+ * @param {string} parsedDomain - Domain hint from LLM parser
  * @returns {Promise<object|null>} - Company info object or null
  */
 async function getCompanyInfo(companyName, parsedDomain = "") {
@@ -17,6 +20,12 @@ async function getCompanyInfo(companyName, parsedDomain = "") {
     const cachedInfo = await CompanyInfo.findOne({ name: normalizedName });
 
     if (cachedInfo) {
+      // Trigger background enrichment if not yet done (non-blocking)
+      if (!cachedInfo.isEnriched && !cachedInfo.isEnriching) {
+        enrichCompanyProfile(cachedInfo).catch(err =>
+          console.error(`[ENRICH_BG_ERROR] "${normalizedName}":`, err.message)
+        );
+      }
       return cachedInfo;
     }
 
@@ -69,6 +78,11 @@ async function getCompanyInfo(companyName, parsedDomain = "") {
       domain: domain,
       logo: finalLogo
     });
+
+    // Trigger background enrichment for the freshly created record (non-blocking)
+    enrichCompanyProfile(newCompanyInfo).catch(err =>
+      console.error(`[ENRICH_BG_ERROR] "${normalizedName}":`, err.message)
+    );
 
     return newCompanyInfo;
   } catch (error) {

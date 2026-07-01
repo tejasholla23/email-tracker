@@ -1463,6 +1463,9 @@ function validateGeminiResponse(raw) {
     displayFields,
     status,
     type,
+    skills: Array.isArray(raw.skills)
+      ? raw.skills.filter(s => typeof s === "string" && s.trim()).map(s => s.trim()).slice(0, 10)
+      : [],
     link: typeof raw.link === "string" && raw.link.startsWith("http") ? raw.link : "",
   };
 }
@@ -1492,8 +1495,14 @@ Return exactly this JSON schema:
   "link": "<primary registration or application URL, or empty string>",
   "displayFields": [
     { "label": "<concise label>", "value": "<explicitly stated value>" }
-  ]
+  ],
+  "skills": ["<skill 1>", "<skill 2>"]
 }
+
+SKILLS RULES:
+- Extract technical and soft skills explicitly required or mentioned in the email (e.g. "Python", "Machine Learning", "Node.js", "REST APIs").
+- Return as a flat array of concise strings. Max 10. Return empty array [] if no skills are mentioned.
+- Only extract skills explicitly stated in the email, not inferred from the role name.
 
 DISPLAY FIELDS RULES:
 - Extract all applicable fields (e.g. Role, CTC, Stipend, Deadline, Duration, Location, Joining, Eligibility) as displayFields. Do not limit the list size in your response; the system will prioritize and filter them. Only include fields with values EXPLICITLY stated in the email.
@@ -1948,6 +1957,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     // ── NEW: flexible display fields from Gemini ─────────────────────────
     // This is the primary source of card details for new records.
     displayFields,
+    skills: gemini?.skills || [],
 
     // ————————————————— LEGACY: empty for new records — legacy records keep their own values
     // in MongoDB and the frontend falls back to them automatically.
