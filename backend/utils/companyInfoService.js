@@ -8,7 +8,7 @@ const CompanyInfo = require("../models/CompanyInfo");
  * @param {string} companyName - Name of the company to look up
  * @returns {Promise<object|null>} - Company info object or null
  */
-async function getCompanyInfo(companyName) {
+async function getCompanyInfo(companyName, parsedDomain = "") {
   if (!companyName) return null;
 
   const normalizedName = companyName.trim();
@@ -20,12 +20,18 @@ async function getCompanyInfo(companyName) {
       return cachedInfo;
     }
 
-    // Generate deterministic fallback URLs
+    // Resolve domain: use parsedDomain from LLM if available, otherwise fall back to deterministic guess
     const lowerName = normalizedName.toLowerCase();
-    let domain = `${lowerName.replace(/[^a-z0-9]/g, "")}.com`;
-    
-    if (lowerName === "eightfold" || lowerName === "eightfold ai") {
-      domain = "eightfold.ai";
+    let domain = parsedDomain ? parsedDomain.replace(/[^a-z0-9.-]/gi, "").toLowerCase() : "";
+
+    if (!domain) {
+      domain = `${lowerName.replace(/[^a-z0-9]/g, "")}.com`;
+      
+      if (lowerName === "eightfold" || lowerName === "eightfold ai") {
+        domain = "eightfold.ai";
+      } else if (lowerName === "atos" || lowerName === "atos ai" || lowerName === "atos syntel" || lowerName === "atos evidian") {
+        domain = "atos.net";
+      }
     }
 
     const clearbitUrl = `https://logo.clearbit.com/${domain}`;

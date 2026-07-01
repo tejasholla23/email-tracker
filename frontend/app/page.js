@@ -2269,7 +2269,9 @@ export default function JobTrackerDashboard() {
                             })()}
 
                             {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
-                            {app.deadline && !app.deadlineText && (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && (
+                            {app.deadline && !app.deadlineText && 
+                             (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && 
+                             (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
                               <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
                                 ? 'urgent' : ''
                                 }`}>

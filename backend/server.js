@@ -732,7 +732,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     
     // Fetch Company Info (with caching inside)
     console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
-    const companyInfo = await getCompanyInfo(parsed.company);
+    const companyInfo = await getCompanyInfo(parsed.company, parsed.domain);
     if (!companyInfo) {
       console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
     }

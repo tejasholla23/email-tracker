@@ -97,8 +97,8 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
  * Used ONLY when more than 5 valid fields are returned (to select top 5).
  */
 const FIELD_PRIORITY = {
-  JOB_APPLICATION: ["role", "ctc", "stipend", "deadline", "duration", "location", "eligibility", "joining"],
-  HACKATHON: ["prize", "prize pool", "registration deadline", "deadline", "team size", "eligibility", "mode", "organizer", "timeline"],
+  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "duration", "location", "eligibility", "joining"],
+  HACKATHON: ["registration deadline", "deadline", "last date", "due date", "closing date", "prize", "prize pool", "team size", "eligibility", "mode", "organizer", "timeline"],
   WEBINAR: ["date", "time", "speaker", "topic", "eligibility"],
   OTHER_PLACEMENT_EVENT: ["date", "time", "organizer", "mode", "eligibility"],
 };
@@ -1418,6 +1418,7 @@ function validateGeminiResponse(raw) {
     return cleanProgramValue(v.substring(0, maxLen));
   };
   const company  = sanitizeTextField(raw.company,  100);
+  const domain   = typeof raw.domain === "string" ? raw.domain.trim().toLowerCase() : "";
   const subtitle = sanitizeTextField(raw.subtitle, 160);
 
   // displayFields — flexible [{label, value}] array, max 8 items through (trimmed to 5 later)
@@ -1457,6 +1458,7 @@ function validateGeminiResponse(raw) {
     opportunityType: raw.opportunityType || "JOB_APPLICATION",
     classification,
     company,
+    domain,
     subtitle,
     displayFields,
     status,
@@ -1484,6 +1486,7 @@ Return exactly this JSON schema:
   "opportunityType": "<JOB_APPLICATION | HACKATHON | WEBINAR | OTHER_PLACEMENT_EVENT>",
   "classification": "<one of: New Hiring Opportunity | Internship Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Expert Talk Series | Scholarship | Non-Recruitment Email>",
   "company": "<actual organizing company â€” see COMPANY RULES>",
+  "domain": "<official website domain of the company (e.g., wipro.com, atos.net, eightfold.ai), or empty string if unknown. Prioritize IT/tech service companies when ambiguous>",
   "subtitle": "<program/event/role name shown below the company name on the card â€” see SUBTITLE RULES>",
   "type": "<internship | full-time | event | test | unknown>",
   "link": "<primary registration or application URL, or empty string>",
@@ -1493,7 +1496,7 @@ Return exactly this JSON schema:
 }
 
 DISPLAY FIELDS RULES:
-- Maximum 5 fields. Only include fields with values EXPLICITLY stated in the email.
+- Extract all applicable fields (e.g. Role, CTC, Stipend, Deadline, Duration, Location, Joining, Eligibility) as displayFields. Do not limit the list size in your response; the system will prioritize and filter them. Only include fields with values EXPLICITLY stated in the email.
 - Do NOT include empty, vague, or inferred values.
 - Choose labels a student would want to see immediately on a card.
 - Ignore forwarding footers entirely. NEVER use RIT, MSRIT, Placement Department, or Dean's name as a venue, location, or company.
@@ -1935,6 +1938,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
 
     // Identity
     company:  resolvedCompany,
+    domain:   gemini?.domain || "",
     subtitle,
     role:     roleField,  // DB required field — actual role placeholder
     title:    subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
