@@ -1386,6 +1386,7 @@ const VALID_CLASSIFICATIONS = [
   "Assessment Announcement",
   "Interview Schedule",
   "Interview Result",
+  "Interview Reminder",
   "Venue Update",
   "Deadline Reminder",
   "Generic Placement Notice",
@@ -1420,6 +1421,8 @@ function validateGeminiResponse(raw) {
   const company  = sanitizeTextField(raw.company,  100);
   const domain   = typeof raw.domain === "string" ? raw.domain.trim().toLowerCase() : "";
   const subtitle = sanitizeTextField(raw.subtitle, 160);
+  const timelineTitle = sanitizeTextField(raw.timelineTitle, 100);
+  const timelineSummary = sanitizeTextField(raw.timelineSummary, 300);
 
   // displayFields — flexible [{label, value}] array, max 8 items through (trimmed to 5 later)
   let displayFields = [];
@@ -1467,6 +1470,8 @@ function validateGeminiResponse(raw) {
       ? raw.skills.filter(s => typeof s === "string" && s.trim()).map(s => s.trim()).slice(0, 10)
       : [],
     link: typeof raw.link === "string" && raw.link.startsWith("http") ? raw.link : "",
+    timelineTitle,
+    timelineSummary,
   };
 }
 
@@ -1496,7 +1501,9 @@ Return exactly this JSON schema:
   "displayFields": [
     { "label": "<concise label>", "value": "<explicitly stated value>" }
   ],
-  "skills": ["<skill 1>", "<skill 2>"]
+  "skills": ["<skill 1>", "<skill 2>"],
+  "timelineTitle": "<a concise 2-4 word description of what this specific email is for (e.g., 'Internship Invite', 'Interview Shortlist', 'Interview Reminder', 'Assessment Scheduled', 'Job Offer')>",
+  "timelineSummary": "<a concise 1-sentence summary explaining the key details or action required in this specific email (e.g., 'Invited students to apply for an unpaid AI/IoT internship', 'Shortlisted 11 candidates and scheduled face-to-face interviews on July 1st', 'Sent a gentle reminder to confirm interview availability for today')>"
 }
 
 SKILLS RULES:
@@ -1944,6 +1951,8 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     type:           finalType,
     status:         finalStatus,
     confidenceScore: Math.min(1, detClassification.confidence + (resolvedCompany ? 0.05 : 0)),
+    timelineTitle:   gemini?.timelineTitle   || "",
+    timelineSummary: gemini?.timelineSummary || "",
 
     // Identity
     company:  resolvedCompany,

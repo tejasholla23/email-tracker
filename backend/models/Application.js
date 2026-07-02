@@ -64,6 +64,7 @@ const applicationSchema = new mongoose.Schema(
           subject: String,
           status: String,
           link: String,
+          summary: String,
         },
       ],
       default: [],

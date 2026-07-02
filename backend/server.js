@@ -20,6 +20,7 @@ const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
+const CURRENT_PARSER_VERSION = "v3";
 
 function getNextRetryDate(retryCount) {
   const now = new Date();
@@ -135,6 +136,7 @@ const oauth2Client = new google.auth.OAuth2(
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:3000",
+  "http://localhost:3001",
 ].filter(Boolean);
 
 app.use(cors({
@@ -446,7 +448,8 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
     title: parsed.title || "",
     subject: subject || "",
     status: parsed.status || "new",
-    link: parsed.link || ""
+    link: parsed.link || "",
+    summary: parsed.summary || ""
   });
   
   application.events.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -465,13 +468,13 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
   let usedGemini = false;
 
   try {
-    // ── FAST PATH: already fully parsed (v2) ──
+    // ── FAST PATH: already fully parsed ──
     if (existingFast) {
-      if (existingFast.parserVersion === "v2") {
+      if (existingFast.parserVersion === CURRENT_PARSER_VERSION) {
         if (existingFast.isDeleted) {
           console.log(`[SKIP_FAST] ${id} | Reason: Message already deleted by user`);
         } else {
-          console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (v2)`);
+          console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (${CURRENT_PARSER_VERSION})`);
         }
         return { action: 'skipped', usedGemini: false };
       } else {
@@ -553,9 +556,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         eventAdded = true;
       }
 
-      const missingDetails = exists.parserVersion !== "v2";
+      const missingDetails = exists.parserVersion !== CURRENT_PARSER_VERSION;
       if (missingDetails) {
-        console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
+        console.log(`[REPARSE] ${id} | Existing message needs enrichment to ${CURRENT_PARSER_VERSION}`);
         const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
         // Sleep to safely respect Gemini RPM free tier limit
         await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
@@ -565,7 +568,30 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
           if (!shouldRetry) {
             const updatePayload = {};
-            updatePayload.parserVersion = "v2"; // Safely lock version now
+            updatePayload.parserVersion = CURRENT_PARSER_VERSION; // Safely lock version now
+
+            // Update matching event in exists.events with the new LLM parsed data
+            const evIndex = exists.events.findIndex(e => e.messageId === id);
+            if (evIndex > -1) {
+              exists.events[evIndex].classification = parsed.classification || "";
+              exists.events[evIndex].title = parsed.timelineTitle || parsed.title || exists.events[evIndex].title || "";
+              exists.events[evIndex].summary = parsed.timelineSummary || parsed.summary || "";
+              exists.events[evIndex].link = parsed.link || exists.events[evIndex].link || "";
+            } else {
+              exists.events.push({
+                messageId: id,
+                date: exists.date,
+                classification: parsed.classification || "",
+                title: parsed.timelineTitle || parsed.title || "",
+                subject: subject || "",
+                status: exists.status || "new",
+                link: parsed.link || "",
+                summary: parsed.timelineSummary || parsed.summary || ""
+              });
+              exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+            }
+            exists.markModified('events');
+            eventAdded = true; // Force eventAdded so updatePayload.events is saved!
 
             if (!parsed.isRelevant || !parsed.company) {
               if (exists.company === "PENDING_PARSE") {
@@ -614,7 +640,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             if (eventAdded) updatePayload.events = exists.events;
 
             await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-            console.log(`[UPDATED] ${id} | Existing application enriched & locked (v2)`);
+            console.log(`[UPDATED] ${id} | Existing application enriched & locked (${CURRENT_PARSER_VERSION})`);
           } else {
             const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
             const nextRetry = getNextRetryDate(currentAttempts);
@@ -636,7 +662,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           }
         } else {
           // Fatal parsing error (parseEmailWithLLM returned null)
-          const updatePayload = { parserVersion: "v2" };
+          const updatePayload = { parserVersion: CURRENT_PARSER_VERSION };
           if (eventAdded) updatePayload.events = exists.events;
           
           if (exists.company === "PENDING_PARSE") {
@@ -646,7 +672,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           }
           
           await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-          console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to v2`);
+          console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to ${CURRENT_PARSER_VERSION}`);
         }
       } else if (eventAdded) {
         await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
@@ -701,7 +727,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         return { action: 'skipped', usedGemini };
       }
       
-      const parserVer = "v2";
+      const parserVer = CURRENT_PARSER_VERSION;
       console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored (parserVersion=${parserVer}) to prevent re-parsing.`);
       
       try {
@@ -814,7 +840,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     // Enforce all new emails to start strictly as "new"
     const normalizedStatus = "new";
     const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
-    const parserVer = shouldRetry ? "v1" : "v2";
+    const parserVer = shouldRetry ? "v1" : CURRENT_PARSER_VERSION;
 
     const newApp = new Application({
       userId: acc._id,
@@ -854,10 +880,11 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         messageId: id,
         date: new Date(parseInt(email.data.internalDate)),
         classification: parsed.classification || "",
-        title: parsed.title || "",
+        title: parsed.timelineTitle || parsed.title || "",
         subject: subject || "",
         status: normalizedStatus,
-        link: parsed.link || ""
+        link: parsed.link || "",
+        summary: parsed.timelineSummary || parsed.summary || ""
       }],
       rawText,
       messageId: id,

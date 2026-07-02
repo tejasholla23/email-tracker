@@ -46,9 +46,7 @@ export default function JobTrackerDashboard() {
   // Company Info Modal State
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
-  const [companyProfile, setCompanyProfile] = useState(null);
-  const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
-  const companyProfilePollRef = React.useRef(null); // holds setInterval id for polling
+
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -783,7 +781,7 @@ export default function JobTrackerDashboard() {
               min-height: 100vh;
               padding: 0 24px;
               text-align: center;
-              background: radial-gradient(circle at 50% 50%, #081229 0%, #030610 100%);
+              background: radial-gradient(circle at 50% 50%, #090d16 0%, #02040a 100%);
               font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
               color: #f8fafc;
               position: relative;
@@ -796,7 +794,7 @@ export default function JobTrackerDashboard() {
               width: 600px;
               height: 600px;
               border-radius: 50%;
-              background: radial-gradient(circle, rgba(34, 211, 238, 0.12) 0%, rgba(34, 211, 238, 0) 70%);
+              background: radial-gradient(circle, rgba(45, 212, 191, 0.06) 0%, rgba(45, 212, 191, 0) 70%);
               filter: blur(80px);
               pointer-events: none;
               z-index: 2;
@@ -811,7 +809,7 @@ export default function JobTrackerDashboard() {
               width: 850px;
               height: 850px;
               border-radius: 50%;
-              background: radial-gradient(circle, rgba(59, 130, 246, 0.04) 0%, rgba(59, 130, 246, 0) 70%);
+              background: radial-gradient(circle, rgba(45, 212, 191, 0.02) 0%, rgba(45, 212, 191, 0) 70%);
               filter: blur(100px);
               pointer-events: none;
               z-index: 1;
@@ -831,10 +829,10 @@ export default function JobTrackerDashboard() {
             }
 
             .login-card {
-              background: rgba(10, 18, 40, 0.65);
+              background: rgba(17, 24, 39, 0.7);
               backdrop-filter: blur(16px);
               -webkit-backdrop-filter: blur(16px);
-              border: 1px solid rgba(34, 211, 238, 0.15);
+              border: 1px solid #1f2937;
               border-top: none;
               box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
               border-bottom-left-radius: 20px;
@@ -856,13 +854,13 @@ export default function JobTrackerDashboard() {
               width: 64px;
               height: 64px;
               border-radius: 16px;
-              background: rgba(34, 211, 238, 0.08);
-              border: 1px solid rgba(34, 211, 238, 0.25);
+              background: rgba(45, 212, 191, 0.08);
+              border: 1px solid rgba(45, 212, 191, 0.25);
               display: flex;
               align-items: center;
               justify-content: center;
               margin-bottom: 28px;
-              box-shadow: 0 0 20px rgba(34, 211, 238, 0.1);
+              box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
             }
 
             .login-title {
@@ -887,20 +885,20 @@ export default function JobTrackerDashboard() {
               justify-content: center;
               width: 100%;
               padding: 14px 24px;
-              background: #3df6d3;
-              color: #040814;
+              background: #14b8a6;
+              color: #ffffff;
               border-radius: 12px;
               text-decoration: none;
               font-weight: 600;
               font-size: 15px;
               transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-              box-shadow: 0 4px 15px rgba(61, 246, 211, 0.15);
+              box-shadow: 0 4px 15px rgba(20, 184, 166, 0.15);
             }
 
             .login-btn:hover {
-              background: #2ce0be;
+              background: #0d9488;
               transform: translateY(-2px);
-              box-shadow: 0 8px 25px rgba(61, 246, 211, 0.35);
+              box-shadow: 0 8px 25px rgba(20, 184, 166, 0.35);
             }
 
             .login-btn:active {
@@ -915,14 +913,14 @@ export default function JobTrackerDashboard() {
             }
 
             .login-domain-highlight {
-              color: #3df6d3;
+              color: #2dd4bf;
               font-weight: 600;
             }
 
             .login-divider {
               width: 100%;
               height: 1px;
-              background: rgba(30, 41, 73, 0.5);
+              background: rgba(31, 41, 55, 0.5);
               margin: 32px 0 20px 0;
             }
 
@@ -973,11 +971,11 @@ export default function JobTrackerDashboard() {
         ) : (
           <div className="login-card" ref={cardRef}>
             <div className="logo-box">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3df6d3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                 <polyline points="22,6 12,13 2,6" />
-                <rect x="9" y="11" width="6" height="5" rx="1" fill="#0a1228" stroke="#3df6d3" strokeWidth="1.5" />
-                <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#3df6d3" strokeWidth="1.5" />
+                <rect x="9" y="11" width="6" height="5" rx="1" fill="#030712" stroke="#2dd4bf" strokeWidth="1.5" />
+                <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#2dd4bf" strokeWidth="1.5" />
               </svg>
             </div>
 
@@ -1626,7 +1624,7 @@ export default function JobTrackerDashboard() {
         .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
         .meta-chip.status-done { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 
-        .info-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1; min-height: 0; padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
+        .info-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1; min-height: 0; max-height: calc(85vh - 210px); padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
         .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: hidden; }
         .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); }
         .info-modal-section-body { padding: 16px 18px; }
@@ -2037,89 +2035,75 @@ export default function JobTrackerDashboard() {
                       ❮ Back to Settings
                     </button>
                     <h3 className="settings-title">Terms of Service</h3>
-                    <p className="legal-last-updated">Last updated: June 2026</p>
+                    <p className="legal-last-updated">Last updated: July 2, 2026</p>
                     <div className="legal-content">
-                      <h2>1. Acceptance</h2>
+                      <h2>1. Acceptance of These Terms</h2>
                       <p>
-                        By signing in and using Email Tracker, you agree to these Terms of Service.
-                        If you don't agree, please don't use the application.
+                        By creating an account or using Email Tracker, you agree to these Terms. If you do not agree, please do not use the application.
                       </p>
 
-                      <h2>2. What Email Tracker does</h2>
+                      <h2>2. Eligibility and Account Access</h2>
                       <p>
-                        Email Tracker connects to your Gmail account and scans for placement-related emails
-                        from your college placement department. It uses AI to extract structured information —
-                        company names, roles, deadlines, application links — and displays everything on a personal dashboard.
-                      </p>
-                      <p>
-                        It's designed to help you stay organized during placement season. That's it.
+                        Access to Email Tracker may be restricted to users from approved educational institutions. We reserve the right to accept or reject registrations based on supported email domains.
                       </p>
 
-                      <h2>3. Your responsibilities</h2>
-                      <p>When using Email Tracker, you agree to:</p>
+                      <h2>3. Acceptable Use</h2>
+                      <p>You are responsible for:</p>
                       <ul>
-                        <li>Use your own Google account. Don't sign in with someone else's credentials.</li>
-                        <li>Comply with Google's Terms of Service and acceptable use policies.</li>
-                        <li>Not attempt to abuse, reverse-engineer, or interfere with the service.</li>
-                        <li>Not use the application for any purpose other than tracking placement-related communications.</li>
-                      </ul>
-
-                      <h2>4. Availability</h2>
-                      <p>
-                        Email Tracker is provided on a <strong>best-effort basis</strong>.
-                        We aim to keep it running reliably, but we can't guarantee 100% uptime.
-                        Temporary downtime may occur for maintenance, updates, or unforeseen technical issues.
-                      </p>
-                      <p>
-                        We won't be liable for any inconvenience caused by service interruptions.
-                      </p>
-
-                      <h2>5. AI-generated information</h2>
-                      <p>
-                        The application data displayed on your dashboard — company names, deadlines, roles, stipends —
-                        is <strong>extracted by AI</strong> (Google Gemini). While we work to make this as accurate as possible,
-                        AI extraction is not perfect.
-                      </p>
-                      <p>
-                        <strong>Always verify important deadlines, application links, and details from the original email.</strong>{" "}
-                        Don't rely solely on AI-extracted information for critical decisions.
-                      </p>
-
-                      <h2>6. Intellectual property</h2>
-                      <p>
-                        Email Tracker — including its design, branding, code, and user interface — belongs to its developer.
-                        You may not copy, redistribute, or create derivative works from the application without permission.
-                      </p>
-                      <p>
-                        Your data remains yours. We don't claim ownership over your emails, notes, or application records.
-                        If you delete your account, your data is removed (see our Privacy Policy for details).
-                      </p>
-
-                      <h2>7. Limitation of liability</h2>
-                      <p>
-                        Email Tracker is a productivity tool, not a replacement for reading your emails.
-                        We are <strong>not responsible</strong> for:
-                      </p>
-                      <ul>
-                        <li>Missed deadlines due to incorrect or incomplete AI extraction.</li>
-                        <li>Opportunities lost because of delayed synchronization or service downtime.</li>
-                        <li>Any decisions you make based on information displayed in the dashboard.</li>
+                        <li>Maintaining the security of your Google account</li>
+                        <li>Ensuring information you provide is accurate</li>
+                        <li>Complying with applicable laws and institutional policies while using Email Tracker</li>
                       </ul>
                       <p>
-                        Use Email Tracker as a helpful supplement — but always double-check anything important.
+                        You agree not to misuse the service or interfere with the operation or security of the service.
                       </p>
 
-                      <h2>8. Changes to these terms</h2>
+                      <h2>4. Google Account Authorization</h2>
                       <p>
-                        We may update these Terms of Service from time to time.
-                        If we make significant changes, we'll update the "Last updated" date at the top of this page.
-                        Continued use of Email Tracker after changes are posted constitutes acceptance of the updated terms.
+                        Your use of Email Tracker is also governed by our Privacy Policy, which explains how we collect, use, and protect your information. Email Tracker accesses Gmail only with your explicit authorization through Google's OAuth authentication system.
                       </p>
 
-                      <h2>9. Contact</h2>
+                      <h2>5. Service Availability</h2>
                       <p>
-                        Questions about these terms? Reach out at{" "}
-                        <strong>tejasholla23@gmail.com</strong>.
+                        Email Tracker is provided on an "as is" and "as available" basis. We may modify, suspend, or discontinue parts of the service at any time without prior notice.
+                      </p>
+
+                      <h2>6. Intellectual Property</h2>
+                      <p>
+                        Email Tracker — including its design, branding, code, and user interface — belongs to its developer. You may not copy, redistribute, or create derivative works from the application without permission. Your data remains yours.
+                      </p>
+
+                      <h2>7. Disclaimer of Warranties</h2>
+                      <p>While we strive for accuracy and reliability, we do not guarantee that:</p>
+                      <ul>
+                        <li>Email synchronization will always succeed</li>
+                        <li>Extracted information will always be complete or accurate</li>
+                        <li>The service will be available without interruption</li>
+                      </ul>
+                      <p>
+                        Users should always verify important deadlines and application details using official communications from employers or their institution.
+                      </p>
+
+                      <h2>8. Limitation of Liability</h2>
+                      <p>
+                        To the maximum extent permitted by law, Email Tracker shall not be responsible for any loss arising from reliance on information displayed by the application, including missed deadlines, inaccurate parsing results, or service interruptions.
+                      </p>
+
+                      <h2>9. Termination</h2>
+                      <p>
+                        We reserve the right to suspend or terminate access to Email Tracker if these Terms are violated or if continued access would compromise the security or operation of the service.
+                      </p>
+
+                      <h2>10. Changes to These Terms</h2>
+                      <p>
+                        We may update these Terms from time to time to reflect changes to the service, legal requirements, or operational practices. Continued use of Email Tracker after updated Terms become effective constitutes acceptance of the revised Terms.
+                      </p>
+
+                      <h2>11. Contact Information</h2>
+                      <p>
+                        If you have any questions about these Terms, please contact us at:
+                        <br />
+                        <strong>tejasholla23@gmail.com</strong>
                       </p>
                     </div>
                   </div>
@@ -2234,45 +2218,7 @@ export default function JobTrackerDashboard() {
                             onClick={(e) => {
                               if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
                               setSelectedApp(app);
-                              setCompanyProfile(null);
                               setShowInfoModal(true);
-                              setCompanyProfileLoading(true);
-
-                              // Clear any existing poll
-                              if (companyProfilePollRef.current) {
-                                clearInterval(companyProfilePollRef.current);
-                                companyProfilePollRef.current = null;
-                              }
-
-                              const appId = app._id;
-                              const fetchProfile = () =>
-                                fetch(`${BASE_URL}/applications/${appId}/company-profile`, { credentials: 'include' })
-                                  .then(r => r.ok ? r.json() : null)
-                                  .catch(() => null);
-
-                              // Initial fetch — returns immediately
-                              fetchProfile().then(data => {
-                                if (!data) { setCompanyProfileLoading(false); return; }
-                                if (data.status === 'ready') {
-                                  // Profile already enriched — show immediately
-                                  setCompanyProfile(data);
-                                  setCompanyProfileLoading(false);
-                                } else {
-                                  // status === 'processing' — poll every 2s
-                                  companyProfilePollRef.current = setInterval(() => {
-                                    fetchProfile().then(polled => {
-                                      if (!polled) return; // network error — keep polling
-                                      if (polled.status === 'ready') {
-                                        clearInterval(companyProfilePollRef.current);
-                                        companyProfilePollRef.current = null;
-                                        setCompanyProfile(polled);
-                                        setCompanyProfileLoading(false);
-                                      }
-                                      // else still processing — next tick will retry
-                                    });
-                                  }, 2000);
-                                }
-                              });
                             }}
                           >
                             <div className="app-header">
@@ -2903,17 +2849,11 @@ export default function JobTrackerDashboard() {
       {showInfoModal && selectedApp && (() => {
         const app = selectedApp;
         const closeInfoModal = () => {
-          // Cancel any in-flight poll before closing
-          if (companyProfilePollRef.current) {
-            clearInterval(companyProfilePollRef.current);
-            companyProfilePollRef.current = null;
-          }
           setShowInfoModal(false);
-          setCompanyProfile(null);
         };
         const statusKey = (app.status || 'new').toLowerCase().replace(/\s+/g, '-');
         const isUrgent = app.deadlineISO && new Date(app.deadlineISO) - Date.now() < 72 * 60 * 60 * 1000;
-        const logoSrc = companyProfile?.logo || app.companyInfo?.logo;
+        const logoSrc = app.companyInfo?.logo;
         const FIELD_CONFIG = {
           role:      { label: "Role(s)",   value: app.programRoles    },
           stipend:   { label: "Stipend",   value: app.programStipend  },
@@ -2970,113 +2910,7 @@ export default function JobTrackerDashboard() {
               {/* ── Scrollable body ── */}
               <div className="info-modal-body">
 
-                {/* Job Details section */}
-                {(displayFieldRows.length > 0 || displayRowsFromFields.length > 0) && (
-                  <div className="info-modal-section">
-                    <div className="info-modal-section-header">Job Details</div>
-                    <div className="info-modal-section-body">
-                      {displayFieldRows.length > 0
-                        ? displayFieldRows.map(({ label, value }) => (
-                            <div key={label} className="info-detail-row">
-                              <span className="info-detail-label">{label}</span>
-                              <span className="info-detail-value">{value}</span>
-                            </div>
-                          ))
-                        : displayRowsFromFields.map(({ label, value }) => (
-                            <div key={label} className="info-detail-row">
-                              <span className="info-detail-label">{label}</span>
-                              <span className="info-detail-value">{value}</span>
-                            </div>
-                          ))
-                      }
-                      {app.link && (
-                        <div className="info-detail-row">
-                          <span className="info-detail-label">Apply</span>
-                          <span className="info-detail-value">
-                            <a href={app.link} target="_blank" rel="noopener noreferrer"
-                              style={{ color: '#3b82f6', textDecoration: 'underline' }}
-                              onClick={e => e.stopPropagation()}>
-                              {app.isFormLink ? 'Open Form ↗' : 'Apply Now ↗'}
-                            </a>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Company Snapshot section */}
-                <div className="info-modal-section">
-                  <div className="info-modal-section-header">Company Snapshot</div>
-                  <div className="info-modal-section-body">
-                    {companyProfileLoading && !companyProfile && (
-                      <div className="company-skeleton">
-                        <div className="skeleton-line" style={{ width: '70%' }}></div>
-                        <div className="skeleton-line" style={{ width: '90%' }}></div>
-                        <div className="skeleton-line" style={{ width: '55%' }}></div>
-                        <div className="skeleton-line" style={{ width: '80%' }}></div>
-                      </div>
-                    )}
-                    {companyProfile && companyProfile.isEnriched && (
-                      <>
-                        {companyProfile.description && (
-                          <p className="company-description">{companyProfile.description}</p>
-                        )}
-                        <div className="info-detail-row">
-                          <span className="info-detail-label">Industry</span>
-                          <span className="info-detail-value">{companyProfile.industry || '—'}</span>
-                        </div>
-                        <div className="info-detail-row">
-                          <span className="info-detail-label">Type</span>
-                          <span className="info-detail-value">{companyProfile.companyType || '—'}</span>
-                        </div>
-                        <div className="info-detail-row">
-                          <span className="info-detail-label">HQ</span>
-                          <span className="info-detail-value">{companyProfile.headquarters || '—'}</span>
-                        </div>
-                        {companyProfile.website && (
-                          <div className="info-detail-row">
-                            <span className="info-detail-label">Website</span>
-                            <span className="info-detail-value">
-                              <a href={companyProfile.website.startsWith('http') ? companyProfile.website : `https://${companyProfile.website}`}
-                                target="_blank" rel="noopener noreferrer"
-                                style={{ color: '#3b82f6', textDecoration: 'underline' }}
-                                onClick={e => e.stopPropagation()}>
-                                {companyProfile.website.replace(/^https?:\/\//, '')}
-                              </a>
-                            </span>
-                          </div>
-                        )}
-                        {companyProfile.knownFor?.length > 0 && (
-                          <div style={{ marginTop: '10px' }}>
-                            <ul className="known-for-list">
-                              {companyProfile.knownFor.map((item, i) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {!companyProfileLoading && (!companyProfile || !companyProfile.isEnriched) && (
-                      <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>
-                        Company profile is being generated — check back in a moment.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Skills section */}
-                {skills.length > 0 && (
-                  <div className="info-modal-section">
-                    <div className="info-modal-section-header">Skills & Requirements</div>
-                    <div className="info-modal-section-body">
-                      <div className="skills-grid">
-                        {skills.map((s, i) => <span key={i} className="skill-chip">{s}</span>)}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Application Timeline */}
+                {/* Application Timeline — Only section in body */}
                 {app.events && app.events.length > 0 && (
                   <div className="info-modal-section">
                     <div className="info-modal-section-header">Application Timeline</div>
@@ -3086,22 +2920,30 @@ export default function JobTrackerDashboard() {
                           const d = new Date(ev.date);
                           const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
                           return (
-                            <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === app.events.length - 1 ? '0' : '16px' }}>
+                            <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === app.events.length - 1 ? '0' : '18px' }}>
                               <div className="timeline-date" style={{ width: '48px', fontSize: '13px', color: '#64748b', textAlign: 'right', marginRight: '16px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
                                 {formattedD}
                               </div>
                               <div className="timeline-dot" style={{ position: 'absolute', left: '59px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
                               {i !== app.events.length - 1 && (
-                                <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-16px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
+                                <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-18px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
                               )}
                               <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
-                                <div className="timeline-title" style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                                  {ev.title || 'Email Notification'}
+                                <div className="timeline-title" style={{ fontSize: '14.5px', fontWeight: '600', color: '#0f172a' }}>
+                                  {ev.title || ev.classification || 'Email Notification'}
                                 </div>
-                                <div className="timeline-subtitle" style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', lineHeight: '1.4' }}>
-                                  {ev.status && <span style={{ textTransform: 'capitalize', marginRight: '6px', fontWeight: '600', color: '#3b82f6' }}>[{ev.status}]</span>}
-                                  <span style={{ opacity: 0.9 }}>{ev.subject ? (ev.subject.length > 60 ? ev.subject.substring(0, 60) + '...' : ev.subject) : ''}</span>
+                                <div className="timeline-subtitle" style={{ fontSize: '12.5px', color: '#475569', marginTop: '3px', lineHeight: '1.5' }}>
+                                  {ev.summary ? ev.summary : (ev.subject ? (ev.subject.length > 80 ? ev.subject.substring(0, 80) + '...' : ev.subject) : '')}
                                 </div>
+                                {ev.link && (
+                                  <div style={{ marginTop: '6px' }}>
+                                    <a href={ev.link} target="_blank" rel="noopener noreferrer"
+                                       style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'underline', fontWeight: '500' }}
+                                       onClick={e => e.stopPropagation()}>
+                                      {ev.classification === 'Registration Link' || ev.classification === 'New Hiring Opportunity' || ev.classification === 'Internship Opportunity' ? 'Apply Link ↗' : 'Open Link ↗'}
+                                    </a>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
