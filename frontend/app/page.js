@@ -376,11 +376,14 @@ export default function JobTrackerDashboard() {
     const isAnyModalOpen = showInfoModal || showAddModal || showEditModal || showDeleteModal;
     if (isAnyModalOpen) {
       document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
     }
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
     };
   }, [showInfoModal, showAddModal, showEditModal, showDeleteModal]);
 
@@ -1600,7 +1603,7 @@ export default function JobTrackerDashboard() {
           max-height: 85vh;
           display: flex;
           flex-direction: column;
-          padding: 0;
+          padding: 0 !important;
           overflow: hidden;
         }
         .info-modal-header {
@@ -1623,7 +1626,7 @@ export default function JobTrackerDashboard() {
         .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
         .meta-chip.status-done { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 
-        .info-modal-body { overflow-y: auto; flex: 1; padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
+        .info-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1; min-height: 0; padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
         .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: hidden; }
         .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); }
         .info-modal-section-body { padding: 16px 18px; }

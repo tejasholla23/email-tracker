@@ -130,15 +130,6 @@ async function enrichCompanyProfile(companyInfoDoc) {
       });
       console.log(`[ENRICH_FAILED] "${name}" — Gemini returned null, lock released.`);
     }
-  } catch (enrichErr) {
-    console.error(`[ENRICH_ERROR] "${name}":`, enrichErr.message);
-    try {
-      await CompanyInfo.findByIdAndUpdate(companyInfoDoc._id, {
-        isEnriching: false,
-      });
-    } catch (dbErr) {
-      console.error(`[ENRICH_LOCK_RELEASE_FAILED] "${name}":`, dbErr.message);
-    }
   } finally {
     enrichingLock.delete(name);
   }
