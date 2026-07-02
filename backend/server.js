@@ -20,7 +20,7 @@ const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
-const CURRENT_PARSER_VERSION = "v3";
+const CURRENT_PARSER_VERSION = "v4";
 
 function getNextRetryDate(retryCount) {
   const now = new Date();

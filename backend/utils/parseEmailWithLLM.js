@@ -29,9 +29,14 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
   const text = deadlineText.trim();
   if (!text) return "";
 
-  // ── Extract time component (e.g. "10 PM", "5:30 AM") ──────────────────────
+  const createDateInIST = (year, month, day, hours, minutes) => {
+    const pad = (num) => String(num).padStart(2, '0');
+    const isoString = `${year}-${pad(month)}-${pad(day)}T${pad(hours)}:${pad(minutes)}:00+05:30`;
+    return new Date(isoString);
+  };
+
   const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
-  let hours = 0, minutes = 0;
+  let hours = 23, minutes = 59;
   if (timeMatch) {
     hours = parseInt(timeMatch[1], 10);
     minutes = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
@@ -42,50 +47,66 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
 
   const lower = text.toLowerCase();
 
-  // ── Relative dates: "today", "tomorrow" ────────────────────────────────────
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  const parts = formatter.formatToParts(referenceDate);
+  const getPartVal = (type) => parseInt(parts.find(p => p.type === type).value, 10);
+
+  const refYear = getPartVal("year");
+  const refMonth = getPartVal("month");
+  const refDay = getPartVal("day");
+
   if (/\btoday\b/i.test(lower)) {
-    const d = new Date(referenceDate);
-    d.setHours(hours, minutes, 0, 0);
+    const d = createDateInIST(refYear, refMonth, refDay, hours, minutes);
     return d.toISOString();
   }
   if (/\btomorrow\b/i.test(lower)) {
-    const d = new Date(referenceDate);
-    d.setDate(d.getDate() + 1);
-    d.setHours(hours, minutes, 0, 0);
+    const dRef = new Date(referenceDate);
+    dRef.setDate(dRef.getDate() + 1);
+
+    const partsTom = formatter.formatToParts(dRef);
+    const getTomVal = (type) => parseInt(partsTom.find(p => p.type === type).value, 10);
+    const tomYear = getTomVal("year");
+    const tomMonth = getTomVal("month");
+    const tomDay = getTomVal("day");
+
+    const d = createDateInIST(tomYear, tomMonth, tomDay, hours, minutes);
     return d.toISOString();
   }
 
-  // ── Absolute dates ─────────────────────────────────────────────────────────
-  // Strip ordinal suffixes (1st, 2nd, 3rd, 4th, etc.) for Date.parse
   const cleaned = text.replace(/(\d{1,2})(st|nd|rd|th)/gi, "$1");
-
-  // Try parsing the cleaned text directly
   const parsed = new Date(cleaned);
   if (!isNaN(parsed.getTime())) {
-    if (timeMatch) {
-      parsed.setHours(hours, minutes, 0, 0);
+    let y = parsed.getFullYear();
+    let m = parsed.getMonth() + 1;
+    let d = parsed.getDate();
+
+    if (cleaned.includes("-")) {
+      y = parsed.getUTCFullYear();
+      m = parsed.getUTCMonth() + 1;
+      d = parsed.getUTCDate();
     }
-    return parsed.toISOString();
+    const finalDate = createDateInIST(y, m, d, hours, minutes);
+    return finalDate.toISOString();
   }
 
-  // Try extracting just the date portion ("25 June 2026", "June 25, 2026", etc.)
   const datePattern = /(?:(\d{1,2})\s+(?:of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)[,\s]+(\d{4})|(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})[,\s]+(\d{4}))/i;
   const dateMatch = cleaned.match(datePattern);
   if (dateMatch) {
     let dateStr;
     if (dateMatch[1]) {
-      // day month year
       dateStr = `${dateMatch[2]} ${dateMatch[1]}, ${dateMatch[3]}`;
     } else {
-      // month day year
       dateStr = `${dateMatch[4]} ${dateMatch[5]}, ${dateMatch[6]}`;
     }
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
-      if (timeMatch) {
-        d.setHours(hours, minutes, 0, 0);
-      }
-      return d.toISOString();
+      const finalDate = createDateInIST(d.getFullYear(), d.getMonth() + 1, d.getDate(), hours, minutes);
+      return finalDate.toISOString();
     }
   }
 
