@@ -60,6 +60,7 @@ export default function JobTrackerDashboard() {
   const [clearError, setClearError] = useState("");
   const [accountDeletedJustNow, setAccountDeletedJustNow] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [timeTick, setTimeTick] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showThemeSubmenu, setShowThemeSubmenu] = useState(false);
@@ -351,6 +352,31 @@ export default function JobTrackerDashboard() {
     } catch (error) {
       console.error("Failed to fetch sync status:", error);
     }
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeTick(t => t + 1);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatRelativeTime = (dateString) => {
+    if (!dateString) return "Never synced";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return "Last Synced: Just now";
+    if (diffMins === 1) return "Last Synced: 1 min ago";
+    if (diffMins < 60) return `Last Synced: ${diffMins} mins ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours === 1) return "Last Synced: 1 hour ago";
+    if (diffHours < 24) return `Last Synced: ${diffHours} hours ago`;
+
+    return `Last Synced: ${date.toLocaleDateString()}`;
   };
 
   useEffect(() => {
@@ -1750,7 +1776,18 @@ export default function JobTrackerDashboard() {
             ))}
           </nav>
 
-          <div className="sidebar-bottom">
+          <div className="sidebar-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ padding: '0 16px', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.05em', marginTop: '8px' }}>
+              Sync Emails
+            </div>
+            <button className="sync-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
+              {(syncing || syncStatus === "pending") ? "Syncing..." : "Sync Now"}
+            </button>
+            {lastSyncTime && (
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '8px' }}>
+                {formatRelativeTime(lastSyncTime)}
+              </div>
+            )}
             <div
               className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
               style={{ marginTop: 0 }}
@@ -1777,10 +1814,6 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
             <div className="topbar-actions">
-              <button className="btn-outline-primary" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
-                {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
-              </button>
-
               <div className="user-dropdown-container">
                 <button
                   className="user-avatar-btn"
