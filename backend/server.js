@@ -430,6 +430,7 @@ app.delete("/auth/account", authenticate, async (req, res) => {
 const activeSyncs = new Set();
 const activeClearRequests = new Set();
 let isCronProcessing = false;
+let isMigrationV4Processing = false;
 
 function appendApplicationEvent(application, parsed, emailMetadata) {
   const { messageId, date, subject } = emailMetadata;
@@ -1299,6 +1300,8 @@ app.get("/sync", authenticate, (req, res) => {
 
   res.send("Sync triggered in background");
 });
+
+
 
 // ==========================
 // 🧪 MANUAL CRON TRIGGER
