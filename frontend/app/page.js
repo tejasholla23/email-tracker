@@ -1070,9 +1070,10 @@ export default function JobTrackerDashboard() {
         .logo-text { font-family: 'IBM Plex Sans', sans-serif; font-size: 20px; font-weight: 700; color: #0d9488; line-height: 1.2; }
         .logo-sub { font-size: 12px; color: #6b7280; }
         
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: #475569; text-decoration: none; font-weight: 500; margin-bottom: 8px; cursor: pointer; transition: background-color 0.15s ease-out, color 0.15s ease-out; font-size: 15px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: #475569; text-decoration: none; font-weight: 500; margin-bottom: 8px; cursor: pointer; transition: all 0.15s ease-out; font-size: 15px; position: relative; overflow: hidden; }
         .nav-item:hover { background: #e5e7eb; color: #0f172a; }
-        .nav-item.active { background: #ecfdf5; border-left: 4px solid #14b8a6; color: #0f766e; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .nav-item.active { background: linear-gradient(90deg, rgba(20, 184, 166, 0.12) 0%, rgba(20, 184, 166, 0.01) 100%); color: #0f766e; }
+        .nav-item.active::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(90deg, #14b8a6, #2dd4bf); border-radius: 0 4px 4px 0; }
         
         .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
         .sync-btn { width: 100%; padding: 12px; background: var(--brand-primary); color: white; border: none; border-radius: var(--radius-btn); font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: background-color 0.2s ease-out, transform 0.15s ease-out, filter 0.2s ease-out; font-size: 14px; }
@@ -1469,7 +1470,8 @@ export default function JobTrackerDashboard() {
         .dark .logo-text { color: #2dd4bf; }
         .dark .nav-item { color: #9ca3af; }
         .dark .nav-item:hover { background: #1f2937; color: #f9fafb; }
-        .dark .nav-item.active { background: #374151; border-color: #2dd4bf; color: #2dd4bf; }
+        .dark .nav-item.active { background: linear-gradient(90deg, rgba(45, 212, 191, 0.12) 0%, rgba(45, 212, 191, 0.01) 100%); color: #2dd4bf; }
+        .dark .nav-item.active::before { background: linear-gradient(90deg, #2dd4bf, #14b8a6); }
         .dark .sidebar-bottom { border-color: #1f2937; }
         
         .dark .topbar { background: rgba(3, 7, 18, 0.8); border-color: var(--border-color); }
@@ -1777,17 +1779,15 @@ export default function JobTrackerDashboard() {
           </nav>
 
           <div className="sidebar-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ padding: '0 16px', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.05em', marginTop: '8px' }}>
-              Sync Emails
-            </div>
             <button className="sync-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
-              {(syncing || syncStatus === "pending") ? "Syncing..." : "Sync Now"}
+              {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
             </button>
             {lastSyncTime && (
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '4px' }}>
                 {formatRelativeTime(lastSyncTime)}
               </div>
             )}
+            <div style={{ borderTop: '1px solid var(--border-color)', margin: '8px 0', opacity: 0.8 }} />
             <div
               className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
               style={{ marginTop: 0 }}
