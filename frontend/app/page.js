@@ -55,6 +55,9 @@ export default function JobTrackerDashboard() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
+  const [clearError, setClearError] = useState("");
   const [accountDeletedJustNow, setAccountDeletedJustNow] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -369,9 +372,8 @@ export default function JobTrackerDashboard() {
     return () => clearInterval(intervalId);
   }, [syncStatus, userEmail]);
 
-  // Lock body scroll when any modal is active to prevent scroll leak
   useEffect(() => {
-    const isAnyModalOpen = showInfoModal || showAddModal || showEditModal || showDeleteModal;
+    const isAnyModalOpen = showInfoModal || showAddModal || showEditModal || showDeleteModal || showClearModal;
     if (isAnyModalOpen) {
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
@@ -383,7 +385,7 @@ export default function JobTrackerDashboard() {
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
     };
-  }, [showInfoModal, showAddModal, showEditModal, showDeleteModal]);
+  }, [showInfoModal, showAddModal, showEditModal, showDeleteModal, showClearModal]);
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -442,24 +444,29 @@ export default function JobTrackerDashboard() {
     }
   };
 
-  const handleClearAll = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete all applications? This cannot be undone."
-    );
-    if (!confirmed) return;
+  const handleClearSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (clearConfirmText !== "CLEAR") {
+      setClearError("Please type CLEAR to confirm clearing workspace.");
+      return;
+    }
 
     setClearing(true);
+    setClearError("");
+
     try {
       const response = await apiFetch(`${BASE_URL}/clear-all-applications`, {
         method: "DELETE"
       });
       if (!response.ok) throw new Error("Clear failed");
       const data = await response.json();
-      alert(`All applications cleared. (${data.deletedCount ?? "?"} records removed)`);
       await fetchApplications();
+      setShowClearModal(false);
+      setClearConfirmText("");
+      alert(`All applications cleared. (${data.deletedCount ?? "?"} records removed)`);
     } catch (error) {
       console.error("Clear all failed:", error);
-      alert("Failed to clear applications. Please try again.");
+      setClearError("Failed to clear applications. Please try again.");
     } finally {
       setClearing(false);
     }
@@ -1088,10 +1095,7 @@ export default function JobTrackerDashboard() {
         .settings-header { margin-bottom: 8px; }
         .settings-main-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px; }
         .settings-main-subtitle { color: var(--text-secondary); font-size: 15px; }
-        .settings-grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-        @media (max-width: 768px) {
-          .settings-grid-row { grid-template-columns: 1fr; }
-        }
+        .settings-grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
         .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .settings-title { font-size: 20px; font-weight: 700; color: var(--text-heading); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
         .settings-title-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(13, 148, 136, 0.1); color: #0d9488; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -1763,22 +1767,18 @@ export default function JobTrackerDashboard() {
               <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
-              <div className="search-container" style={{ flex: 1 }}>
+              <div className="search-container">
                 <input
                   type="text"
                   placeholder="Search applications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ width: '100%' }}
                 />
               </div>
             </div>
             <div className="topbar-actions">
               <button className="btn-outline-primary" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
                 {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
-              </button>
-              <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
-                {clearing ? "Clearing..." : "Clear All"}
               </button>
 
               <div className="user-dropdown-container">
@@ -1796,11 +1796,11 @@ export default function JobTrackerDashboard() {
 
                     {!showThemeSubmenu ? (
                       <>
+                        <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setShowUserDropdown(false); }}>
+                          Settings
+                        </button>
                         <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
                           Theme ❯
-                        </button>
-                        <button className="user-dropdown-item" onClick={() => { setShowDeleteModal(true); setShowUserDropdown(false); }}>
-                          Delete Account
                         </button>
                         <div style={{ borderBottom: '1px solid var(--border-color)', margin: '4px 0' }} />
                         <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>
@@ -1847,6 +1847,26 @@ export default function JobTrackerDashboard() {
                   <>
                     <div className="settings-header">
                       <h1 className="settings-main-title">Settings & Help</h1>
+                    </div>
+
+                    <div className="settings-about-card" style={{ marginBottom: '24px' }}>
+                      <div className="about-info-box">
+                        <h3>About Email Tracker</h3>
+                        <span className="about-version-badge">VERSION 2.0.0 STABLE</span>
+                        <p className="about-desc">
+                          Email Tracker automatically tracks and organizes emails from the placement department. It extracts important information such as company details, deadlines, eligibility criteria, and application form links, presenting everything in a centralized dashboard for quick access and easy tracking.
+                        </p>
+                        <div className="about-tech-container">
+                          <span className="about-tech-label">Built with:</span>
+                          <div className="about-tech-tags">
+                            <span className="about-tech-tag">React</span>
+                            <span className="about-tech-tag">Node.js</span>
+                            <span className="about-tech-tag">MongoDB</span>
+                            <span className="about-tech-tag">Gemini</span>
+                            <span className="about-tech-tag">Google OAuth</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="settings-grid-row">
@@ -1899,24 +1919,29 @@ export default function JobTrackerDashboard() {
                           </button>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="settings-about-card">
-                      <div className="about-info-box">
-                        <h3>About Email Tracker</h3>
-                        <span className="about-version-badge">VERSION 2.0.0 STABLE</span>
-                        <p className="about-desc">
-                          Email Tracker automatically tracks and organizes emails from the placement department. It extracts important information such as company details, deadlines, eligibility criteria, and application links, presenting everything in a centralized dashboard for quick access and easy tracking.
-                        </p>
-                        <div className="about-tech-container">
-                          <span className="about-tech-label">Built with:</span>
-                          <div className="about-tech-tags">
-                            <span className="about-tech-tag">React</span>
-                            <span className="about-tech-tag">Node.js</span>
-                            <span className="about-tech-tag">MongoDB</span>
-                            <span className="about-tech-tag">Gemini</span>
-                            <span className="about-tech-tag">Google OAuth</span>
-                          </div>
+                      <div className="settings-card" style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+                        <h3 className="settings-title" style={{ color: '#ef4444' }}>
+                          <span className="settings-title-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                          </span>
+                          <span>Delete</span>
+                        </h3>
+                        <div className="settings-list">
+                          <button className="settings-item" onClick={() => { setShowClearModal(true); setClearConfirmText(""); setClearError(""); }}>
+                            <span className="settings-item-icon" style={{ color: '#ef4444' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                            </span>
+                            <span className="settings-item-label">Clear Workspace</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                          <button className="settings-item" onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(""); setDeleteError(""); }}>
+                            <span className="settings-item-icon" style={{ color: '#ef4444' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>
+                            </span>
+                            <span className="settings-item-label" style={{ color: '#ef4444' }}>Delete Account</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -3033,6 +3058,69 @@ export default function JobTrackerDashboard() {
                   disabled={deletingAccount || deleteConfirmText !== "DELETE"}
                 >
                   {deletingAccount ? "Deleting..." : "Permanently Delete"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showClearModal && (
+        <div className="modal-overlay" onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>
+          <div className="modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#ef4444' }}>Clear Workspace</h3>
+              <button className="modal-close" onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleClearSubmit} style={{ marginTop: '16px' }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                <p style={{ marginBottom: '12px', fontWeight: '600' }}>
+                  Warning: This action will delete all synced applications.
+                </p>
+                <p style={{ marginBottom: '12px' }}>
+                  Your account settings, notes, and Gmail credentials will remain intact, but all applications displayed on your dashboard will be removed.
+                </p>
+              </div>
+
+              {clearError && (
+                <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', fontWeight: '500' }}>
+                  {clearError}
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                  To confirm, type <strong style={{ color: '#ef4444' }}>CLEAR</strong> in the box below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="CLEAR"
+                  value={clearConfirmText}
+                  onChange={(e) => setClearConfirmText(e.target.value)}
+                  disabled={clearing}
+                  required
+                  style={{ borderColor: clearConfirmText === "CLEAR" ? '#ef4444' : 'var(--border-color)', outline: 'none' }}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}
+                  disabled={clearing}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  style={{ backgroundColor: clearConfirmText === "CLEAR" ? '#ef4444' : '#f87171', opacity: clearConfirmText === "CLEAR" ? 1 : 0.6 }}
+                  disabled={clearing || clearConfirmText !== "CLEAR"}
+                >
+                  {clearing ? "Clearing..." : "Clear Workspace"}
                 </button>
               </div>
             </form>
