@@ -371,6 +371,19 @@ export default function JobTrackerDashboard() {
     return () => clearInterval(intervalId);
   }, [syncStatus, userEmail]);
 
+  // Lock body scroll when any modal is active to prevent scroll leak
+  useEffect(() => {
+    const isAnyModalOpen = showInfoModal || showAddModal || showEditModal || showDeleteModal;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [showInfoModal, showAddModal, showEditModal, showDeleteModal]);
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
     localStorage.setItem("darkMode", !isDarkMode);
