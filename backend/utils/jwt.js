@@ -13,7 +13,7 @@ function generateAccessToken(account) {
       email: account.email,
     },
     JWT_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "30d" }
   );
 }
 

@@ -314,9 +314,9 @@ app.post("/auth/token", async (req, res) => {
     const rawRefreshToken = generateRefreshToken();
     const hashedToken = hashRefreshToken(rawRefreshToken);
 
-    // Save hashed refresh token and expiry (7 days)
+    // Save hashed refresh token and expiry (90 days)
     account.refreshTokenHash = hashedToken;
-    account.refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    account.refreshTokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
     await account.save();
 
     res.json({
@@ -355,7 +355,7 @@ app.post("/auth/refresh", async (req, res) => {
 
     // Rotate refresh token
     account.refreshTokenHash = newHashedToken;
-    account.refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    account.refreshTokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
     await account.save();
 
     res.json({
