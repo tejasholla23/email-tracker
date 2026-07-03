@@ -2031,20 +2031,23 @@ export default function JobTrackerDashboard() {
                 <div className="settings-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                   <h1 className="settings-main-title" style={{ margin: 0 }}>Google Calendar Integration</h1>
                   <a 
-                    href="https://calendar.google.com" 
+                    href={userEmail ? `https://calendar.google.com/calendar/r?authuser=${encodeURIComponent(userEmail)}` : "https://calendar.google.com"} 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    className="btn-outline-primary"
+                    className="btn-primary"
                     style={{ 
                       display: 'inline-flex', 
                       alignItems: 'center', 
-                      gap: '8px', 
+                      justifyContent: 'center',
                       textDecoration: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '8px'
+                      padding: '10px 24px',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      minWidth: '180px'
                     }}
                   >
-                    <span>📅</span> Open Google Calendar
+                    Open Google Calendar
                   </a>
                 </div>
 
