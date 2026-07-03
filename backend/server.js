@@ -19,6 +19,13 @@ const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require(
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 const { processCalendarSyncQueue } = require("./utils/calendarService");
+const {
+  authLimiter,
+  syncLimiter,
+  calendarSyncLimiter,
+  writeLimiter,
+  readLimiter
+} = require("./middleware/rateLimiters");
 
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 const CURRENT_PARSER_VERSION = "v4";
@@ -190,7 +197,7 @@ app.get("/", (req, res) => {
 // ==========================
 
 // GET /clear-applications — legacy convenience endpoint (browser-accessible)
-app.get("/clear-applications", authenticate, async (req, res) => {
+app.get("/clear-applications", writeLimiter, authenticate, async (req, res) => {
   try {
     await Application.deleteMany({ userId: req.userId });
     res.send("All applications deleted");
@@ -201,7 +208,7 @@ app.get("/clear-applications", authenticate, async (req, res) => {
 
 // DELETE /clear-all-applications — used by the frontend "Clear All" button.
 // Sets a flag that aborts any in-progress sync, waits briefly, then wipes the DB.
-app.delete("/clear-all-applications", authenticate, async (req, res) => {
+app.delete("/clear-all-applications", writeLimiter, authenticate, async (req, res) => {
   if (!config.isAllowedEmail(req.userEmail)) {
     return res.status(401).json({ message: "Unauthorized" });
   }
@@ -239,7 +246,7 @@ app.delete("/clear-all-applications", authenticate, async (req, res) => {
 // ==========================
 // 🔐 GOOGLE AUTH
 // ==========================
-app.get("/auth/google", (req, res) => {
+app.get("/auth/google", authLimiter, (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: [
@@ -253,7 +260,7 @@ app.get("/auth/google", (req, res) => {
 });
 
 // Incremental OAuth flow for calendar scopes specifically
-app.get("/auth/google/calendar", (req, res) => {
+app.get("/auth/google/calendar", authLimiter, (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: [
@@ -268,7 +275,7 @@ app.get("/auth/google/calendar", (req, res) => {
   res.redirect(url);
 });
 
-app.get("/auth/google/callback", async (req, res) => {
+app.get("/auth/google/callback", authLimiter, async (req, res) => {
   const { code } = req.query;
 
   try {
@@ -317,7 +324,7 @@ app.get("/auth/google/callback", async (req, res) => {
 });
 
 // POST /auth/token - exchange temporary auth code for access and refresh tokens
-app.post("/auth/token", async (req, res) => {
+app.post("/auth/token", authLimiter, async (req, res) => {
   const { code } = req.body;
   if (!code) {
     return res.status(400).json({ message: "Authorization code is required" });
@@ -355,7 +362,7 @@ app.post("/auth/token", async (req, res) => {
 });
 
 // POST /auth/refresh - rotate refresh token and issue new access token
-app.post("/auth/refresh", async (req, res) => {
+app.post("/auth/refresh", authLimiter, async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) {
     return res.status(400).json({ message: "Refresh token is required" });
@@ -393,7 +400,7 @@ app.post("/auth/refresh", async (req, res) => {
 });
 
 // GET /auth/me - get current user context from JWT
-app.get("/auth/me", authenticate, async (req, res) => {
+app.get("/auth/me", readLimiter, authenticate, async (req, res) => {
   res.json({
     _id: req.userId,
     email: req.userEmail
@@ -401,7 +408,7 @@ app.get("/auth/me", authenticate, async (req, res) => {
 });
 
 // GET /auth/calendar/status - check calendar integration status
-app.get("/auth/calendar/status", authenticate, async (req, res) => {
+app.get("/auth/calendar/status", readLimiter, authenticate, async (req, res) => {
   try {
     const account = await Account.findById(req.userId);
     if (!account) return res.status(404).json({ message: "Account not found" });
@@ -419,7 +426,7 @@ app.get("/auth/calendar/status", authenticate, async (req, res) => {
 });
 
 // POST /auth/calendar/toggle - toggle calendar integration enabled state
-app.post("/auth/calendar/toggle", authenticate, async (req, res) => {
+app.post("/auth/calendar/toggle", writeLimiter, authenticate, async (req, res) => {
   try {
     const account = await Account.findById(req.userId);
     if (!account) return res.status(404).json({ message: "Account not found" });
@@ -447,7 +454,7 @@ app.post("/auth/calendar/toggle", authenticate, async (req, res) => {
 });
 
 // POST /auth/calendar/sync - manually trigger calendar re-sync
-app.post("/auth/calendar/sync", authenticate, async (req, res) => {
+app.post("/auth/calendar/sync", calendarSyncLimiter, authenticate, async (req, res) => {
   try {
     const account = await Account.findById(req.userId);
     if (!account) return res.status(404).json({ message: "Account not found" });
@@ -474,7 +481,7 @@ app.post("/auth/calendar/sync", authenticate, async (req, res) => {
 // ==========================
 // 🚪 LOGOUT
 // ==========================
-app.get("/logout", authenticate, async (req, res) => {
+app.get("/logout", readLimiter, authenticate, async (req, res) => {
   try {
     await Account.findByIdAndUpdate(req.userId, {
       refreshTokenHash: null,
@@ -490,7 +497,7 @@ app.get("/logout", authenticate, async (req, res) => {
 // ==========================
 // ❌ DELETE ACCOUNT
 // ==========================
-app.delete("/auth/account", authenticate, async (req, res) => {
+app.delete("/auth/account", writeLimiter, authenticate, async (req, res) => {
   try {
     const userId = req.userId;
     console.log(`[ACCOUNT_DELETION] Initiating deletion for userId: ${userId}`);
@@ -524,6 +531,11 @@ app.delete("/auth/account", authenticate, async (req, res) => {
 const activeSyncs = new Set();
 const activeClearRequests = new Set();
 let isCronProcessing = false;
+
+// Per-user manual sync cooldown (45 seconds).
+// Complements the activeSyncs concurrency guard as a second layer.
+const manualSyncCooldowns = new Map();
+const MANUAL_SYNC_COOLDOWN_MS = 45 * 1000;
 let isMigrationV4Processing = false;
 
 function appendApplicationEvent(application, parsed, emailMetadata) {
@@ -1394,12 +1406,32 @@ const requireCronKey = (req, res, next) => {
 // ==========================
 // 🔘 MANUAL TRIGGER (SYNC BUTTON)
 // ==========================
-app.get("/sync", authenticate, (req, res) => {
+app.get("/sync", syncLimiter, authenticate, (req, res) => {
   const userIdStr = req.userId.toString();
+
+  // Layer 1 — concurrency guard (existing, unchanged)
   if (activeSyncs.has(userIdStr)) {
     console.log(`[MANUAL_SYNC] Blocked for user ${userIdStr} — sync already in progress`);
     return res.status(200).json({ success: true, message: "Sync already in progress. Please wait for it to finish." });
   }
+
+  // Layer 2 — per-user cooldown (45-second window)
+  const lastSync = manualSyncCooldowns.get(userIdStr);
+  if (lastSync) {
+    const elapsed = Date.now() - lastSync;
+    if (elapsed < MANUAL_SYNC_COOLDOWN_MS) {
+      const remaining = Math.ceil((MANUAL_SYNC_COOLDOWN_MS - elapsed) / 1000);
+      console.log(`[MANUAL_SYNC] Cooldown active for user ${userIdStr} — ${remaining}s remaining`);
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${remaining} second${remaining !== 1 ? "s" : ""} before syncing again.`,
+        retryAfterSeconds: remaining
+      });
+    }
+  }
+
+  // Record the timestamp of this sync attempt
+  manualSyncCooldowns.set(userIdStr, Date.now());
 
   fetchAndProcessEmails(req.userId)
     .then(() => console.log("Manual sync completed"))

@@ -10,12 +10,13 @@ const router = express.Router();
 const config = require("../config/appConfig");
 
 const authenticate = require("../middleware/authenticate");
+const { writeLimiter, readLimiter } = require("../middleware/rateLimiters");
 
 // Protect all routes below
 router.use(authenticate);
 
 // GET /applications/sync-status - return Google sync status
-router.get("/sync-status", async (req, res) => {
+router.get("/sync-status", readLimiter, async (req, res) => {
   try {
     const email = req.userEmail;
     const account = await Account.findOne({ email });
@@ -34,7 +35,7 @@ router.get("/sync-status", async (req, res) => {
 });
 
 // GET /applications - return all applications with company info
-router.get("/", async (req, res) => {
+router.get("/", readLimiter, async (req, res) => {
   try {
     const applications = await Application.aggregate([
       { 
@@ -72,7 +73,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /applications - add a new application
-router.post("/", async (req, res) => {
+router.post("/", writeLimiter, async (req, res) => {
   try {
     const { companyInfo, userId, ...appData } = req.body;
     const newApplication = await Application.create({
@@ -94,7 +95,7 @@ router.post("/", async (req, res) => {
 });
 
 // PATCH /applications/:id - update application status and/or note
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", writeLimiter, async (req, res) => {
   try {
     const { status, note, manualEdits } = req.body;
     const update = { needsCalendarSync: true };
@@ -138,7 +139,7 @@ router.patch("/:id", async (req, res) => {
 });
 
 // DELETE /applications/clear - delete all applications
-router.delete("/clear", async (req, res) => {
+router.delete("/clear", writeLimiter, async (req, res) => {
   try {
     // Soft-delete and queue all for sync so Google Calendar is cleaned up
     await Application.updateMany(
@@ -159,7 +160,7 @@ router.delete("/clear", async (req, res) => {
 });
 
 // DELETE /applications/:id - soft-delete a single application
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", writeLimiter, async (req, res) => {
   try {
     const deleted = await Application.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
