@@ -76,7 +76,7 @@ export default function TermsPage() {
           <section>
             <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>4. Google Account Authorization</h2>
             <p>
-              Your use of Email Tracker is also governed by our Privacy Policy, which explains how we collect, use, and protect your information. Email Tracker accesses Gmail only with your explicit authorization through Google's OAuth authentication system.
+              Your use of Email Tracker is also governed by our Privacy Policy, which explains how we collect, use, and protect your information. Email Tracker accesses Gmail and Google Calendar only with your explicit authorization through Google's OAuth authentication system.
             </p>
           </section>
 
@@ -100,7 +100,7 @@ export default function TermsPage() {
               While we strive for accuracy and reliability, we do not guarantee that:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Email synchronization will always succeed</li>
+              <li>Email and Google Calendar synchronization will always succeed</li>
               <li>Extracted information will always be complete or accurate</li>
               <li>The service will be available without interruption</li>
             </ul>

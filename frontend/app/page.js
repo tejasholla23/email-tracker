@@ -1910,8 +1910,9 @@ export default function JobTrackerDashboard() {
               style={{ marginTop: 0 }}
               onClick={() => { setActiveFilter('calendar'); setIsSidebarOpen(false); }}
             >
-              <span>Calendar 📅</span>
+              <span>Calendar</span>
             </div>
+            <div style={{ borderTop: '1px solid var(--border-color)', margin: '8px 0', opacity: 0.8 }} />
             <div
               className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
               style={{ marginTop: 0 }}
@@ -2030,14 +2031,11 @@ export default function JobTrackerDashboard() {
                 </div>
 
                 <div className="settings-card" style={{ padding: '32px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                    <div style={{ fontSize: '40px' }}>📅</div>
-                    <div>
-                      <h3 className="settings-title" style={{ margin: 0 }}>Sync Deadlines & Events</h3>
-                      <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                        Automatically add form deadlines, interviews, online assessments, and PPTs directly to your primary college Google Calendar.
-                      </p>
-                    </div>
+                  <div style={{ marginBottom: '24px' }}>
+                    <h3 className="settings-title" style={{ margin: 0 }}>Sync Deadlines & Events</h3>
+                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                      Automatically add form deadlines, interviews, online assessments, and PPTs directly to your primary college Google Calendar.
+                    </p>
                   </div>
 
                   {calendarSuccessMsg && (
@@ -2128,24 +2126,30 @@ export default function JobTrackerDashboard() {
                 <div className="settings-card" style={{ padding: '28px' }}>
                   <h3 className="settings-title">Features & Organization Rules</h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '16px' }}>
-                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)' }}>
-                      <div style={{ fontSize: '20px', marginBottom: '8px' }}>⏱️</div>
+                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      </span>
                       <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Smart Event Types</h4>
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                         Deadlines sync as <b>All-Day Events</b>. Timed entries like online tests and interviews use customized slots (tests: 2h, interviews: 45m).
                       </p>
                     </div>
 
-                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)' }}>
-                      <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔔</div>
+                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                      </span>
                       <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Application Deadlines Reminders</h4>
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                         Deadline reminders are set automatically to alert you <b>1 day before</b> and <b>2 hours before</b> they expire to prevent missing forms.
                       </p>
                     </div>
 
-                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)' }}>
-                      <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔗</div>
+                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                      </span>
                       <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Contextual Deep Links</h4>
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                         Every calendar event includes quick links to jump directly to the application card in Email Tracker or the company's registration portal.
@@ -2167,7 +2171,7 @@ export default function JobTrackerDashboard() {
                         <h3>About Email Tracker</h3>
                         <span className="about-version-badge">VERSION 2.0.0 STABLE</span>
                         <p className="about-desc">
-                          Email Tracker automatically tracks and organizes emails from the placement department. It extracts important information such as company details, deadlines, eligibility criteria, and application form links, presenting everything in a centralized dashboard for quick access and easy tracking.
+                          Email Tracker automatically tracks and organizes emails from the placement department. It extracts important information such as company details, deadlines, eligibility criteria, and application form links, presenting everything in a centralized dashboard and synchronizing key deadlines directly into your Google Calendar for quick access and easy tracking.
                         </p>
                         <div className="about-tech-container">
                           <span className="about-tech-label">Built with:</span>
@@ -2175,7 +2179,8 @@ export default function JobTrackerDashboard() {
                             <span className="about-tech-tag">React</span>
                             <span className="about-tech-tag">Node.js</span>
                             <span className="about-tech-tag">MongoDB</span>
-                            <span className="about-tech-tag">Gemini</span>
+                            <span className="about-tech-tag">Llama 3.1 70B</span>
+                            <span className="about-tech-tag">Google Calendar API</span>
                             <span className="about-tech-tag">Google OAuth</span>
                           </div>
                         </div>
@@ -2280,8 +2285,9 @@ export default function JobTrackerDashboard() {
                       <p>When you use Email Tracker, we collect and store the following:</p>
                       <ul>
                         <li><strong>Your Google account email address</strong> — used to identify your account.</li>
-                        <li><strong>Google OAuth credentials</strong> — securely stored tokens that let us access your Gmail on your behalf. We never see or store your Google password.</li>
+                        <li><strong>Google OAuth credentials</strong> — securely stored tokens that let us access your Gmail and Google Calendar (if enabled) on your behalf. We never see or store your Google password.</li>
                         <li><strong>Placement-related Gmail messages</strong> — we read emails matching specific criteria (e.g., from your placement department) to extract application details.</li>
+                        <li><strong>Google Calendar events metadata</strong> — if you enable Google Calendar integration, we store event identifiers and hashes to sync and update placement deadlines directly on your calendar.</li>
                         <li><strong>Parsed application data</strong> — company names, roles, deadlines, stipends, and other structured information extracted from your emails.</li>
                         <li><strong>Personal notes</strong> — any notes you add to applications within the dashboard.</li>
                         <li><strong>Synchronization metadata</strong> — timestamps and history IDs that help us sync efficiently without re-processing old emails.</li>
@@ -2293,6 +2299,7 @@ export default function JobTrackerDashboard() {
                         <li>Synchronize placement emails from your Gmail inbox.</li>
                         <li>Extract and organize application details using AI.</li>
                         <li>Display your applications on a personal dashboard.</li>
+                        <li>Synchronize placement deadlines and events with your primary Google Calendar (if enabled).</li>
                         <li>Show summary statistics (total applications, upcoming deadlines, etc.).</li>
                         <li>Let you add notes, mark applications as done, and manage your workflow.</li>
                       </ul>
@@ -2300,8 +2307,8 @@ export default function JobTrackerDashboard() {
 
                       <h2>4. AI processing</h2>
                       <p>
-                        When we sync your emails, relevant message content is sent to <strong>Google's Gemini API</strong> for processing.
-                        Gemini extracts structured placement information — company name, role, deadline, application link, and so on.
+                        When we sync your emails, relevant message content is sent to <strong>NVIDIA's NIM API (running Meta's Llama 3.1 70B model)</strong> for processing.
+                        The AI extracts structured placement information — company name, role, deadline, application link, and so on.
                       </p>
                       <p>
                         This processing happens solely to turn unstructured email text into organized application cards.
@@ -2325,8 +2332,8 @@ export default function JobTrackerDashboard() {
                       <p><strong>No.</strong> We do not sell your data. We do not share it with third parties for their own purposes.</p>
                       <p>The only external services that interact with your data are:</p>
                       <ul>
-                        <li><strong>Google OAuth & Gmail API</strong> — to authenticate you and read your emails.</li>
-                        <li><strong>Google Gemini API</strong> — to parse email content into structured data.</li>
+                        <li><strong>Google OAuth, Gmail & Calendar APIs</strong> — to authenticate you, read your emails, and sync events (if enabled).</li>
+                        <li><strong>NVIDIA NIM API (Meta Llama 3.1 70B)</strong> — to parse email content into structured data.</li>
                         <li><strong>MongoDB Atlas</strong> — to store your data.</li>
                       </ul>
                       <p>These services are necessary for Email Tracker to function. We do not send your data anywhere else.</p>

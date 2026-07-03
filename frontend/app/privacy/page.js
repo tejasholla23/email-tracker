@@ -51,61 +51,54 @@ export default function PrivacyPage() {
           <section>
             <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>1. Information We Collect</h2>
             <p style={{ marginBottom: "12px" }}>
-              When you sign in using your Google account, we request permission to access your Gmail inbox through Google's OAuth authentication system.
+              When you sign in using your Google account and authorize scopes, we request permission to access your Gmail inbox and Google Calendar (if enabled) through Google's OAuth authentication system.
             </p>
             <p style={{ marginBottom: "12px" }}>
-              Depending on the permissions you grant, we may access:
+              Depending on the permissions you grant, we may collect and store:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Your Google account email address</li>
-              <li>Gmail messages required to identify placement and recruitment emails</li>
-              <li>Metadata associated with those emails, such as the sender, subject, and received date</li>
+              <li>Your Google account email address.</li>
+              <li>Gmail messages matching specific criteria (e.g. from your placement department) to extract application details.</li>
+              <li>Google Calendar event identifiers and hashes required to synchronize and update placement deadlines directly on your primary calendar.</li>
+              <li>Metadata associated with those emails and calendar events (such as timestamps, sender info, event fingerprints, and hashes).</li>
             </ul>
             <p>
-              Email Tracker only processes email content necessary to identify placement opportunities and extract relevant application details.
+              Email Tracker only processes email and calendar content necessary to identify placement opportunities, extract details, and maintain your calendar sync.
             </p>
           </section>
 
           <section>
             <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>2. How We Use Your Information</h2>
             <p style={{ marginBottom: "12px" }}>
-              The information obtained from Gmail is used solely to provide the core functionality of Email Tracker, including:
+              The information obtained from Google APIs is used solely to provide the core functionality of Email Tracker, including:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Detecting placement-related emails</li>
-              <li>Extracting information such as:
-                <ul style={{ paddingLeft: "20px", marginTop: "4px", listStyleType: "circle" }}>
-                  <li>Company name</li>
-                  <li>Job role</li>
-                  <li>Deadlines</li>
-                  <li>Eligibility criteria</li>
-                  <li>Application links</li>
-                  <li>Interview or assessment schedules</li>
-                </ul>
-              </li>
-              <li>Organizing this information into your personal dashboard</li>
-              <li>Maintaining the status of your applications</li>
-              <li>Synchronizing newly received placement emails</li>
+              <li>Detecting placement-related emails and parsing their contents using AI (Meta's Llama 3.1 70B via NVIDIA NIM API).</li>
+              <li>Extracting information such as company names, roles, deadlines, eligibility criteria, and application links.</li>
+              <li>Organizing this information into your personal dashboard.</li>
+              <li>Synchronizing placement deadlines and events with your primary Google Calendar (if enabled).</li>
+              <li>Maintaining the status of your applications and handling soft-deletions safely.</li>
+              <li>Synchronizing newly received placement emails.</li>
             </ul>
             <p>
-              We do not use your Gmail data for advertising, marketing, profiling, or any unrelated purpose.
+              We do not use your Gmail or Calendar data for advertising, marketing, profiling, or any unrelated purpose.
             </p>
           </section>
 
           <section>
             <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>3. Data Storage</h2>
             <p style={{ marginBottom: "12px" }}>
-              To provide the application's functionality, we store certain information associated with your account, including:
+              To provide the application's functionality, we store certain information associated with your account in our MongoDB database, including:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Extracted application information</li>
-              <li>Application status (such as New, Applied, or Done)</li>
-              <li>Personal notes you choose to add</li>
-              <li>Google OAuth tokens required to maintain your authorized connection</li>
-              <li>Basic account information such as your email address</li>
+              <li>Extracted application details and statuses.</li>
+              <li>Personal notes you choose to add.</li>
+              <li>Google OAuth credentials (access/refresh tokens) required to maintain authorized API connection.</li>
+              <li>Google Calendar event IDs and hashes for synchronization integrity.</li>
+              <li>Basic account details such as your email address.</li>
             </ul>
             <p>
-              Raw email content is processed only as necessary to extract placement-related information.
+              Raw email content is processed temporarily only as necessary to perform parsing and extraction.
             </p>
           </section>
 
@@ -150,7 +143,7 @@ export default function PrivacyPage() {
           <section>
             <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>7. Google API Services</h2>
             <p style={{ marginBottom: "12px" }}>
-              Email Tracker accesses Gmail only with your explicit authorization.
+              Email Tracker accesses Gmail and Google Calendar only with your explicit authorization.
             </p>
             <p>
               Our use of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.
