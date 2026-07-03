@@ -1866,7 +1866,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   // ── Step 7: displayFields — flexible [{label,value}] from Gemini ─────────────
   let displayFields = gemini?.displayFields || [];
   if (displayFields.length === 0) {
-    displayFields = extractFallbackDisplayFields(fullBodyText || rawText || "", detClassification.opportunityType);
+    displayFields = extractFallbackDisplayFields(sourceBody, detClassification.opportunityType);
   }
 
   // Sanitize and validate all display fields
