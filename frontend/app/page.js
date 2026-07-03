@@ -1089,13 +1089,8 @@ export default function JobTrackerDashboard() {
           </div>
         ) : (
           <div className="login-card" ref={cardRef}>
-            <div className="logo-box">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                <polyline points="22,6 12,13 2,6" />
-                <rect x="9" y="11" width="6" height="5" rx="1" fill="#030712" stroke="#2dd4bf" strokeWidth="1.5" />
-                <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#2dd4bf" strokeWidth="1.5" />
-              </svg>
+            <div className="logo-box" style={{ background: 'transparent', border: 'none', boxShadow: 'none' }}>
+              <img src="/logo.png" alt="Email Tracker Logo" style={{ width: '64px', height: '64px', borderRadius: '16px', objectFit: 'contain' }} />
             </div>
 
             <h1 className="login-title">Email Tracker</h1>
@@ -1871,7 +1866,9 @@ export default function JobTrackerDashboard() {
 
         <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <div className="sidebar-header">
-            <div className="logo-box">📧</div>
+            <div className="logo-box" style={{ background: 'transparent', border: 'none', boxShadow: 'none' }}>
+              <img src="/logo.png" alt="Email Tracker Logo" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'contain' }} />
+            </div>
             <div>
               <div className="logo-text">Email Tracker</div>
               <div className="logo-sub">Placement Department Mails</div>
@@ -2486,7 +2483,13 @@ export default function JobTrackerDashboard() {
 
                 <div className="stats-grid">
                   <div className="stat-card total">
-                    <div className="stat-icon">📊</div>
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                      </svg>
+                    </div>
                     <div className="stat-content">
                       <span className="stat-label">Total Applications</span>
                       <div className="stat-main">
@@ -2497,7 +2500,12 @@ export default function JobTrackerDashboard() {
                   </div>
 
                   <div className="stat-card urgent">
-                    <div className="stat-icon">🔔</div>
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                      </svg>
+                    </div>
                     <div className="stat-content">
                       <span className="stat-label">Deadlines Today</span>
                       <div className="stat-main">
@@ -2508,7 +2516,12 @@ export default function JobTrackerDashboard() {
                   </div>
 
                   <div className="stat-card unmarked">
-                    <div className="stat-icon">📝</div>
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path>
+                      </svg>
+                    </div>
                     <div className="stat-content">
                       <span className="stat-label">Unmarked</span>
                       <div className="stat-main">
