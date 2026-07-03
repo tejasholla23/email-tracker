@@ -118,17 +118,17 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
  * Used ONLY when more than 5 valid fields are returned (to select top 5).
  */
 const FIELD_PRIORITY = {
-  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "duration", "location", "eligibility", "joining"],
-  HACKATHON: ["registration deadline", "deadline", "last date", "due date", "closing date", "prize", "prize pool", "team size", "eligibility", "mode", "organizer", "timeline"],
-  WEBINAR: ["date", "time", "speaker", "topic", "eligibility"],
-  OTHER_PLACEMENT_EVENT: ["date", "time", "organizer", "mode", "eligibility"],
+  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "duration", "location", "joining"],
+  HACKATHON: ["registration deadline", "deadline", "last date", "due date", "closing date", "prize", "prize pool", "team size", "mode", "organizer", "timeline"],
+  WEBINAR: ["date", "time", "speaker", "topic"],
+  OTHER_PLACEMENT_EVENT: ["date", "time", "organizer", "mode"],
 };
 
 /**
  * Patterns that indicate a field label boundary inside a value string.
  * Used to detect when Gemini has merged two fields together.
  */
-const FIELD_LABEL_PATTERNS = /\b(?:Stipend|CTC|Duration|Location|Deadline|Role|Eligibility|Joining|Venue|Date|Time|Mode|Prize|Team Size|Speaker|Topic|Organizer|Registration Deadline|Type|Salary|Package|Compensation)\s*:/i;
+const FIELD_LABEL_PATTERNS = /\b(?:Stipend|CTC|Duration|Location|Deadline|Role|Joining|Venue|Date|Time|Mode|Prize|Team Size|Speaker|Topic|Organizer|Registration Deadline|Type|Salary|Package|Compensation)\s*:/i;
 
 /**
  * Descriptive parenthetical content that should be stripped from field values.
@@ -1533,15 +1533,16 @@ SKILLS RULES:
 - Only extract skills explicitly stated in the email, not inferred from the role name.
 
 DISPLAY FIELDS RULES:
-- Extract all applicable fields (e.g. Role, CTC, Stipend, Deadline, Duration, Location, Joining, Eligibility) as displayFields. Do not limit the list size in your response; the system will prioritize and filter them. Only include fields with values EXPLICITLY stated in the email.
+- Extract all applicable fields (e.g. Role, CTC, Stipend, Deadline, Duration, Location, Joining) as displayFields. Do not limit the list size in your response; the system will prioritize and filter them. Only include fields with values EXPLICITLY stated in the email.
+- NEVER extract or return "Eligibility". It is redundant as all recipients are eligible.
 - Do NOT include empty, vague, or inferred values.
 - Choose labels a student would want to see immediately on a card.
 - Ignore forwarding footers entirely. NEVER use RIT, MSRIT, Placement Department, or Dean's name as a venue, location, or company.
 - CRITICAL: Strongly prioritize fields based on the provided Opportunity Type (${opportunityType}):
 
-  If JOB_APPLICATION: Extract Role, CTC, Stipend, Deadline, Duration, Location, Joining, Eligibility.
-  If HACKATHON: Extract Event Name, Registration Deadline, Timeline, Prize Amount, Eligibility, Team Size, Mode, Organizer, Benefits.
-  If WEBINAR: Extract Event Title, Date, Time, Speaker/Company, Eligibility.
+  If JOB_APPLICATION: Extract Role, CTC, Stipend, Deadline, Duration, Location, Joining.
+  If HACKATHON: Extract Event Name, Registration Deadline, Timeline, Prize Amount, Team Size, Mode, Organizer, Benefits.
+  If WEBINAR: Extract Event Title, Date, Time, Speaker/Company.
   If OTHER_PLACEMENT_EVENT: Extract Event Title, Important Dates, Organizer, Mode.
 
 SUBTITLE RULES (what shows as the tagline below the company name):
@@ -1660,13 +1661,11 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
   if (opportunityType === "HACKATHON") {
     extract(/(?:prize pool|cash prizes|total prize|win up to|rewards|prize)[ \t:]*([^•*\n\r]+)/i, "Prize");
     extract(/(?:team format|team size)[ \t:]*([^•*\n\r]+)/i, "Team Size");
-    extract(/(?:who can participate|who can apply|eligibility(?: criteria(?: for participation)?)?)[ \t:]*[\n\r]*[ \t]*([^•*\n\r]+)/i, "Eligibility");
     extract(/(?:registration deadline|registration & submission window|registration closes|register by|last date|apply by|submission window)[ \t:]*([^•*\n\r]+)/i, "Deadline");
   } else if (opportunityType === "WEBINAR" || opportunityType === "OTHER_PLACEMENT_EVENT") {
     extract(/(?:date|scheduled on)[ \t:]*([^•*\n\r]+)/i, "Date");
     extract(/(?:time)[ \t:]*([^•*\n\r]+)/i, "Time");
     extract(/(?:speaker|speaker profile|resource person)[ \t:]*([^•*\n\r]+)/i, "Speaker");
-    extract(/(?:eligibility|eligible|who can apply(?: criteria(?: for participation)?)?)[ \t:]*[\n\r]*[ \t]*([^•*\n\r]+)/i, "Eligibility");
     extract(/(?:topic|agenda)[ \t:]*([^•*\n\r]+)/i, "Topic");
     extract(/(?:registration closes|registration deadline|last date|register by)[ \t:]*([^•*\n\r]+)/i, "Deadline");
   } else {
