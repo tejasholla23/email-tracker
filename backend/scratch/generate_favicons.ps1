@@ -1,6 +1,6 @@
 [void][System.Reflection.Assembly]::LoadWithPartialName('System.Drawing')
 
-$srcPath = "C:\Users\Admin\.gemini\antigravity-ide\brain\279ae157-6860-45ca-9d81-8c23ca72689c\media__1783089389574.png"
+$srcPath = "C:\Users\Admin\.gemini\antigravity-ide\brain\279ae157-6860-45ca-9d81-8c23ca72689c\media__1783092641744.png"
 $appDir = "c:\Users\Admin\email-tracker\frontend\app"
 
 if (-not (Test-Path $srcPath)) {
@@ -8,39 +8,31 @@ if (-not (Test-Path $srcPath)) {
     Exit 1
 }
 
-# Helper function to resize bitmap
 function Resize-Bitmap($srcBmp, $width, $height) {
     $destBmp = New-Object System.Drawing.Bitmap($width, $height)
     $g = [System.Drawing.Graphics]::FromImage($destBmp)
-    
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-    
     $g.Clear([System.Drawing.Color]::Transparent)
     $g.DrawImage($srcBmp, 0, 0, $width, $height)
     $g.Dispose()
-    
     return $destBmp
 }
 
-# Load source
 $srcBmp = [System.Drawing.Bitmap]::FromFile($srcPath)
 
-# 1. Save icon.png (512x512 for main app icon)
 Write-Host "Generating icon.png (512x512)..."
 $iconBmp = Resize-Bitmap $srcBmp 512 512
 $iconBmp.Save((Join-Path $appDir "icon.png"), [System.Drawing.Imaging.ImageFormat]::Png)
 $iconBmp.Dispose()
 
-# 2. Save apple-icon.png (180x180 for iOS)
 Write-Host "Generating apple-icon.png (180x180)..."
 $appleBmp = Resize-Bitmap $srcBmp 180 180
 $appleBmp.Save((Join-Path $appDir "apple-icon.png"), [System.Drawing.Imaging.ImageFormat]::Png)
 $appleBmp.Dispose()
 
-# 3. Save favicon.ico (32x32)
 Write-Host "Generating favicon.ico (32x32)..."
 $favBmp = Resize-Bitmap $srcBmp 32 32
 $hIcon = $favBmp.GetHicon()
@@ -52,4 +44,4 @@ $icon.Dispose()
 $favBmp.Dispose()
 
 $srcBmp.Dispose()
-Write-Host "All assets generated successfully."
+Write-Host "All favicon assets regenerated successfully."
