@@ -2256,9 +2256,9 @@ export default function JobTrackerDashboard() {
                         return dateB - dateA;
                       })
                       .map((app) => {
-                        const dateToShow = app.deadlineISO || app.date || app.testDate || app.createdAt;
+                        const dateToShow = app.date || app.createdAt;
                         const formattedDate = dateToShow
-                          ? new Date(dateToShow).toLocaleString(undefined, app.deadlineISO ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' })
+                          ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
                           : "N/A";
                         const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
                         const statusKey = app.derivedStatus;

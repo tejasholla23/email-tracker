@@ -1,10 +1,11 @@
-const { GoogleGenAI } = require("@google/genai");
+const { OpenAI } = require("openai");
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+const nvidiaClient = new OpenAI({
+  apiKey: process.env.NVIDIA_API_KEY,
+  baseURL: "https://integrate.api.nvidia.com/v1",
 });
 
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const MODEL_NAME = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
 
 // ---------------------------------------------------------------------------
 // Text utilities
@@ -1505,18 +1506,18 @@ function validateGeminiResponse(raw) {
 async function callGeminiStructured({ subject = "", sender = "", body = "", opportunityType = "JOB_APPLICATION" }) {
   const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
 
-  const prompt = `You are a smart placement-email parser for a college student dashboard. Analyze the email and return ONLY valid JSON â€” no markdown, no explanation.
+  const prompt = `You are a smart placement-email parser for a college student dashboard. Analyze the email and return ONLY valid JSON — no markdown, no explanation.
 
-CONTEXT: Emails are forwarded from a campus placement department (MSRIT/RIT). The ACTUAL company is the ORIGINAL SENDER â€” NOT the forwarding institution. Ignore all forwarding footers ("Regards, Placement Department, RIT/MSRIT").
+CONTEXT: Emails are forwarded from a campus placement department (MSRIT/RIT). The ACTUAL company is the ORIGINAL SENDER — NOT the forwarding institution. Ignore all forwarding footers ("Regards, Placement Department, RIT/MSRIT").
 
 Return exactly this JSON schema:
 {
   "emailType": "<job | event | nonRecruitment>",
   "opportunityType": "<JOB_APPLICATION | HACKATHON | WEBINAR | OTHER_PLACEMENT_EVENT>",
   "classification": "<one of: New Hiring Opportunity | Internship Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Expert Talk Series | Scholarship | Non-Recruitment Email>",
-  "company": "<actual organizing company â€” see COMPANY RULES>",
+  "company": "<actual organizing company — see COMPANY RULES>",
   "domain": "<official website domain of the company (e.g., wipro.com, atos.net, eightfold.ai), or empty string if unknown. Prioritize IT/tech service companies when ambiguous>",
-  "subtitle": "<program/event/role name shown below the company name on the card â€” see SUBTITLE RULES>",
+  "subtitle": "<program/event/role name shown below the company name on the card — see SUBTITLE RULES>",
   "type": "<internship | full-time | event | test | unknown>",
   "link": "<primary registration or application URL, or empty string>",
   "displayFields": [
@@ -1546,25 +1547,25 @@ DISPLAY FIELDS RULES:
   If OTHER_PLACEMENT_EVENT: Extract Event Title, Important Dates, Organizer, Mode.
 
 SUBTITLE RULES (what shows as the tagline below the company name):
-  Internship Opportunity    â†’ program/team name (e.g. "IS Team Internship")
-  New Hiring Opportunity    â†’ role or position name
-  Hackathon / Event Invitation â†’ event name (e.g. "InnoVent-27", "HackVega 2.0")
-  Workshop / Webinar        â†’ session/program name (e.g. "Ericsson Edge Academy")
-  Expert Talk Series        â†’ full series name (e.g. "POD Expert Talk Series on Databases")
-  Registration Link         â†’ concise description of what to register for
-  Non-Recruitment Email     â†’ empty string""
+  Internship Opportunity    → program/team name (e.g. "IS Team Internship")
+  New Hiring Opportunity    → role or position name
+  Hackathon / Event Invitation → event name (e.g. "InnoVent-27", "HackVega 2.0")
+  Workshop / Webinar        → session/program name (e.g. "Ericsson Edge Academy")
+  Expert Talk Series        → full series name (e.g. "POD Expert Talk Series on Databases")
+  Registration Link         → concise description of what to register for
+  Non-Recruitment Email     → empty string""
 
 COMPANY RULES:
-1. Use the ACTUAL ORGANIZING ENTITY â€” not the forwarding institution.
+1. Use the ACTUAL ORGANIZING ENTITY — not the forwarding institution.
 2. For forwarded emails, use original sender company from the "Forwarded message From:" or signature.
 3. NEVER use: MSRIT, RIT, Ramaiah Institute, Placement Department, Dean.
 4. NEVER use generic phrases: "Here", "Seeking", "Potential opportunities", "Greetings".
 5. Ignore platform names (Teams, Zoom, Google Forms, Unstop, Brazen) when identifying company.
 
 CLASSIFICATION GUIDE:
-  emailType "job"   â†’ hiring, internship, placement, recruitment, assessment, interview
-  emailType "event" â†’ hackathon, competition, webinar, workshop, expert talk, scholarship, event invitation
-  emailType "nonRecruitment" â†’ newsletter, announcement unrelated to placement
+  emailType "job"   → hiring, internship, placement, recruitment, assessment, interview
+  emailType "event" → hackathon, competition, webinar, workshop, expert talk, scholarship, event invitation
+  emailType "nonRecruitment" → newsletter, announcement unrelated to placement
 
 Subject: ${subject}
 Sender: ${sender}
@@ -1575,16 +1576,15 @@ Body: ${truncatedBody}`;
 
   while (retries > 0) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
-      const response = await ai.models.generateContent({
+      const response = await nvidiaClient.chat.completions.create({
         model: MODEL_NAME,
-        contents: prompt,
-        config: { abortSignal: controller.signal }
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+        max_tokens: 1000,
+        stream: false
       });
-      clearTimeout(timeoutId);
 
-      let jsonText = (response.text || "").trim();
+      let jsonText = (response.choices[0]?.message?.content || "").trim();
       jsonText = jsonText
         .replace(/^```json\s*/i, "")
         .replace(/^```\s*/i, "")
@@ -1595,44 +1595,50 @@ Body: ${truncatedBody}`;
       try {
         rawParsed = JSON.parse(jsonText);
       } catch (parseErr) {
-        console.error(`[GEMINI_STRUCTURED] JSON parse failed using ${MODEL_NAME}:`, parseErr.message);
+        console.error(`[NVIDIA_STRUCTURED] JSON parse failed using ${MODEL_NAME}:`, parseErr.message);
         return { status: "content_error" };
       }
 
-      console.log("[GEMINI_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
+      console.log("[NVIDIA_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
       console.log("RAW_DISPLAY_FIELDS", rawParsed.displayFields);
       
       const validated = validateGeminiResponse(rawParsed);
 
       if (!validated) {
-        console.warn("[GEMINI_STRUCTURED] Response failed schema validation, discarding.");
+        console.warn("[NVIDIA_STRUCTURED] Response failed schema validation, discarding.");
         return { status: "content_error" };
       }
 
       console.log("VALIDATED_DISPLAY_FIELDS", validated.displayFields);
-      console.log(`[GEMINI_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+      console.log(`[NVIDIA_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+      
+      // Preserve geminiUsed key so we don't break existing UI checks for LLM parsing success
+      validated.parseMeta = {
+        geminiUsed: true,
+        nvidiaUsed: true,
+        model: MODEL_NAME
+      };
+
       return { status: "success", data: validated };
 
     } catch (err) {
       retries--;
       const errorMsg = err?.message || err;
       
-      if (err.name === "AbortError") {
-        console.warn(`[GEMINI_STRUCTURED] Request timed out. Retries left: ${retries}`);
-      } else if (errorMsg.toString().includes("429") || errorMsg.toString().toLowerCase().includes("quota") || errorMsg.toString().toLowerCase().includes("rate")) {
-        console.warn(`[GEMINI_STRUCTURED] Rate limit hit (429). Retries left: ${retries}. Waiting ${delayMs}ms...`);
+      if (errorMsg.toString().includes("429") || errorMsg.toString().toLowerCase().includes("quota") || errorMsg.toString().toLowerCase().includes("rate")) {
+        console.warn(`[NVIDIA_STRUCTURED] Rate limit hit (429). Retries left: ${retries}. Waiting ${delayMs}ms...`);
       } else if (errorMsg.toString().includes("503") || errorMsg.toString().toLowerCase().includes("overloaded")) {
-        console.warn(`[GEMINI_STRUCTURED] Service unavailable (503). Retries left: ${retries}. Waiting ${delayMs}ms...`);
+        console.warn(`[NVIDIA_STRUCTURED] Service unavailable (503). Retries left: ${retries}. Waiting ${delayMs}ms...`);
       } else {
-        console.error("[GEMINI_STRUCTURED] Failed with unrecoverable error:", errorMsg);
+        console.error("[NVIDIA_STRUCTURED] Failed with unrecoverable error:", errorMsg);
         return { status: "transport_error" };
       }
 
       if (retries > 0) {
         await new Promise(r => setTimeout(r, delayMs));
-        delayMs += 4000; // Increase backoff penalty
+        delayMs += 4000;
       } else {
-        console.error("[GEMINI_STRUCTURED] Final failure after all retries.");
+        console.error("[NVIDIA_STRUCTURED] Final failure after all retries.");
         return { status: "transport_error" };
       }
     }
