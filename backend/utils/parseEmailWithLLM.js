@@ -60,7 +60,7 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
   const refMonth = getPartVal("month");
   const refDay = getPartVal("day");
 
-  if (/\btoday\b/i.test(lower)) {
+  if (/\b(?:today|tonight)\b/i.test(lower)) {
     const d = createDateInIST(refYear, refMonth, refDay, hours, minutes);
     return d.toISOString();
   }

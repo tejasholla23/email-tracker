@@ -994,7 +994,17 @@ async function fetchAndProcessEmails(targetUserId = null) {
     }
 
     for (let acc of accounts) {
-      if (!acc.email || !config.isAllowedEmail(acc.email)) continue;
+      if (!acc.email || !config.isAllowedEmail(acc.email)) {
+        console.log(`[SYNC] Skipping unauthorized or invalid email: ${acc.email || "Unknown"}`);
+        accountsSkipped++;
+        continue;
+      }
+
+      if (config.ALLOWED_SENDERS.includes(acc.email.toLowerCase())) {
+        console.log(`[SYNC] Skipping institutional sender account: ${acc.email}`);
+        accountsSkipped++;
+        continue;
+      }
 
       const accIdStr = acc._id.toString();
       if (!targetUserId) {
@@ -1261,7 +1271,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
       console.log("==================================================");
       console.log("[CRON COMPLETE]");
       console.log(`Duration: ${formatDuration(totalDuration)}`);
-      console.log(`Accounts Processed: ${accountsProcessed}`);
+      console.log(`Accounts Succeeded: ${accountsProcessed}`);
       console.log(`Accounts Skipped: ${accountsSkipped}`);
       console.log(`Accounts Failed: ${accountsFailed}`);
       console.log(`Emails Fetched: ${fetchedCount}`);
