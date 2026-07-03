@@ -54,6 +54,16 @@ const applicationSchema = new mongoose.Schema(
     salaryText: { type: String },
     parseMeta: { type: mongoose.Schema.Types.Mixed },
     manualOverrides: { type: [String], default: [] },
+    
+    // Calendar Integration Fields
+    calendarEventId: { type: String, default: null },
+    calendarEventFingerprint: { type: String, default: null },
+    calendarPayloadHash: { type: String, default: null },
+    calendarSyncVersion: { type: Number, default: 0 },
+    needsCalendarSync: { type: Boolean, default: false },
+    calendarLastSyncedAt: { type: Date, default: null },
+    calendarSyncError: { type: String, default: null },
+
     events: {
       type: [
         {

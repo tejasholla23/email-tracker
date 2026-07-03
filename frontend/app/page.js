@@ -68,6 +68,14 @@ export default function JobTrackerDashboard() {
 
   const [userEmail, setUserEmail] = useState(null);
 
+  // Google Calendar Integration State
+  const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
+  const [hasCalendarScope, setHasCalendarScope] = useState(false);
+  const [loadingCalendarStatus, setLoadingCalendarStatus] = useState(true);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
+  const [calendarSuccessMsg, setCalendarSuccessMsg] = useState("");
+  const [calendarErrorMsg, setCalendarErrorMsg] = useState("");
+
   const containerRef = React.useRef(null);
   const cardRef = React.useRef(null);
   const canvasRef = React.useRef(null);
@@ -345,6 +353,77 @@ export default function JobTrackerDashboard() {
       setIsDarkMode(true);
     }
   }, []);
+
+  const fetchCalendarStatus = async () => {
+    try {
+      setLoadingCalendarStatus(true);
+      const res = await apiFetch(`${BASE_URL}/auth/calendar/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarSyncEnabled(data.calendarSyncEnabled);
+        setHasCalendarScope(data.hasCalendarScope);
+      }
+    } catch (err) {
+      console.error("Failed to fetch calendar status:", err);
+    } finally {
+      setLoadingCalendarStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userEmail) {
+      fetchCalendarStatus();
+    }
+  }, [userEmail]);
+
+  const handleToggleCalendarSync = async () => {
+    try {
+      setSyncingCalendar(true);
+      setCalendarSuccessMsg("");
+      setCalendarErrorMsg("");
+      
+      const res = await apiFetch(`${BASE_URL}/auth/calendar/toggle`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarSyncEnabled(data.calendarSyncEnabled);
+        setCalendarSuccessMsg(data.calendarSyncEnabled ? "Calendar integration enabled! Syncing active deadlines..." : "Calendar integration disabled.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setCalendarErrorMsg(err.message || "Failed to update calendar integration settings.");
+      }
+    } catch (err) {
+      console.error("Toggle calendar error:", err);
+      setCalendarErrorMsg("Failed to connect to backend server.");
+    } finally {
+      setSyncingCalendar(false);
+    }
+  };
+
+  const handleManualCalendarSync = async () => {
+    try {
+      setSyncingCalendar(true);
+      setCalendarSuccessMsg("");
+      setCalendarErrorMsg("");
+      
+      const res = await apiFetch(`${BASE_URL}/auth/calendar/sync`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarSuccessMsg("Calendar re-sync successfully queued in the background!");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setCalendarErrorMsg(err.message || "Failed to trigger calendar re-sync.");
+      }
+    } catch (err) {
+      console.error("Manual calendar sync error:", err);
+      setCalendarErrorMsg("Failed to connect to backend server.");
+    } finally {
+      setSyncingCalendar(false);
+    }
+  };
 
   const fetchSyncStatus = async () => {
     if (!userEmail) return;
@@ -1827,6 +1906,13 @@ export default function JobTrackerDashboard() {
             )}
             <div style={{ borderTop: '1px solid var(--border-color)', margin: '8px 0', opacity: 0.8 }} />
             <div
+              className={`nav-item ${activeFilter === 'calendar' ? 'active' : ''}`}
+              style={{ marginTop: 0 }}
+              onClick={() => { setActiveFilter('calendar'); setIsSidebarOpen(false); }}
+            >
+              <span>Calendar 📅</span>
+            </div>
+            <div
               className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
               style={{ marginTop: 0 }}
               onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setIsSidebarOpen(false); }}
@@ -1937,7 +2023,138 @@ export default function JobTrackerDashboard() {
               </div>
             )}
 
-            {activeFilter === "settings" ? (
+            {activeFilter === "calendar" ? (
+              <div className="settings-container">
+                <div className="settings-header">
+                  <h1 className="settings-main-title">Google Calendar Integration</h1>
+                </div>
+
+                <div className="settings-card" style={{ padding: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                    <div style={{ fontSize: '40px' }}>📅</div>
+                    <div>
+                      <h3 className="settings-title" style={{ margin: 0 }}>Sync Deadlines & Events</h3>
+                      <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                        Automatically add form deadlines, interviews, online assessments, and PPTs directly to your primary college Google Calendar.
+                      </p>
+                    </div>
+                  </div>
+
+                  {calendarSuccessMsg && (
+                    <div className="success-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(46, 213, 115, 0.1)', border: '1px solid rgba(46, 213, 115, 0.3)', color: '#2ed573', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>✅</span>
+                      <span>{calendarSuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {calendarErrorMsg && (
+                    <div className="error-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(255, 71, 87, 0.1)', border: '1px solid rgba(255, 71, 87, 0.3)', color: '#ff4757', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>⚠️</span>
+                      <span>{calendarErrorMsg}</span>
+                    </div>
+                  )}
+
+                  {loadingCalendarStatus ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                      <span className="spinner">Loading status...</span>
+                    </div>
+                  ) : !hasCalendarScope ? (
+                    <div className="about-info-box" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', padding: '24px', borderRadius: '12px' }}>
+                      <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)' }}>Authorization Required</h4>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                        To create and update calendar events, Email Tracker needs permission to access your Google Calendar events. We request the <b>least-privilege</b> scope (<code>calendar.events</code>) to read, create, and modify events strictly on your primary college calendar. We will never view or edit unrelated personal events.
+                      </p>
+                      <a 
+                        href={`${BASE_URL}/auth/google/calendar`} 
+                        className="btn-primary" 
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', fontWeight: '500', padding: '12px 24px', borderRadius: '8px' }}
+                      >
+                        Authorize & Connect Google Calendar
+                      </a>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '16px' }}>
+                        <div style={{ flex: '1', minWidth: '250px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>Integration Status:</span>
+                            <span style={{ 
+                              padding: '4px 8px', 
+                              borderRadius: '12px', 
+                              fontSize: '11px', 
+                              fontWeight: '600',
+                              background: calendarSyncEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)', 
+                              color: calendarSyncEnabled ? '#2ed573' : 'var(--text-secondary)'
+                            }}>
+                              {calendarSyncEnabled ? "ACTIVE" : "PAUSED"}
+                            </span>
+                          </div>
+                          <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            {calendarSyncEnabled 
+                              ? "Deadlines and placement events are synced automatically in the background." 
+                              : "Background calendar synchronization is currently paused."}
+                          </p>
+                        </div>
+                        <button 
+                          className={calendarSyncEnabled ? "btn-outline-danger" : "btn-primary"} 
+                          onClick={handleToggleCalendarSync}
+                          disabled={syncingCalendar}
+                          style={{ minWidth: '130px' }}
+                        >
+                          {syncingCalendar ? "Updating..." : calendarSyncEnabled ? "Pause Sync" : "Enable Sync"}
+                        </button>
+                      </div>
+
+                      {calendarSyncEnabled && (
+                        <div className="about-info-box" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', padding: '24px', borderRadius: '12px' }}>
+                          <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px', color: 'var(--text-primary)' }}>Sync Diagnostics & Controls</h4>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                            Email Tracker is the single source of truth. If any calendar events are out of sync or if you want to push all active deadlines to your Google Calendar immediately, click "Re-sync All" below. This runs a delta sync using payload verification to ensure zero duplicate events are created.
+                          </p>
+                          <button 
+                            className="btn-outline-primary" 
+                            onClick={handleManualCalendarSync}
+                            disabled={syncingCalendar}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px' }}
+                          >
+                            🔄 {syncingCalendar ? "Syncing..." : "Re-sync All Calendar Events"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="settings-card" style={{ padding: '28px' }}>
+                  <h3 className="settings-title">Features & Organization Rules</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '20px', marginBottom: '8px' }}>⏱️</div>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Smart Event Types</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                        Deadlines sync as <b>All-Day Events</b>. Timed entries like online tests and interviews use customized slots (tests: 2h, interviews: 45m).
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔔</div>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Application Deadlines Reminders</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                        Deadline reminders are set automatically to alert you <b>1 day before</b> and <b>2 hours before</b> they expire to prevent missing forms.
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔗</div>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Contextual Deep Links</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                        Every calendar event includes quick links to jump directly to the application card in Email Tracker or the company's registration portal.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : activeFilter === "settings" ? (
               <div className="settings-container">
                 {settingsSubView === "main" && (
                   <>

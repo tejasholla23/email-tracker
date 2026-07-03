@@ -33,6 +33,10 @@ const accountSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  calendarSyncEnabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 module.exports = mongoose.model("Account", accountSchema);

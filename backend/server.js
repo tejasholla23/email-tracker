@@ -18,6 +18,7 @@ const { advanceStatus, classificationToStatus } = require("./utils/statusMachine
 const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
+const { processCalendarSyncQueue } = require("./utils/calendarService");
 
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 const CURRENT_PARSER_VERSION = "v4";
@@ -251,6 +252,22 @@ app.get("/auth/google", (req, res) => {
   res.redirect(url);
 });
 
+// Incremental OAuth flow for calendar scopes specifically
+app.get("/auth/google/calendar", (req, res) => {
+  const url = oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/calendar.events"
+    ],
+    include_granted_scopes: true,
+    prompt: "consent",
+  });
+
+  res.redirect(url);
+});
+
 app.get("/auth/google/callback", async (req, res) => {
   const { code } = req.query;
 
@@ -266,13 +283,20 @@ app.get("/auth/google/callback", async (req, res) => {
     const userInfo = await oauth2.userinfo.get();
     const email = userInfo.data.email;
 
+    const updatePayload = {
+      tokens,
+      syncStatus: "idle",
+      syncError: ""
+    };
+
+    // Auto-detect calendar permission consent in scope string
+    if (tokens.scope && tokens.scope.includes("auth/calendar.events")) {
+      updatePayload.calendarSyncEnabled = true;
+    }
+
     await Account.findOneAndUpdate(
       { email },
-      { 
-        tokens,
-        syncStatus: "idle",
-        syncError: ""
-      },
+      { $set: updatePayload },
       { upsert: true }
     );
 
@@ -374,6 +398,76 @@ app.get("/auth/me", authenticate, async (req, res) => {
     _id: req.userId,
     email: req.userEmail
   });
+});
+
+// GET /auth/calendar/status - check calendar integration status
+app.get("/auth/calendar/status", authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    // Check if the OAuth token has the required calendar scope
+    const hasCalendarScope = account.tokens && account.tokens.scope && account.tokens.scope.includes("auth/calendar.events");
+
+    res.json({
+      calendarSyncEnabled: account.calendarSyncEnabled || false,
+      hasCalendarScope: !!hasCalendarScope
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /auth/calendar/toggle - toggle calendar integration enabled state
+app.post("/auth/calendar/toggle", authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    account.calendarSyncEnabled = !account.calendarSyncEnabled;
+    
+    // If enabling, queue all existing non-deleted applications for sync sweep
+    if (account.calendarSyncEnabled) {
+      await Application.updateMany(
+        { userId: req.userId, isDeleted: { $ne: true } },
+        { $set: { needsCalendarSync: true } }
+      );
+    }
+
+    await account.save();
+    res.json({ calendarSyncEnabled: account.calendarSyncEnabled });
+
+    // Trigger sync in background
+    if (account.calendarSyncEnabled) {
+      processCalendarSyncQueue(account).catch(err => console.error("Async calendar sync error:", err.message));
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /auth/calendar/sync - manually trigger calendar re-sync
+app.post("/auth/calendar/sync", authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    if (!account.calendarSyncEnabled) {
+      return res.status(400).json({ message: "Calendar integration is disabled" });
+    }
+
+    // Flag all active applications for sync
+    await Application.updateMany(
+      { userId: req.userId, isDeleted: { $ne: true } },
+      { $set: { needsCalendarSync: true } }
+    );
+
+    res.json({ success: true, message: "Sync queued in background" });
+
+    processCalendarSyncQueue(account).catch(err => console.error("Async calendar sync error:", err.message));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 
@@ -1226,7 +1320,10 @@ async function fetchAndProcessEmails(targetUserId = null) {
           accountUpdate.syncMode = "incremental";
           console.log(`[SYNC_CHECKPOINT] historyId saved: ${newHistoryId}`);
         }
-        await Account.findOneAndUpdate({ email: acc.email }, accountUpdate);
+        const syncedAccount = await Account.findOneAndUpdate({ email: acc.email }, accountUpdate, { new: true });
+        if (syncedAccount) {
+          await processCalendarSyncQueue(syncedAccount);
+        }
 
         const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
         console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: ${messageIdsToProcess.length}\nInserted: ${accInserted}\nSkipped: ${accSkipped}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}`);

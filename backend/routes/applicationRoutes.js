@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Application = require("../models/Application");
 const CompanyInfo = require("../models/CompanyInfo");
 const Account = require("../models/Account");
+const { processCalendarSyncQueue } = require("../utils/calendarService");
 
 const router = express.Router();
 
@@ -73,13 +74,20 @@ router.get("/", async (req, res) => {
 // POST /applications - add a new application
 router.post("/", async (req, res) => {
   try {
-    // Remove companyInfo and userId from body if passed manually (should be fetched/generated during sync)
     const { companyInfo, userId, ...appData } = req.body;
     const newApplication = await Application.create({
       ...appData,
-      userId: req.userId
+      userId: req.userId,
+      needsCalendarSync: true
     });
+
     res.status(201).json(newApplication);
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(400).json({ message: "Failed to create application" });
   }
@@ -89,7 +97,7 @@ router.post("/", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   try {
     const { status, note, manualEdits } = req.body;
-    const update = {};
+    const update = { needsCalendarSync: true };
     if (status !== undefined) update.status = status;
     if (note  !== undefined) update.note   = note;
 
@@ -118,6 +126,12 @@ router.patch("/:id", async (req, res) => {
     }
 
     res.json(updatedApplication);
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(400).json({ message: "Failed to update application" });
   }
@@ -126,8 +140,19 @@ router.patch("/:id", async (req, res) => {
 // DELETE /applications/clear - delete all applications
 router.delete("/clear", async (req, res) => {
   try {
-    await Application.deleteMany({ userId: req.userId });
-    res.json({ message: "All applications permanently cleared" });
+    // Soft-delete and queue all for sync so Google Calendar is cleaned up
+    await Application.updateMany(
+      { userId: req.userId, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, needsCalendarSync: true } }
+    );
+
+    res.json({ message: "All applications marked for sync and clearance" });
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(500).json({ message: "Failed to clear applications" });
   }
@@ -138,13 +163,19 @@ router.delete("/:id", async (req, res) => {
   try {
     const deleted = await Application.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      { isDeleted: true },
+      { isDeleted: true, needsCalendarSync: true },
       { new: true }
     );
     if (!deleted) {
       return res.status(404).json({ message: "Application not found" });
     }
     res.json({ message: "Application removed from dashboard" });
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(500).json({ message: "Failed to delete application" });
   }
