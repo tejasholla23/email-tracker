@@ -244,7 +244,7 @@ function preprocessBody(rawText = "") {
     text = text.replace(/<br\s*\/?>/gi, "\n");
     text = text.replace(/<\/(p|div|tr|li|h[1-6]|thead|tbody|tfoot)>/gi, "\n");
     text = text.replace(/<(p|div|tr|li|h[1-6]|thead|tbody|tfoot)[^>]*>/gi, "\n");
-    text = text.replace(/<[^>]*>/g, " ");
+    text = text.replace(/<(?!.*?@)[^>]*>/g, " ");
     decisions.push("Stripped HTML style/script blocks and mapped block tags to newlines");
   }
 
@@ -1647,8 +1647,24 @@ Body: ${truncatedBody}`;
 function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION") {
   const fields = [];
   
+  // Clean forwarded headers at the beginning of the text to prevent matching metadata like Subject
+  let cleanBody = body || "";
+  const lines = cleanBody.split(/\r?\n/);
+  let headerIndex = 0;
+  while (headerIndex < lines.length) {
+    const line = lines[headerIndex].trim();
+    if (line === "" || /^(?:from|subject|date|to|cc|bcc|sent)\s*:/i.test(line)) {
+      headerIndex++;
+    } else {
+      break;
+    }
+  }
+  if (headerIndex > 0) {
+    cleanBody = lines.slice(headerIndex).join("\n");
+  }
+  
   const extract = (regex, label) => {
-    const match = body.match(regex);
+    const match = cleanBody.match(regex);
     if (match && match[1]) {
       // Clean and trim, taking at most 60 chars to avoid run-on sentences
       let val = match[1].trim();
@@ -1659,24 +1675,24 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
   };
 
   if (opportunityType === "HACKATHON") {
-    extract(/(?:prize pool|cash prizes|total prize|win up to|rewards|prize)[ \t:]*([^•*\n\r]+)/i, "Prize");
-    extract(/(?:team format|team size)[ \t:]*([^•*\n\r]+)/i, "Team Size");
-    extract(/(?:registration deadline|registration & submission window|registration closes|register by|last date|apply by|submission window)[ \t:]*([^•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:prize pool|cash prizes|total prize|win up to|rewards|prize)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Prize");
+    extract(/\b(?:team format|team size)\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Team Size");
+    extract(/\b(?:registration deadline|registration & submission window|registration closes|register by|last date|apply by|submission window)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Deadline");
   } else if (opportunityType === "WEBINAR" || opportunityType === "OTHER_PLACEMENT_EVENT") {
-    extract(/(?:date|scheduled on)[ \t:]*([^•*\n\r]+)/i, "Date");
-    extract(/(?:time)[ \t:]*([^•*\n\r]+)/i, "Time");
-    extract(/(?:speaker|speaker profile|resource person)[ \t:]*([^•*\n\r]+)/i, "Speaker");
-    extract(/(?:topic|agenda)[ \t:]*([^•*\n\r]+)/i, "Topic");
-    extract(/(?:registration closes|registration deadline|last date|register by)[ \t:]*([^•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:date|scheduled on)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Date");
+    extract(/\b(?:time)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Time");
+    extract(/\b(?:speaker|speaker profile|resource person)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Speaker");
+    extract(/\b(?:topic|agenda)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Topic");
+    extract(/\b(?:registration closes|registration deadline|last date|register by)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Deadline");
   } else {
     // Default JOB_APPLICATION
-    extract(/(?:stipend|compensation)[ \t:]*([^-|•*\n\r]+)/i, "Stipend");
-    extract(/(?:ctc|package|salary)[ \t:]*([^-|•*\n\r]+)/i, "CTC");
-    extract(/(?:duration|period)[ \t:]*([^-|•*\n\r]+)/i, "Duration");
-    extract(/(?:location|job location|venue)[ \t:]*([^-|•*\n\r]+)/i, "Location");
-    extract(/(?:deadline|last date(?: to apply| for registration)?|register before)[ \t:]*([^-|•*\n\r]+)/i, "Deadline");
-    extract(/(?:role|designation|position)[ \t:]*([^-|•*\n\r]+)/i, "Role");
-    extract(/(?:joining(?: date)?)[ \t:]*([^-|•*\n\r]+)/i, "Joining");
+    extract(/\b(?:stipend|compensation)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Stipend");
+    extract(/\b(?:ctc|package|salary)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "CTC");
+    extract(/\b(?:duration|period)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Duration");
+    extract(/\b(?:location|job location|venue)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Location");
+    extract(/\b(?:deadline|last date(?: to apply| for registration)?|register before)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:role|designation|position)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Role");
+    extract(/\b(?:joining(?: date)?)\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Joining");
   }
 
   // Deduplicate by label (just in case) and return top 5

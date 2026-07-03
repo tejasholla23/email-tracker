@@ -1,5 +1,6 @@
 "use client";
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+let activeRefreshPromise = null;
 
 import React, { useEffect, useState } from "react";
 
@@ -247,22 +248,28 @@ export default function JobTrackerDashboard() {
       }
 
       try {
-        const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken })
-        });
-
-        if (!refreshRes.ok) {
-          throw new Error("Refresh failed");
+        if (!activeRefreshPromise) {
+          activeRefreshPromise = fetch(`${BASE_URL}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken })
+          }).then(async (refreshRes) => {
+            if (!refreshRes.ok) {
+              throw new Error("Refresh failed");
+            }
+            const data = await refreshRes.json();
+            localStorage.setItem("accessToken", data.accessToken);
+            localStorage.setItem("refreshToken", data.refreshToken);
+            return data.accessToken;
+          }).finally(() => {
+            activeRefreshPromise = null;
+          });
         }
 
-        const data = await refreshRes.json();
-        localStorage.setItem("accessToken", data.accessToken);
-        localStorage.setItem("refreshToken", data.refreshToken);
+        const newAccessToken = await activeRefreshPromise;
 
         // Retry the original request once
-        options.headers["Authorization"] = `Bearer ${data.accessToken}`;
+        options.headers["Authorization"] = `Bearer ${newAccessToken}`;
         response = await fetch(url, options);
       } catch (err) {
         console.error("Refresh failed, logging out:", err);
@@ -1085,7 +1092,8 @@ export default function JobTrackerDashboard() {
         .main-wrapper { margin-left: 280px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
         
         .topbar { height: 64px; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; position: sticky; top: 0; z-index: 40; }
-        .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--surface-color) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 320px; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
+        .search-container { flex: 1; width: 100%; }
+        .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--surface-color) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 100%; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: var(--surface-color); }
         .search-container input::placeholder { color: var(--text-secondary); }
         .topbar-actions { display: flex; align-items: center; gap: 16px; }
