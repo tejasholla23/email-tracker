@@ -1660,6 +1660,8 @@ export default function JobTrackerDashboard() {
         .dark .form-input:focus, .dark .form-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .dark .btn-cancel { background: transparent; border-color: var(--border-color); color: var(--text-primary); }
         .dark .btn-cancel:hover { background: #27272a; border-color: #3f3f46; color: #fff; }
+        .dark .btn-danger { background: transparent; border-color: #ef4444; color: #fca5a5; }
+        .dark .btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; }
         .dark .note-input { background: #0d1321; border-color: #1f2937; color: var(--text-primary); }
         .dark .note-input:focus { background: #0d1321; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         
@@ -2026,8 +2028,24 @@ export default function JobTrackerDashboard() {
 
             {activeFilter === "calendar" ? (
               <div className="settings-container">
-                <div className="settings-header">
-                  <h1 className="settings-main-title">Google Calendar Integration</h1>
+                <div className="settings-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                  <h1 className="settings-main-title" style={{ margin: 0 }}>Google Calendar Integration</h1>
+                  <a 
+                    href="https://calendar.google.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="btn-outline-primary"
+                    style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      textDecoration: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '8px'
+                    }}
+                  >
+                    <span>📅</span> Open Google Calendar
+                  </a>
                 </div>
 
                 <div className="settings-card" style={{ padding: '32px' }}>
@@ -2094,7 +2112,7 @@ export default function JobTrackerDashboard() {
                           </p>
                         </div>
                         <button 
-                          className={calendarSyncEnabled ? "btn-outline-danger" : "btn-primary"} 
+                          className={calendarSyncEnabled ? "btn-danger" : "btn-primary"} 
                           onClick={handleToggleCalendarSync}
                           disabled={syncingCalendar}
                           style={{ minWidth: '130px' }}
