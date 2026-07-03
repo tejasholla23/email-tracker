@@ -1092,7 +1092,7 @@ export default function JobTrackerDashboard() {
         .main-wrapper { margin-left: 280px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
         
         .topbar { height: 64px; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; position: sticky; top: 0; z-index: 40; }
-        .search-container { flex: 1; width: 100%; }
+        .search-container { flex: 1; width: 100%; position: relative; }
         .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--surface-color) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 100%; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: var(--surface-color); }
         .search-container input::placeholder { color: var(--text-secondary); }
@@ -1434,6 +1434,15 @@ export default function JobTrackerDashboard() {
         .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #0d9488; }
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 45; backdrop-filter: blur(2px); }
 
+        .filters::-webkit-scrollbar { display: none; }
+        .filters { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .modal-grid-2col {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
         @media (max-width: 768px) {
           .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
           .sidebar.open { transform: translateX(0); }
@@ -1441,13 +1450,15 @@ export default function JobTrackerDashboard() {
           .main-wrapper { margin-left: 0; }
           .hamburger { display: block; }
           .topbar { padding: 0 16px; }
-          .search-container input { width: 180px; }
+          .search-container { flex: 1; max-width: none; }
+          .search-container input { width: 100%; }
           .topbar-actions { gap: 8px; }
           .content { padding: 20px 16px; }
           .page-title { font-size: 24px; }
-          .stats-grid { grid-template-columns: 1fr; }
-          .app-grid { grid-template-columns: 1fr; }
-          .modal-content { padding: 20px; width: 95%; margin: 0 10px; }
+          .stats-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+          .app-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+          .modal-content { padding: 20px; width: calc(100% - 24px); margin: 0 auto; max-width: 500px; }
+          .modal-grid-2col { grid-template-columns: 1fr; gap: 12px; }
         }
 
         @media (max-width: 480px) {
@@ -1456,6 +1467,25 @@ export default function JobTrackerDashboard() {
           .search-container input { width: 100%; }
           .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
           .topbar-actions > button { flex: 1; min-width: 100px; text-align: center; justify-content: center; display: flex; align-items: center; }
+          
+          .stats-grid { grid-template-columns: 1fr; gap: 14px; }
+          .stat-card { padding: 16px; }
+          
+          .card-actions {
+            flex-wrap: wrap;
+            gap: 6px;
+          }
+          .card-btn {
+            flex: 1 1 calc(50% - 4px);
+            min-width: 100px;
+          }
+          
+          .floating-add-btn {
+            bottom: 20px;
+            right: 20px;
+            width: 54px;
+            height: 54px;
+          }
         }
 
         /* Dark Mode */
@@ -1779,7 +1809,7 @@ export default function JobTrackerDashboard() {
               <div
                 key={value}
                 className={`nav-item ${activeFilter === value ? 'active' : ''}`}
-                onClick={() => setActiveFilter(value)}
+                onClick={() => { setActiveFilter(value); setIsSidebarOpen(false); }}
               >
                 {label}
               </div>
@@ -1818,7 +1848,32 @@ export default function JobTrackerDashboard() {
                   placeholder="Search applications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ paddingRight: searchQuery ? '36px' : '16px' }}
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: 1
+                    }}
+                  >
+                    &times;
+                  </button>
+                )}
               </div>
             </div>
             <div className="topbar-actions">
@@ -2547,7 +2602,7 @@ export default function JobTrackerDashboard() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="modal-grid-2col">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Subtitle</label>
                   <input
@@ -2769,7 +2824,7 @@ export default function JobTrackerDashboard() {
                 <input type="text" className="form-input" value={editFormData.company || ""} onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })} required />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="modal-grid-2col">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Subtitle</label>
                   <input type="text" className="form-input" value={editFormData.subtitle || ""} onChange={(e) => setEditFormData({ ...editFormData, subtitle: e.target.value })} />
