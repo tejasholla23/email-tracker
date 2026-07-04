@@ -2052,7 +2052,7 @@ export default function JobTrackerDashboard() {
                   <div style={{ marginBottom: '24px' }}>
                     <h3 className="settings-title" style={{ margin: 0 }}>Sync Deadlines & Events</h3>
                     <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                      Automatically add form deadlines, interviews, online assessments, and PPTs directly to your primary college Google Calendar.
+                      Automatically add form deadlines, interviews, online assessments, etc directly to primary Google Calendar (@msrit.edu account).
                     </p>
                   </div>
 
@@ -2142,13 +2142,13 @@ export default function JobTrackerDashboard() {
                 </div>
 
                 <div className="settings-card" style={{ padding: '28px' }}>
-                  <h3 className="settings-title">Features & Organization Rules</h3>
+                  <h3 className="settings-title">Features</h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '16px' }}>
                     <div style={{ padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                       <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                       </span>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Smart Event Types</h4>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Event Types</h4>
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                         Deadlines sync as <b>All-Day Events</b>. Timed entries like online tests and interviews use customized slots (tests: 2h, interviews: 45m).
                       </p>
