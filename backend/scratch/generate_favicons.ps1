@@ -1,7 +1,7 @@
 [void][System.Reflection.Assembly]::LoadWithPartialName('System.Drawing')
 
 # Use the BLACK-CIRCLE logo for favicons (visible on light browser tabs)
-$srcPath = "C:\Users\Admin\.gemini\antigravity-ide\brain\279ae157-6860-45ca-9d81-8c23ca72689c\media__1783089389574.png"
+$srcPath = "C:\Users\Admin\.gemini\antigravity-ide\brain\7e299b09-58b2-4ced-977b-d27e56f39169\media__1783153087961.jpg"
 $appDir = "c:\Users\Admin\email-tracker\frontend\app"
 
 if (-not (Test-Path $srcPath)) {
