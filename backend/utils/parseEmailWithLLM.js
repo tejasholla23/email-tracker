@@ -80,6 +80,31 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
   }
 
   const cleaned = text.replace(/(\d{1,2})(st|nd|rd|th)/gi, "$1");
+
+  // ── DD-MM-YYYY / DD/MM/YYYY (Indian date format) ─────────────────────────
+  // Must be checked BEFORE new Date() which assumes US MM-DD-YYYY for hyphenated dates.
+  const ddmmyyyyMatch = cleaned.match(/(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);
+  if (ddmmyyyyMatch) {
+    const part1 = parseInt(ddmmyyyyMatch[1], 10);
+    const part2 = parseInt(ddmmyyyyMatch[2], 10);
+    const year  = parseInt(ddmmyyyyMatch[3], 10);
+    let day, month;
+    if (part1 > 12) {
+      // Unambiguous: first part must be day (e.g. 25-07-2026)
+      day = part1; month = part2;
+    } else if (part2 > 12) {
+      // Unambiguous: second part must be day (e.g. 07-25-2026)
+      day = part2; month = part1;
+    } else {
+      // Ambiguous (e.g. 05-07-2026): default to DD-MM-YYYY (Indian convention)
+      day = part1; month = part2;
+    }
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const finalDate = createDateInIST(year, month, day, hours, minutes);
+      return finalDate.toISOString();
+    }
+  }
+
   const parsed = new Date(cleaned);
   if (!isNaN(parsed.getTime())) {
     let y = parsed.getFullYear();
@@ -112,6 +137,32 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
   }
 
   return "";
+}
+
+// ---------------------------------------------------------------------------
+// Derive legacy flat fields from displayFields (single source of truth).
+// This ensures role, salaryText, deadlineText, etc. always mirror displayFields.
+// ---------------------------------------------------------------------------
+
+function deriveFromDisplayFields(displayFields = []) {
+  const get = (...labels) => {
+    for (const label of labels) {
+      const f = displayFields.find(f =>
+        new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i').test(f.label)
+      );
+      if (f?.value) return f.value;
+    }
+    return "";
+  };
+  return {
+    role:            get("Role", "Roles", "Position", "Designation") || "Unknown Role",
+    salaryText:      get("CTC", "Salary", "Compensation", "Package"),
+    programStipend:  get("Stipend"),
+    programDuration: get("Duration"),
+    venue:           get("Location", "Venue"),
+    deadlineText:    get("Deadline", "Last Date", "Due Date", "Closing Date"),
+    programRoles:    get("Role", "Roles"),
+  };
 }
 
 /**
@@ -1877,11 +1928,14 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   // Keep generateTitle for the title field only (not subtitle)
   const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, "", sourceBody);
 
-  // ── Step 6: role field (DB required: true) ──────────────────────────────────
-  // For job emails: the classification or "Unknown Role" (never the subtitle).
+  // ── Step 6: role field (DB required) ──────────────────────────────────
+  // Derived from displayFields first (LLM-extracted), then regex fallback.
   // For event emails: "Event" as a neutral placeholder.
   const isJobEmail = emailType === "job";
-  const fallbackRole = extractFallbackRole(sourceSubject, sourceBody);
+  const displayFieldsRole = (gemini?.displayFields || []).find(f =>
+    /^(role|roles|position|designation)$/i.test(f?.label)
+  )?.value || "";
+  const fallbackRole = displayFieldsRole || extractFallbackRole(sourceSubject, sourceBody);
   const roleField = isJobEmail ? (fallbackRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
 
   // ── Step 7: displayFields — flexible [{label,value}] from Gemini ─────────────
@@ -1983,7 +2037,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     },
   } : undefined;
 
-  // // â”€â”€ Step 9: Build parsed output â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // // ── Step 9: Build parsed output ──────────────────────────────────────────
   const parsed = {
     // Core
     emailType,
@@ -2010,18 +2064,24 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     displayFields,
     skills: gemini?.skills || [],
 
-    // ————————————————— LEGACY: empty for new records — legacy records keep their own values
-    // in MongoDB and the frontend falls back to them automatically.
-    fieldsToDisplay: [],
-    programRoles:    "",
-    programStipend:  "",
-    programDuration: "",
-    deadlineText:    "",
-    deadline:        deadlineField?.value || "",
-    deadlineISO:     resolvedDeadlineISO,
-    venue:           "",
-    durationText:    "",
-    salaryText:      "",
+    // ────────────────── LEGACY: derived from displayFields (single source of truth).
+    // These fields are kept for backward compatibility, search, calendar, and indexing.
+    // They mirror displayFields so all consumers see consistent data.
+    ...(() => {
+      const derived = deriveFromDisplayFields(displayFields);
+      return {
+        fieldsToDisplay: [],
+        programRoles:    derived.programRoles,
+        programStipend:  derived.programStipend,
+        programDuration: derived.programDuration,
+        deadlineText:    derived.deadlineText,
+        deadline:        deadlineField?.value || derived.deadlineText || "",
+        deadlineISO:     resolvedDeadlineISO,
+        venue:           derived.venue,
+        durationText:    derived.programDuration,
+        salaryText:      derived.salaryText,
+      };
+    })(),
 
     // Links (still from deterministic link extractor)
     link:       linkInfo.primary || gemini?.link || "",

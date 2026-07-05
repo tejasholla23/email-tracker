@@ -2553,7 +2553,10 @@ export default function JobTrackerDashboard() {
                         const query = searchQuery.toLowerCase();
                         const matchesSearch =
                           (app.company || "").toLowerCase().includes(query) ||
-                          (app.role || "").toLowerCase().includes(query);
+                          (app.role || "").toLowerCase().includes(query) ||
+                          (app.displayFields || []).some(f => 
+                            (f.value || "").toLowerCase().includes(query)
+                          );
 
                         const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
                         const matchesFilter =

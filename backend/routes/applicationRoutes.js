@@ -119,7 +119,7 @@ router.patch("/:id", writeLimiter, async (req, res) => {
     const updatedApplication = await Application.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       update,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!updatedApplication) {
@@ -165,7 +165,7 @@ router.delete("/:id", writeLimiter, async (req, res) => {
     const deleted = await Application.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       { isDeleted: true, needsCalendarSync: true },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!deleted) {
       return res.status(404).json({ message: "Application not found" });

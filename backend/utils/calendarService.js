@@ -25,11 +25,24 @@ function normalizeString(str, type = "generic") {
 }
 
 /**
+ * Helper to get a field value from displayFields first, falling back to legacy flat fields.
+ */
+function getAppField(app, label, fallbackVal) {
+  if (app && Array.isArray(app.displayFields) && app.displayFields.length > 0) {
+    const f = app.displayFields.find(df => 
+      new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i').test(df.label)
+    );
+    if (f?.value) return f.value;
+  }
+  return fallbackVal || "";
+}
+
+/**
  * Generates a SHA-256 fingerprint for the calendar event to prevent duplicates.
  */
 function generateEventFingerprint(app, eventType, dateString) {
   const normCompany = normalizeString(app.company, "company");
-  const normRole = normalizeString(app.role || app.subtitle, "role");
+  const normRole = normalizeString(getAppField(app, "Role", app.role) || app.subtitle, "role");
   const cleanDate = dateString ? dateString.substring(0, 10) : "no-date";
 
   const rawKey = `${normCompany}_${normRole}_${eventType}_${cleanDate}`;
@@ -44,57 +57,55 @@ function parseEventTime(dateInput, timeInput, eventType, roleName) {
   const baseDate = new Date(dateInput);
   if (isNaN(baseDate.getTime())) return null;
 
-  // Determine if it has an explicit time component
-  let isAllDay = true;
-  let startDateTime = null;
-  let endDateTime = null;
+  // Setup start time based on event type
+  let startHour = 9;
+  let startMinute = 0;
 
   if (timeInput) {
-    const cleanTime = timeInput.toLowerCase().trim();
-    // Regex matching HH:MM AM/PM or HH AM/PM
-    const match = cleanTime.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
-    if (match) {
-      isAllDay = false;
-      let hours = parseInt(match[1], 10);
-      const minutes = match[2] ? parseInt(match[2], 10) : 0;
-      const ampm = match[3];
+    const timeMatch = timeInput.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      let m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      const meridiem = timeMatch[3];
 
-      if (ampm === "pm" && hours < 12) hours += 12;
-      if (ampm === "am" && hours === 12) hours = 0;
-
-      baseDate.setHours(hours, minutes, 0, 0);
-      startDateTime = baseDate.toISOString();
-
-      // Calculate dynamic default duration
-      let durationMs = 60 * 60 * 1000; // Default 1 hour
-      const cleanRole = (roleName || "").toLowerCase();
-      if (eventType === "oa" || cleanRole.includes("assessment") || cleanRole.includes("oa") || cleanRole.includes("test")) {
-        durationMs = 120 * 60 * 1000; // 2 hours for OAs
-      } else if (eventType === "interview" || cleanRole.includes("interview")) {
-        durationMs = 45 * 60 * 1000; // 45 minutes for Interviews
+      if (meridiem) {
+        if (meridiem.toLowerCase() === "pm" && h !== 12) h += 12;
+        if (meridiem.toLowerCase() === "am" && h === 12) h = 0;
       }
-
-      endDateTime = new Date(baseDate.getTime() + durationMs).toISOString();
+      startHour = h;
+      startMinute = m;
     }
   }
 
-  if (isAllDay) {
-    const dateStr = baseDate.toISOString().substring(0, 10);
-    // End date is exclusive for all-day events in Google Calendar (so +1 day)
-    const nextDay = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000);
-    const endStr = nextDay.toISOString().substring(0, 10);
+  // Set start
+  const start = new Date(baseDate);
+  start.setHours(startHour, startMinute, 0, 0);
 
-    return {
-      isAllDay: true,
-      start: { date: dateStr },
-      end: { date: endStr }
-    };
-  }
+  // Set end (default 1 hour duration)
+  const end = new Date(start);
+  end.setHours(start.getHours() + 1);
+
+  // Convert to Google RFC 3339 format (timezone offset is added)
+  // Ensure we are outputting in local IST timezone format
+  const pad = (num) => String(num).padStart(2, "0");
+  const getOffsetString = (d) => {
+    // Hardcoded to Asia/Kolkata (IST) +05:30 for server-independent stability
+    return "+05:30";
+  };
+
+  const toRfc3339 = (d) => {
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    const seconds = pad(d.getSeconds());
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${getOffsetString(d)}`;
+  };
 
   return {
-    isAllDay: false,
-    start: { dateTime: startDateTime, timeZone: "UTC" },
-    end: { dateTime: endDateTime, timeZone: "UTC" }
+    start: { dateTime: toRfc3339(start), timeZone: "Asia/Kolkata" },
+    end: { dateTime: toRfc3339(end), timeZone: "Asia/Kolkata" }
   };
 }
 
@@ -102,16 +113,21 @@ function parseEventTime(dateInput, timeInput, eventType, roleName) {
  * Builds Google Calendar resource payload object.
  */
 function buildEventPayload(app, eventType, dateInfo, fingerprint) {
-  const summary = `[${app.company}] ${app.subtitle || app.role || "Hiring Event"}`;
+  const role = getAppField(app, "Role", app.role);
+  const summary = `[${app.company}] ${app.subtitle || role || "Hiring Event"}`;
   
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   const appDeepLink = `${frontendUrl}/?id=${app._id}`;
 
   let descriptionHtml = `<b>Company:</b> ${app.company}<br>`;
-  if (app.role) descriptionHtml += `<b>Role:</b> ${app.role}<br>`;
+  if (role) descriptionHtml += `<b>Role:</b> ${role}<br>`;
   if (app.subtitle) descriptionHtml += `<b>Program Details:</b> ${app.subtitle}<br>`;
-  if (app.deadlineText) descriptionHtml += `<b>Deadline:</b> ${app.deadlineText}<br>`;
-  if (app.venue) descriptionHtml += `<b>Venue/Location:</b> ${app.venue}<br>`;
+  
+  const deadlineText = getAppField(app, "Deadline", app.deadlineText);
+  if (deadlineText) descriptionHtml += `<b>Deadline:</b> ${deadlineText}<br>`;
+  
+  const venue = getAppField(app, "Location", getAppField(app, "Venue", app.venue));
+  if (venue) descriptionHtml += `<b>Venue/Location:</b> ${venue}<br>`;
   
   if (app.skills && app.skills.length > 0) {
     descriptionHtml += `<b>Skills:</b> ${app.skills.join(", ")}<br>`;
@@ -191,15 +207,16 @@ async function syncAppToCalendar(account, app) {
   let timeInput = app.eventTime || app.reportingTime || null;
   let eventType = "deadline";
 
+  const roleVal = getAppField(app, "Role", app.role);
   if (app.classification === "Interview Schedule") {
     eventType = "interview";
-  } else if (app.classification === "Assessment Announcement" || (app.role && app.role.toLowerCase().includes("oa"))) {
+  } else if (app.classification === "Assessment Announcement" || (roleVal && roleVal.toLowerCase().includes("oa"))) {
     eventType = "oa";
   } else if (app.classification === "Workshop / Webinar" || app.classification === "Expert Talk Series") {
     eventType = "talk";
   }
 
-  const dateInfo = parseEventTime(dateInput, timeInput, eventType, app.role);
+  const dateInfo = parseEventTime(dateInput, timeInput, eventType, roleVal);
   if (!dateInfo) {
     // If no valid date matches, we cannot create a calendar event
     app.needsCalendarSync = false;

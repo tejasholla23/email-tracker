@@ -620,6 +620,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     const headers = email.data.payload.headers;
     const fromHeader = headers.find((h) => h.name === "From")?.value || "";
     const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    const internetMessageId = headers.find((h) => h.name.toLowerCase() === "message-id")?.value || "";
 
     const isAllowedSender = ALLOWED_SENDERS.some(sender => 
       fromHeader.toLowerCase().includes(sender.toLowerCase())
@@ -666,10 +667,65 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       const missingDetails = exists.parserVersion !== CURRENT_PARSER_VERSION;
       if (missingDetails) {
         console.log(`[REPARSE] ${id} | Existing message needs enrichment to ${CURRENT_PARSER_VERSION}`);
-        const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-        // Sleep to safely respect Gemini RPM free tier limit
-        await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
-        usedGemini = true;
+        let parsed = null;
+        if (internetMessageId) {
+          const cachedApp = await Application.findOne({
+            "parseMeta.internetMessageId": internetMessageId,
+            company: { $nin: ["PENDING_PARSE", "IGNORED"] },
+            parserVersion: CURRENT_PARSER_VERSION
+          });
+          if (cachedApp) {
+            console.log(`[REPARSE_CACHE_HIT] Reusing parsed data from existing application for Message-ID: ${internetMessageId}`);
+            parsed = {
+              emailType: cachedApp.emailType,
+              opportunityType: cachedApp.opportunityType,
+              isRelevant: cachedApp.isRelevant,
+              classification: cachedApp.classification,
+              type: cachedApp.type,
+              status: cachedApp.status,
+              confidenceScore: cachedApp.confidenceScore,
+              timelineTitle: cachedApp.title,
+              timelineSummary: cachedApp.parseMeta?.trace?.gemini?.timelineSummary || "",
+              company: cachedApp.company,
+              domain: cachedApp.domain,
+              subtitle: cachedApp.subtitle,
+              role: cachedApp.role,
+              title: cachedApp.title,
+              processId: cachedApp.processId,
+              processName: cachedApp.processName,
+              displayFields: cachedApp.displayFields,
+              skills: cachedApp.skills,
+              fieldsToDisplay: cachedApp.fieldsToDisplay,
+              programRoles: cachedApp.programRoles,
+              programStipend: cachedApp.programStipend,
+              programDuration: cachedApp.programDuration,
+              deadlineText: cachedApp.deadlineText,
+              deadline: cachedApp.deadline,
+              deadlineISO: cachedApp.deadlineISO,
+              venue: cachedApp.venue,
+              durationText: cachedApp.durationText,
+              salaryText: cachedApp.salaryText,
+              link: cachedApp.link,
+              links: cachedApp.links,
+              isFormLink: cachedApp.isFormLink,
+              parseMeta: {
+                ...cachedApp.parseMeta,
+                cacheHit: true,
+                originalUserId: cachedApp.userId
+              }
+            };
+          }
+        }
+
+        if (!parsed) {
+          parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+          // Sleep to safely respect Gemini RPM free tier limit
+          await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
+          usedGemini = true;
+          if (parsed && parsed.parseMeta) {
+            parsed.parseMeta.internetMessageId = internetMessageId;
+          }
+        }
         
         if (parsed) {
           const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
@@ -790,12 +846,67 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     }
 
     // ── NEW EMAIL: parse and save ──
-    console.log(`[PARSE_START] ${id}`);
-    const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-    // Sleep to safely respect Gemini RPM free tier limit
-    await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
-    usedGemini = true;
-    console.log(`[PARSE_RESULT] ${id}`, parsed);
+    let parsed = null;
+    if (internetMessageId) {
+      const cachedApp = await Application.findOne({
+        "parseMeta.internetMessageId": internetMessageId,
+        company: { $nin: ["PENDING_PARSE", "IGNORED"] },
+        parserVersion: CURRENT_PARSER_VERSION
+      });
+      if (cachedApp) {
+        console.log(`[PARSE_CACHE_HIT] Reusing parsed data from existing application for Message-ID: ${internetMessageId}`);
+        parsed = {
+          emailType: cachedApp.emailType,
+          opportunityType: cachedApp.opportunityType,
+          isRelevant: cachedApp.isRelevant,
+          classification: cachedApp.classification,
+          type: cachedApp.type,
+          status: cachedApp.status,
+          confidenceScore: cachedApp.confidenceScore,
+          timelineTitle: cachedApp.title,
+          timelineSummary: cachedApp.parseMeta?.trace?.gemini?.timelineSummary || "",
+          company: cachedApp.company,
+          domain: cachedApp.domain,
+          subtitle: cachedApp.subtitle,
+          role: cachedApp.role,
+          title: cachedApp.title,
+          processId: cachedApp.processId,
+          processName: cachedApp.processName,
+          displayFields: cachedApp.displayFields,
+          skills: cachedApp.skills,
+          fieldsToDisplay: cachedApp.fieldsToDisplay,
+          programRoles: cachedApp.programRoles,
+          programStipend: cachedApp.programStipend,
+          programDuration: cachedApp.programDuration,
+          deadlineText: cachedApp.deadlineText,
+          deadline: cachedApp.deadline,
+          deadlineISO: cachedApp.deadlineISO,
+          venue: cachedApp.venue,
+          durationText: cachedApp.durationText,
+          salaryText: cachedApp.salaryText,
+          link: cachedApp.link,
+          links: cachedApp.links,
+          isFormLink: cachedApp.isFormLink,
+          parseMeta: {
+            ...cachedApp.parseMeta,
+            cacheHit: true,
+            originalUserId: cachedApp.userId
+          }
+        };
+      }
+    }
+
+    if (!parsed) {
+      console.log(`[PARSE_START] ${id}`);
+      parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+      // Sleep to safely respect Gemini RPM free tier limit
+      await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
+      usedGemini = true;
+      if (parsed && parsed.parseMeta) {
+        parsed.parseMeta.internetMessageId = internetMessageId;
+      }
+      console.log(`[PARSE_RESULT] ${id}`, parsed);
+    }
     
     if (!parsed || !parsed.isRelevant || !parsed.company) {
       const reason = !parsed ? "Parsing failed" : (!parsed.isRelevant ? "Marked not relevant" : "Missing company");
@@ -1332,7 +1443,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
           accountUpdate.syncMode = "incremental";
           console.log(`[SYNC_CHECKPOINT] historyId saved: ${newHistoryId}`);
         }
-        const syncedAccount = await Account.findOneAndUpdate({ email: acc.email }, accountUpdate, { new: true });
+        const syncedAccount = await Account.findOneAndUpdate({ email: acc.email }, accountUpdate, { returnDocument: 'after' });
         if (syncedAccount) {
           await processCalendarSyncQueue(syncedAccount);
         }

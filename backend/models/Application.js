@@ -16,11 +16,11 @@ const applicationSchema = new mongoose.Schema(
     // Skills extracted from email body by Gemini (e.g. ["Python", "Machine Learning"])
     skills: { type: [String], default: [] },
     companyKey: { type: String, default: "" }, // normalized key for company-level dedup
-    role: { type: String, required: true },
+    role: { type: String, default: "Unknown Role" }, // Derived from displayFields — kept for search indexing and backward compatibility
     type: { type: String },
-    deadline: { type: String },
-    deadlineISO: { type: String },
-    deadlineText: { type: String },
+    deadline: { type: String }, // Derived from displayFields
+    deadlineISO: { type: String }, // Parsed deadline ISO
+    deadlineText: { type: String }, // Derived from displayFields
     programRoles: { type: String },
     programDuration: { type: String },
     programStipend: { type: String },
