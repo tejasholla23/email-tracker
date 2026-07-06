@@ -2,7 +2,7 @@ const { google } = require("googleapis");
 const crypto = require("crypto");
 const Application = require("../models/Application");
 
-const CALENDAR_SYNC_VERSION = 1;
+const CALENDAR_SYNC_VERSION = 2;
 
 /**
  * Normalizes input strings (case-insensitive, strips common suffixes, collapses spaces)
@@ -51,13 +51,44 @@ function generateEventFingerprint(app, eventType, dateString) {
 
 /**
  * Formats date and time components into proper Google Calendar API formats.
+ * Returns either an all-day event or a timed event depending on eventType.
+ *
+ * @param {string|Date} dateInput - The date to use for the event
+ * @param {string|null} timeInput - Optional explicit time string (e.g. "2:30 PM")
+ * @param {string} eventType - One of: "deadline", "interview", "oa", "talk"
+ * @returns {object|null} Google Calendar start/end object, or null if invalid
  */
-function parseEventTime(dateInput, timeInput, eventType, roleName) {
+function parseEventTime(dateInput, timeInput, eventType) {
   if (!dateInput) return null;
   const baseDate = new Date(dateInput);
   if (isNaN(baseDate.getTime())) return null;
 
-  // Setup start time based on event type
+  const pad = (num) => String(num).padStart(2, "0");
+
+  // ── ALL-DAY events for deadlines ──────────────────────────────────────────
+  // Deadlines are "last date to apply" — they make most sense as all-day events
+  // with reminders, not as 1-hour timed slots.
+  if (eventType === "deadline") {
+    const y = baseDate.getUTCFullYear();
+    const m = pad(baseDate.getUTCMonth() + 1);
+    const d = pad(baseDate.getUTCDate());
+    const startDate = `${y}-${m}-${d}`;
+    // All-day events use exclusive end date (next day)
+    const endDateObj = new Date(baseDate);
+    endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
+    const ey = endDateObj.getUTCFullYear();
+    const em = pad(endDateObj.getUTCMonth() + 1);
+    const ed = pad(endDateObj.getUTCDate());
+    const endDate = `${ey}-${em}-${ed}`;
+
+    return {
+      allDay: true,
+      start: { date: startDate },
+      end: { date: endDate }
+    };
+  }
+
+  // ── TIMED events for interviews, OAs, talks ───────────────────────────────
   let startHour = 9;
   let startMinute = 0;
 
@@ -67,7 +98,6 @@ function parseEventTime(dateInput, timeInput, eventType, roleName) {
       let h = parseInt(timeMatch[1], 10);
       let m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
       const meridiem = timeMatch[3];
-
       if (meridiem) {
         if (meridiem.toLowerCase() === "pm" && h !== 12) h += 12;
         if (meridiem.toLowerCase() === "am" && h === 12) h = 0;
@@ -77,21 +107,15 @@ function parseEventTime(dateInput, timeInput, eventType, roleName) {
     }
   }
 
-  // Set start
   const start = new Date(baseDate);
   start.setHours(startHour, startMinute, 0, 0);
 
-  // Set end (default 1 hour duration)
-  const end = new Date(start);
-  end.setHours(start.getHours() + 1);
+  // Duration depends on event type
+  let durationMinutes = 60; // default 1 hour
+  if (eventType === "oa") durationMinutes = 120;       // OA: 2 hours
+  if (eventType === "interview") durationMinutes = 45;  // Interview: 45 min
 
-  // Convert to Google RFC 3339 format (timezone offset is added)
-  // Ensure we are outputting in local IST timezone format
-  const pad = (num) => String(num).padStart(2, "0");
-  const getOffsetString = (d) => {
-    // Hardcoded to Asia/Kolkata (IST) +05:30 for server-independent stability
-    return "+05:30";
-  };
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
 
   const toRfc3339 = (d) => {
     const year = d.getFullYear();
@@ -100,10 +124,11 @@ function parseEventTime(dateInput, timeInput, eventType, roleName) {
     const hours = pad(d.getHours());
     const minutes = pad(d.getMinutes());
     const seconds = pad(d.getSeconds());
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${getOffsetString(d)}`;
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
   };
 
   return {
+    allDay: false,
     start: { dateTime: toRfc3339(start), timeZone: "Asia/Kolkata" },
     end: { dateTime: toRfc3339(end), timeZone: "Asia/Kolkata" }
   };
@@ -114,7 +139,16 @@ function parseEventTime(dateInput, timeInput, eventType, roleName) {
  */
 function buildEventPayload(app, eventType, dateInfo, fingerprint) {
   const role = getAppField(app, "Role", app.role);
-  const summary = `[${app.company}] ${app.subtitle || role || "Hiring Event"}`;
+  
+  // Build a descriptive summary prefix based on event type
+  const typeEmoji = {
+    deadline: "📋",
+    interview: "🎤",
+    oa: "💻",
+    talk: "🎓"
+  };
+  const emoji = typeEmoji[eventType] || "📋";
+  const summary = `${emoji} [${app.company}] ${app.subtitle || role || "Hiring Event"}`;
   
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   const appDeepLink = `${frontendUrl}/?id=${app._id}`;
@@ -126,11 +160,24 @@ function buildEventPayload(app, eventType, dateInfo, fingerprint) {
   const deadlineText = getAppField(app, "Deadline", app.deadlineText);
   if (deadlineText) descriptionHtml += `<b>Deadline:</b> ${deadlineText}<br>`;
   
+  const ctc = getAppField(app, "CTC", app.salaryText);
+  if (ctc) descriptionHtml += `<b>CTC:</b> ${ctc}<br>`;
+
   const venue = getAppField(app, "Location", getAppField(app, "Venue", app.venue));
   if (venue) descriptionHtml += `<b>Venue/Location:</b> ${venue}<br>`;
   
   if (app.skills && app.skills.length > 0) {
     descriptionHtml += `<b>Skills:</b> ${app.skills.join(", ")}<br>`;
+  }
+
+  // Include all displayFields for completeness
+  if (Array.isArray(app.displayFields) && app.displayFields.length > 0) {
+    descriptionHtml += `<br><b>Details:</b><br>`;
+    for (const f of app.displayFields) {
+      if (f.label && f.value) {
+        descriptionHtml += `• <b>${f.label}:</b> ${f.value}<br>`;
+      }
+    }
   }
   
   descriptionHtml += `<br><a href="${appDeepLink}">View in Email Tracker Dashboard</a>`;
@@ -142,12 +189,17 @@ function buildEventPayload(app, eventType, dateInfo, fingerprint) {
     descriptionHtml += `<br><br><b>Personal Notes:</b><br>${app.note.replace(/\n/g, "<br>")}`;
   }
 
-  // Setup specific reminders based on type (Only for application deadlines)
+  // Setup reminders based on event type
   let reminderConfig = { useDefault: false, overrides: [] };
   if (eventType === "deadline") {
     reminderConfig.overrides = [
       { method: "popup", minutes: 1440 }, // 1 day before
       { method: "popup", minutes: 120 }   // 2 hours before
+    ];
+  } else if (eventType === "interview" || eventType === "oa") {
+    reminderConfig.overrides = [
+      { method: "popup", minutes: 60 },   // 1 hour before
+      { method: "popup", minutes: 15 }    // 15 minutes before
     ];
   }
 
@@ -202,12 +254,9 @@ async function syncAppToCalendar(account, app) {
   oauth2Client.setCredentials(account.tokens);
   const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
-  // 1. Resolve date and event type
-  let dateInput = app.deadlineISO || app.testDate || app.eventDate || app.date;
-  let timeInput = app.eventTime || app.reportingTime || null;
-  let eventType = "deadline";
-
+  // 1. Resolve event type from classification
   const roleVal = getAppField(app, "Role", app.role);
+  let eventType = "deadline";
   if (app.classification === "Interview Schedule") {
     eventType = "interview";
   } else if (app.classification === "Assessment Announcement" || (roleVal && roleVal.toLowerCase().includes("oa"))) {
@@ -216,17 +265,58 @@ async function syncAppToCalendar(account, app) {
     eventType = "talk";
   }
 
-  const dateInfo = parseEventTime(dateInput, timeInput, eventType, roleVal);
-  if (!dateInfo) {
-    // If no valid date matches, we cannot create a calendar event
+  // 2. Resolve date — only use meaningful dates, NOT the email-received date
+  //    For deadlines: must have an explicit deadlineISO (parsed from Deadline displayField)
+  //    For interviews/OAs/talks: can use testDate, eventDate, or deadlineISO
+  //    NEVER fall back to app.date (email received date) — that creates misleading events
+  let dateInput = null;
+  let timeInput = app.eventTime || app.reportingTime || null;
+
+  if (eventType === "interview" || eventType === "oa" || eventType === "talk") {
+    dateInput = app.testDate || app.eventDate || app.deadlineISO || null;
+  } else {
+    // deadline / default — only use explicit deadline date
+    dateInput = app.deadlineISO || null;
+  }
+
+  if (!dateInput) {
+    // No meaningful date found — skip calendar sync entirely
     app.needsCalendarSync = false;
-    app.calendarSyncError = "No valid date found for application";
+    app.calendarSyncError = "No explicit deadline or event date found — skipping calendar event";
+    await app.save();
+    console.log(`[CALENDAR_SYNC] Skipping ${app.company} (${app._id}): no meaningful date`);
+    return;
+  }
+
+  // 3. Reject past dates — Google Calendar rejects events in the past anyway
+  const eventDate = new Date(dateInput);
+  if (isNaN(eventDate.getTime())) {
+    app.needsCalendarSync = false;
+    app.calendarSyncError = `Invalid date value: ${dateInput}`;
+    await app.save();
+    return;
+  }
+  const now = new Date();
+  // Allow events up to 1 day in the past (timezone buffer) but reject anything older
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  if (eventDate < oneDayAgo) {
+    app.needsCalendarSync = false;
+    app.calendarSyncError = `Deadline/event date is in the past (${eventDate.toISOString().substring(0, 10)})`;
+    await app.save();
+    console.log(`[CALENDAR_SYNC] Skipping ${app.company} (${app._id}): date in past (${eventDate.toISOString().substring(0, 10)})`);
+    return;
+  }
+
+  const dateInfo = parseEventTime(dateInput, timeInput, eventType);
+  if (!dateInfo) {
+    app.needsCalendarSync = false;
+    app.calendarSyncError = "Failed to parse event time from date input";
     await app.save();
     return;
   }
 
-  // 2. Generate fingerprint and payload
-  const fingerprint = generateEventFingerprint(app, eventType, dateInput.toISOString ? dateInput.toISOString() : dateInput.toString());
+  // 4. Generate fingerprint and payload
+  const fingerprint = generateEventFingerprint(app, eventType, eventDate.toISOString());
   const payload = buildEventPayload(app, eventType, dateInfo, fingerprint);
   const payloadHash = computePayloadHash(payload);
 
