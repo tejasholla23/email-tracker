@@ -308,9 +308,23 @@ async function syncAppToCalendar(account, app) {
   } catch (err) {
     console.error(`[CALENDAR_SYNC] Error syncing application ${app._id}:`, err.message);
     app.calendarSyncError = err.message;
-    // Set to failed/disabled if user revoked permission (401 / 403)
-    if (err.status === 401 || err.status === 403 || err.message.includes("invalid_grant")) {
+    
+    // Set to failed/disabled if user revoked permission or has insufficient scope
+    const errLower = (err.message || "").toLowerCase();
+    const isAuthError = err.status === 401 || 
+                        err.status === 403 || 
+                        errLower.includes("invalid_grant") || 
+                        errLower.includes("insufficient") || 
+                        errLower.includes("scope");
+                        
+    if (isAuthError) {
       app.needsCalendarSync = false;
+      
+      // Auto-disable calendar sync on account level due to missing/revoked scopes
+      account.calendarSyncEnabled = false;
+      account.syncError = `Google Calendar permissions missing: ${err.message}`;
+      await account.save().catch(saveErr => console.error("[CALENDAR_SYNC] Failed to update account sync status:", saveErr.message));
+      console.log(`[CALENDAR_SYNC] Auto-disabled calendar sync for account: ${account.email} due to auth scope error`);
     }
     await app.save();
   }

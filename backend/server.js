@@ -431,6 +431,11 @@ app.post("/auth/calendar/toggle", writeLimiter, authenticate, async (req, res) =
     const account = await Account.findById(req.userId);
     if (!account) return res.status(404).json({ message: "Account not found" });
 
+    const hasCalendarScope = account.tokens && account.tokens.scope && account.tokens.scope.includes("auth/calendar.events");
+    if (!account.calendarSyncEnabled && !hasCalendarScope) {
+      return res.status(400).json({ message: "Insufficient permissions. Please connect Google Calendar first to grant access." });
+    }
+
     account.calendarSyncEnabled = !account.calendarSyncEnabled;
     
     // If enabling, queue all existing non-deleted applications for sync sweep
@@ -679,7 +684,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             parsed = {
               emailType: cachedApp.emailType,
               opportunityType: cachedApp.opportunityType,
-              isRelevant: cachedApp.isRelevant,
+              isRelevant: cachedApp.emailType !== "nonRecruitment",
               classification: cachedApp.classification,
               type: cachedApp.type,
               status: cachedApp.status,
@@ -858,7 +863,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         parsed = {
           emailType: cachedApp.emailType,
           opportunityType: cachedApp.opportunityType,
-          isRelevant: cachedApp.isRelevant,
+          isRelevant: cachedApp.emailType !== "nonRecruitment",
           classification: cachedApp.classification,
           type: cachedApp.type,
           status: cachedApp.status,
