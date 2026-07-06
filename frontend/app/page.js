@@ -1697,11 +1697,12 @@ export default function JobTrackerDashboard() {
           margin-bottom: 6px;
           display: flex;
           align-items: baseline;
+          gap: 12px;
         }
         .program-detail-label {
           font-weight: 600;
           color: #64748b;
-          width: 70px;
+          width: 95px;
           flex-shrink: 0;
         }
         .program-detail-value {
