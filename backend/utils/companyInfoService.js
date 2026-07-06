@@ -61,8 +61,8 @@ async function getCompanyInfo(companyName, parsedDomain = "") {
         throw new Error('Clearbit failed or 404');
       }
     } catch (clearbitErr) {
-      // 2. Fall back to Google Favicon (high-quality icon for active domains)
-      finalLogo = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+      // 2. Fall back to UI Avatars (initials on a colored background) to prevent duplicate generic globe icons
+      finalLogo = uiAvatarUrl;
     }
 
     const newCompanyInfo = await CompanyInfo.create({
