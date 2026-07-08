@@ -161,6 +161,9 @@ export async function unsubscribePush(apiFetch) {
 export async function getCurrentPushEndpoint() {
   if (!isPushSupported()) return "";
   try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (!regs || regs.length === 0) return "";
+
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     return sub ? sub.endpoint : "";
@@ -176,6 +179,9 @@ export async function getCurrentPushEndpoint() {
 export async function hasActiveSubscription() {
   if (!isPushSupported()) return false;
   try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (!regs || regs.length === 0) return false;
+
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     return !!sub;
