@@ -1222,6 +1222,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
     await newApp.save();
     console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
+
+    // Send push notification for new email (fire-and-forget)
+    try {
+      const { sendNewEmailNotification } = require("./utils/pushService");
+      await sendNewEmailNotification(acc, newApp);
+    } catch (pushErr) {
+      console.error(`[PUSH_ERROR] ${id}:`, pushErr.message);
+    }
+
     return { action: 'inserted', usedGemini };
   } catch (error) {
     if (error.code === 11000) {
