@@ -401,10 +401,16 @@ app.post("/auth/refresh", authLimiter, async (req, res) => {
 
 // GET /auth/me - get current user context from JWT
 app.get("/auth/me", readLimiter, authenticate, async (req, res) => {
-  res.json({
-    _id: req.userId,
-    email: req.userEmail
-  });
+  try {
+    const account = await Account.findById(req.userId);
+    res.json({
+      _id: req.userId,
+      email: req.userEmail,
+      pushSubscriptionsCount: account ? (account.pushSubscriptions?.length || 0) : 0
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // GET /auth/calendar/status - check calendar integration status

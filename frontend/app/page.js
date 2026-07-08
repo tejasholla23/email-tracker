@@ -76,6 +76,12 @@ export default function JobTrackerDashboard() {
   const [calendarSuccessMsg, setCalendarSuccessMsg] = useState("");
   const [calendarErrorMsg, setCalendarErrorMsg] = useState("");
 
+  // Push Notifications State
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState("default");
+  const [pushSubscriptionsCount, setPushSubscriptionsCount] = useState(0);
+  const [showPushBanner, setShowPushBanner] = useState(false);
+
   const containerRef = React.useRef(null);
   const cardRef = React.useRef(null);
   const canvasRef = React.useRef(null);
@@ -229,23 +235,125 @@ export default function JobTrackerDashboard() {
     };
   }, [userEmail]);
 
+  // Push Notifications Setup
+  useEffect(() => {
+    const initPushState = async () => {
+      const { isPushSupported, getPushPermissionState } = await import("./utils/pushManager");
+      const supported = isPushSupported();
+      setPushSupported(supported);
+      if (supported) {
+        setPushPermission(getPushPermissionState());
+      }
+    };
+    initPushState();
+  }, [userEmail]);
+
+  // Deferred push notification permission banner logic
   useEffect(() => {
     if (!userEmail) return;
 
-    const autoRegisterPush = async () => {
-      try {
-        const { isPushSupported, getPushPermissionState, registerAndSubscribe } = await import("./utils/pushManager");
-        if (isPushSupported() && getPushPermissionState() === "granted") {
-          console.log("[PushManager] Auto-registering and re-associating push subscription...");
+    let isMounted = true;
+    let timer;
+
+    const checkDeferredBanner = async () => {
+      const { isPushSupported, getPushPermissionState, registerAndSubscribe } = await import("./utils/pushManager");
+      if (!isPushSupported()) return;
+
+      const perm = getPushPermissionState();
+      if (!isMounted) return;
+      setPushPermission(perm);
+
+      if (perm === "granted") {
+        try {
           await registerAndSubscribe(apiFetch);
+          const res = await apiFetch(`${BASE_URL}/auth/me`);
+          if (res.ok && isMounted) {
+            const data = await res.json();
+            setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+          }
+        } catch (e) {
+          console.warn("[PushManager] Silent re-association failed:", e.message);
         }
-      } catch (err) {
-        console.error("[PushManager] Auto-registration failed:", err.message);
+        return;
       }
+
+      if (perm === "denied") return;
+
+      const dismissedAt = localStorage.getItem("pushBannerDismissedAt");
+      if (dismissedAt) {
+        const elapsed = Date.now() - parseInt(dismissedAt, 10);
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (elapsed < sevenDays) {
+          return;
+        }
+      }
+
+      timer = setTimeout(() => {
+        if (isMounted) {
+          setShowPushBanner(true);
+        }
+      }, 3000);
     };
 
-    autoRegisterPush();
+    checkDeferredBanner();
+
+    return () => {
+      isMounted = false;
+      if (timer) clearTimeout(timer);
+    };
   }, [userEmail]);
+
+  const handleRequestPushPermission = async () => {
+    try {
+      const { registerAndSubscribe, getPushPermissionState } = await import("./utils/pushManager");
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      setShowPushBanner(false);
+
+      if (permission === "granted") {
+        console.log("[Push] Permission granted, subscribing...");
+        await registerAndSubscribe(apiFetch);
+        const res = await apiFetch(`${BASE_URL}/auth/me`);
+        if (res.ok) {
+          const data = await res.json();
+          setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+        }
+        alert("Push notifications enabled successfully!");
+      } else {
+        alert("Notifications permission was denied or dismissed.");
+      }
+    } catch (err) {
+      console.error("[Push] Error enabling notifications:", err.message);
+      alert("Failed to enable push notifications: " + err.message);
+    }
+  };
+
+  const handleDisablePushNotifications = async () => {
+    if (!confirm("Are you sure you want to disable push notifications on this device?")) {
+      return;
+    }
+
+    try {
+      const { unsubscribePush, getPushPermissionState } = await import("./utils/pushManager");
+      await unsubscribePush(apiFetch);
+      setPushPermission(getPushPermissionState());
+      
+      const res = await apiFetch(`${BASE_URL}/auth/me`);
+      if (res.ok) {
+        const data = await res.json();
+        setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+      }
+      alert("Disabled push notifications on this device successfully.");
+    } catch (err) {
+      console.error("[Push] Error disabling notifications:", err.message);
+      alert("Failed to disable notifications: " + err.message);
+    }
+  };
+
+  const handleDismissPushBanner = () => {
+    setShowPushBanner(false);
+    localStorage.setItem("pushBannerDismissedAt", Date.now().toString());
+  };
 
   const handleLocalLogout = () => {
     localStorage.removeItem("accessToken");
@@ -351,6 +459,9 @@ export default function JobTrackerDashboard() {
           if (res.ok) {
             const data = await res.json();
             setUserEmail(data.email);
+            if (typeof data.pushSubscriptionsCount === "number") {
+              setPushSubscriptionsCount(data.pushSubscriptionsCount);
+            }
           } else {
             handleLocalLogout();
           }
@@ -678,8 +789,20 @@ export default function JobTrackerDashboard() {
   };
 
   const handleLogout = async () => {
+    let pushEndpoint = "";
     try {
-      await apiFetch(`${BASE_URL}/logout`);
+      const { getCurrentPushEndpoint } = await import("./utils/pushManager");
+      pushEndpoint = await getCurrentPushEndpoint();
+    } catch (e) {
+      console.warn("[Push] Error getting endpoint for logout:", e.message);
+    }
+
+    try {
+      await apiFetch(`${BASE_URL}/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pushEndpoint })
+      });
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {
@@ -2042,6 +2165,33 @@ export default function JobTrackerDashboard() {
               </div>
             )}
 
+            {showPushBanner && (
+              <div className="sync-warning-banner" style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#3b82f6', marginBottom: '16px' }}>
+                <div className="sync-warning-content" style={{ color: 'var(--text-primary)' }}>
+                  <span className="sync-warning-icon" style={{ fontSize: '18px' }}>🔔</span>
+                  <span>
+                    Get instant push notifications when new placement opportunities, OAs, or deadlines arrive.
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button 
+                    onClick={handleRequestPushPermission} 
+                    className="btn-primary"
+                    style={{ padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: '600' }}
+                  >
+                    Enable
+                  </button>
+                  <button 
+                    onClick={handleDismissPushBanner} 
+                    className="btn-outline"
+                    style={{ padding: '6px 14px', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer' }}
+                  >
+                    Maybe Later
+                  </button>
+                </div>
+              </div>
+            )}
+
             {activeFilter === "calendar" ? (
               <div className="settings-container">
                 <div className="settings-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -2272,6 +2422,65 @@ export default function JobTrackerDashboard() {
                             <span className="settings-item-label">Terms of Service</span>
                             <span className="settings-item-arrow">❯</span>
                           </button>
+                        </div>
+                      </div>
+
+                      <div className="settings-card">
+                        <h3 className="settings-title">
+                          <span className="settings-title-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                          </span>
+                          <span>Notifications</span>
+                        </h3>
+                        <div className="settings-list">
+                          {pushSupported ? (
+                            <>
+                              <div className="settings-item" style={{ cursor: 'default', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', padding: '16px 20px' }}>
+                                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Permission Status:</span>
+                                  <span style={{ 
+                                    padding: '4px 8px', 
+                                    borderRadius: '12px', 
+                                    fontSize: '11px', 
+                                    fontWeight: '600',
+                                    background: pushPermission === 'granted' ? 'rgba(46, 213, 115, 0.15)' : pushPermission === 'denied' ? 'rgba(255, 71, 87, 0.15)' : 'rgba(255, 255, 255, 0.05)', 
+                                    color: pushPermission === 'granted' ? '#2ed573' : pushPermission === 'denied' ? '#ff4757' : 'var(--text-secondary)'
+                                  }}>
+                                    {pushPermission.toUpperCase()}
+                                  </span>
+                                </div>
+                                {pushPermission === 'granted' && pushSubscriptionsCount > 0 && (
+                                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    Active registered devices: <b>{pushSubscriptionsCount}</b>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {pushPermission === "default" && (
+                                <button className="settings-item" onClick={handleRequestPushPermission}>
+                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>🔔 Enable Notifications</span>
+                                  <span className="settings-item-arrow">❯</span>
+                                </button>
+                              )}
+                              
+                              {pushPermission === "granted" && (
+                                <button className="settings-item" onClick={handleDisablePushNotifications}>
+                                  <span className="settings-item-label text-danger">🔕 Disable on this device</span>
+                                  <span className="settings-item-arrow">❯</span>
+                                </button>
+                              )}
+                              
+                              {pushPermission === "denied" && (
+                                <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(255, 71, 87, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 71, 87, 0.1)', margin: '8px 20px' }}>
+                                  Notifications are blocked. Please enable them in browser site settings to receive updates.
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div style={{ padding: '16px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              Push notifications are not supported in this browser.
+                            </div>
+                          )}
                         </div>
                       </div>
 
