@@ -169,3 +169,18 @@ export async function getCurrentPushEndpoint() {
     return "";
   }
 }
+
+/**
+ * Checks if the browser currently has an active push subscription object.
+ */
+export async function hasActiveSubscription() {
+  if (!isPushSupported()) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    return !!sub;
+  } catch (err) {
+    console.warn("[PushManager] Error checking active push subscription:", err.message);
+    return false;
+  }
+}

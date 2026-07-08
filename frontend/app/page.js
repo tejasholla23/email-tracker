@@ -81,6 +81,7 @@ export default function JobTrackerDashboard() {
   const [pushPermission, setPushPermission] = useState("default");
   const [pushSubscriptionsCount, setPushSubscriptionsCount] = useState(0);
   const [showPushBanner, setShowPushBanner] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
   const containerRef = React.useRef(null);
   const cardRef = React.useRef(null);
@@ -238,11 +239,13 @@ export default function JobTrackerDashboard() {
   // Push Notifications Setup
   useEffect(() => {
     const initPushState = async () => {
-      const { isPushSupported, getPushPermissionState } = await import("./utils/pushManager");
+      const { isPushSupported, getPushPermissionState, hasActiveSubscription } = await import("./utils/pushManager");
       const supported = isPushSupported();
       setPushSupported(supported);
       if (supported) {
         setPushPermission(getPushPermissionState());
+        const active = await hasActiveSubscription();
+        setIsSubscribed(active);
       }
     };
     initPushState();
@@ -256,23 +259,38 @@ export default function JobTrackerDashboard() {
     let timer;
 
     const checkDeferredBanner = async () => {
-      const { isPushSupported, getPushPermissionState, registerAndSubscribe } = await import("./utils/pushManager");
+      const { isPushSupported, getPushPermissionState, hasActiveSubscription, registerAndSubscribe } = await import("./utils/pushManager");
       if (!isPushSupported()) return;
 
       const perm = getPushPermissionState();
       if (!isMounted) return;
       setPushPermission(perm);
 
+      const active = await hasActiveSubscription();
+      if (!isMounted) return;
+      setIsSubscribed(active);
+
       if (perm === "granted") {
+        if (!active) {
+          // If permission is granted but no active browser subscription exists, try to register
+          try {
+            await registerAndSubscribe(apiFetch);
+            if (isMounted) setIsSubscribed(true);
+          } catch (e) {
+            console.warn("[PushManager] Silent subscription registration failed:", e.message);
+            if (isMounted) setIsSubscribed(false);
+          }
+        }
+        
+        // Refresh registered device count
         try {
-          await registerAndSubscribe(apiFetch);
           const res = await apiFetch(`${BASE_URL}/auth/me`);
           if (res.ok && isMounted) {
             const data = await res.json();
             setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
           }
         } catch (e) {
-          console.warn("[PushManager] Silent re-association failed:", e.message);
+          console.warn("[PushManager] Failed to fetch device count:", e.message);
         }
         return;
       }
@@ -305,7 +323,7 @@ export default function JobTrackerDashboard() {
 
   const handleRequestPushPermission = async () => {
     try {
-      const { registerAndSubscribe, getPushPermissionState } = await import("./utils/pushManager");
+      const { registerAndSubscribe, getPushPermissionState, hasActiveSubscription } = await import("./utils/pushManager");
       const permission = await Notification.requestPermission();
       setPushPermission(permission);
       setShowPushBanner(false);
@@ -313,6 +331,9 @@ export default function JobTrackerDashboard() {
       if (permission === "granted") {
         console.log("[Push] Permission granted, subscribing...");
         await registerAndSubscribe(apiFetch);
+        const active = await hasActiveSubscription();
+        setIsSubscribed(active);
+
         const res = await apiFetch(`${BASE_URL}/auth/me`);
         if (res.ok) {
           const data = await res.json();
@@ -320,10 +341,32 @@ export default function JobTrackerDashboard() {
         }
         alert("Push notifications enabled successfully!");
       } else {
+        setIsSubscribed(false);
         alert("Notifications permission was denied or dismissed.");
       }
     } catch (err) {
+      setIsSubscribed(false);
       console.error("[Push] Error enabling notifications:", err.message);
+      alert("Failed to enable push notifications: " + err.message);
+    }
+  };
+
+  const handleEnablePushSubscription = async () => {
+    try {
+      const { registerAndSubscribe, hasActiveSubscription } = await import("./utils/pushManager");
+      await registerAndSubscribe(apiFetch);
+      const active = await hasActiveSubscription();
+      setIsSubscribed(active);
+
+      const res = await apiFetch(`${BASE_URL}/auth/me`);
+      if (res.ok) {
+        const data = await res.json();
+        setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+      }
+      alert("Push notifications enabled on this device successfully!");
+    } catch (err) {
+      setIsSubscribed(false);
+      console.error("[Push] Error enabling subscription:", err.message);
       alert("Failed to enable push notifications: " + err.message);
     }
   };
@@ -334,9 +377,11 @@ export default function JobTrackerDashboard() {
     }
 
     try {
-      const { unsubscribePush, getPushPermissionState } = await import("./utils/pushManager");
+      const { unsubscribePush, getPushPermissionState, hasActiveSubscription } = await import("./utils/pushManager");
       await unsubscribePush(apiFetch);
       setPushPermission(getPushPermissionState());
+      const active = await hasActiveSubscription();
+      setIsSubscribed(active);
       
       const res = await apiFetch(`${BASE_URL}/auth/me`);
       if (res.ok) {
@@ -2460,31 +2505,45 @@ export default function JobTrackerDashboard() {
                                     {pushPermission.toUpperCase()}
                                   </span>
                                 </div>
-                                {pushPermission === 'granted' && pushSubscriptionsCount > 0 && (
+                                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Device Notifications:</span>
+                                  <span style={{ 
+                                    padding: '4px 8px', 
+                                    borderRadius: '12px', 
+                                    fontSize: '11px', 
+                                    fontWeight: '600',
+                                    background: isSubscribed ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)', 
+                                    color: isSubscribed ? '#2ed573' : 'var(--text-secondary)'
+                                  }}>
+                                    {isSubscribed ? "ENABLED" : "DISABLED"}
+                                  </span>
+                                </div>
+                                {isSubscribed && pushSubscriptionsCount > 0 && (
                                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                                     Active registered devices: <b>{pushSubscriptionsCount}</b>
                                   </div>
                                 )}
                               </div>
                               
-                              {pushPermission === "default" && (
-                                <button className="settings-item" onClick={handleRequestPushPermission}>
-                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>🔔 Enable Notifications</span>
-                                  <span className="settings-item-arrow">❯</span>
-                                </button>
-                              )}
-                              
-                              {pushPermission === "granted" && (
+                              {pushPermission === "denied" ? (
+                                <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(255, 71, 87, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 71, 87, 0.1)', margin: '8px 20px' }}>
+                                  Notifications are blocked. Please enable them in browser site settings to receive updates.
+                                </div>
+                              ) : isSubscribed ? (
                                 <button className="settings-item" onClick={handleDisablePushNotifications}>
                                   <span className="settings-item-label text-danger">🔕 Disable on this device</span>
                                   <span className="settings-item-arrow">❯</span>
                                 </button>
-                              )}
-                              
-                              {pushPermission === "denied" && (
-                                <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(255, 71, 87, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 71, 87, 0.1)', margin: '8px 20px' }}>
-                                  Notifications are blocked. Please enable them in browser site settings to receive updates.
-                                </div>
+                              ) : pushPermission === "default" ? (
+                                <button className="settings-item" onClick={handleRequestPushPermission}>
+                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>🔔 Enable Notifications</span>
+                                  <span className="settings-item-arrow">❯</span>
+                                </button>
+                              ) : (
+                                <button className="settings-item" onClick={handleEnablePushSubscription}>
+                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>🔔 Enable on this device</span>
+                                  <span className="settings-item-arrow">❯</span>
+                                </button>
                               )}
 
         
