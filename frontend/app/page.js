@@ -229,6 +229,24 @@ export default function JobTrackerDashboard() {
     };
   }, [userEmail]);
 
+  useEffect(() => {
+    if (!userEmail) return;
+
+    const autoRegisterPush = async () => {
+      try {
+        const { isPushSupported, getPushPermissionState, registerAndSubscribe } = await import("./utils/pushManager");
+        if (isPushSupported() && getPushPermissionState() === "granted") {
+          console.log("[PushManager] Auto-registering and re-associating push subscription...");
+          await registerAndSubscribe(apiFetch);
+        }
+      } catch (err) {
+        console.error("[PushManager] Auto-registration failed:", err.message);
+      }
+    };
+
+    autoRegisterPush();
+  }, [userEmail]);
+
   const handleLocalLogout = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");

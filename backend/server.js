@@ -484,14 +484,111 @@ app.post("/auth/calendar/sync", calendarSyncLimiter, authenticate, async (req, r
 
 
 // ==========================
+// 🔔 PUSH NOTIFICATIONS
+// ==========================
+
+// GET /push/vapid-key - Get the VAPID public key
+app.get("/push/vapid-key", readLimiter, (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+// POST /push/subscribe - Subscribe a device to push notifications
+app.post("/push/subscribe", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
+      return res.status(400).json({ message: "Invalid subscription format." });
+    }
+
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found." });
+
+    if (!account.pushSubscriptions) {
+      account.pushSubscriptions = [];
+    }
+
+    // Check if subscription endpoint is already registered
+    const existingIndex = account.pushSubscriptions.findIndex(
+      (sub) => sub.endpoint === subscription.endpoint
+    );
+
+    const userAgent = req.headers["user-agent"] || "";
+
+    if (existingIndex !== -1) {
+      // Update existing subscription metadata
+      account.pushSubscriptions[existingIndex].createdAt = new Date();
+      account.pushSubscriptions[existingIndex].userAgent = userAgent;
+    } else {
+      // Add new device subscription
+      account.pushSubscriptions.push({
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: subscription.keys.p256dh,
+          auth: subscription.keys.auth,
+        },
+        userAgent,
+        createdAt: new Date(),
+      });
+    }
+
+    // Enforce cap of 10 subscriptions per account (remove oldest)
+    if (account.pushSubscriptions.length > 10) {
+      account.pushSubscriptions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      account.pushSubscriptions.shift();
+    }
+
+    await account.save();
+    res.json({ success: true, message: "Subscribed successfully." });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /push/unsubscribe - Unsubscribe a device from push notifications
+app.post("/push/unsubscribe", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) {
+      return res.status(400).json({ message: "Endpoint is required." });
+    }
+
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found." });
+
+    if (account.pushSubscriptions && account.pushSubscriptions.length > 0) {
+      account.pushSubscriptions = account.pushSubscriptions.filter(
+        (sub) => sub.endpoint !== endpoint
+      );
+      await account.save();
+    }
+
+    res.json({ success: true, message: "Unsubscribed successfully." });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ==========================
 // 🚪 LOGOUT
 // ==========================
-app.get("/logout", readLimiter, authenticate, async (req, res) => {
+app.post("/logout", writeLimiter, authenticate, async (req, res) => {
   try {
-    await Account.findByIdAndUpdate(req.userId, {
-      refreshTokenHash: null,
-      refreshTokenExpiresAt: null
-    });
+    const { pushEndpoint } = req.body || {};
+    const account = await Account.findById(req.userId);
+    
+    if (account) {
+      // Remove only this device's push subscription from the DB
+      if (pushEndpoint && account.pushSubscriptions?.length > 0) {
+        account.pushSubscriptions = account.pushSubscriptions.filter(
+          (sub) => sub.endpoint !== pushEndpoint
+        );
+      }
+      
+      account.refreshTokenHash = null;
+      account.refreshTokenExpiresAt = null;
+      await account.save();
+    }
+
     res.send("Logged out successfully");
   } catch (err) {
     console.error(err);

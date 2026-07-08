@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "Email Dashboard",
   description: "",
+  manifest: "/manifest.json"
 };
 
 export default function RootLayout({ children }) {

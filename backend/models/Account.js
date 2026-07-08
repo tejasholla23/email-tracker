@@ -37,6 +37,22 @@ const accountSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  pushSubscriptions: {
+    type: [{
+      endpoint: { type: String, required: true },
+      keys: {
+        p256dh: { type: String, required: true },
+        auth: { type: String, required: true },
+      },
+      userAgent: { type: String, default: "" },
+      createdAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
+  pushEnabled: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 module.exports = mongoose.model("Account", accountSchema);
