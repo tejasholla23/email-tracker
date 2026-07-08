@@ -111,6 +111,7 @@ function getFullBodyText(payload) {
 }
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 
 const MONGO_URI =
@@ -277,18 +278,41 @@ app.get("/auth/google/calendar", authLimiter, (req, res) => {
 
 app.get("/auth/google/callback", authLimiter, async (req, res) => {
   const { code } = req.query;
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
   try {
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
+    // Fix 6: Use per-request OAuth client to prevent race conditions on shared global instance
+    const localCallbackClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+
+    const { tokens } = await localCallbackClient.getToken(code);
+    localCallbackClient.setCredentials(tokens);
 
     const oauth2 = google.oauth2({
-      auth: oauth2Client,
+      auth: localCallbackClient,
       version: "v2",
     });
 
     const userInfo = await oauth2.userinfo.get();
-    const email = userInfo.data.email;
+    const email = userInfo?.data?.email;
+
+    // Fix 2: Log the user scopes returned from Google
+    console.log(`[AUTH_CALLBACK] User ${email || "unknown"} completed OAuth. Scopes granted: ${tokens.scope || "NONE"}`);
+
+    // Fix 4: Check allowlist BEFORE upserting the account in MongoDB
+    if (!email || !config.isAllowedEmail(email)) {
+      console.warn(`[AUTH] Denied login attempt from unauthorized email: ${email}`);
+      return res.redirect(`${frontendUrl}?error=unauthorized`);
+    }
+
+    // Fix 1: Validate required scopes are granted (specifically gmail.readonly)
+    if (!tokens.scope || !tokens.scope.includes("https://www.googleapis.com/auth/gmail.readonly")) {
+      console.warn(`[AUTH] Denied login for ${email} due to missing gmail.readonly scope. Scopes returned: ${tokens.scope}`);
+      return res.redirect(`${frontendUrl}?error=insufficient_scopes`);
+    }
 
     const updatePayload = {
       tokens,
@@ -306,13 +330,6 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
       { $set: updatePayload },
       { upsert: true }
     );
-
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-
-    if (!email || !config.isAllowedEmail(email)) {
-      console.warn(`[AUTH] Denied login attempt from: ${email}`);
-      return res.redirect(`${frontendUrl}?error=unauthorized`);
-    }
 
     // Generate short-lived auth code and redirect frontend
     const authCode = generateAuthCode(email);
@@ -1361,6 +1378,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
           process.env.GOOGLE_REDIRECT_URI
         );
         localOauth2Client.setCredentials(acc.tokens);
+        console.log(`[SYNC_TOKENS] ${acc.email} | scope: ${acc.tokens?.scope || 'NONE'} | has_refresh: ${!!acc.tokens?.refresh_token}`);
 
         localOauth2Client.on("tokens", async (newTokens) => {
           console.log(`[TOKEN_REFRESH] Received refreshed Google tokens for: ${acc.email}`);
@@ -1576,7 +1594,9 @@ async function fetchAndProcessEmails(targetUserId = null) {
 
         console.error(`Fetch error for account ${acc.email}:`, err.message);
         let errorMsg = err.message || "Unknown sync error";
-        if (
+        if (err.message?.includes("insufficient authentication scopes")) {
+          errorMsg = "Gmail permissions were not fully granted. Please log out and sign in again, ensuring all permissions are accepted on the Google consent screen.";
+        } else if (
           err.message?.includes("invalid_grant") ||
           err.message?.includes("token") ||
           err.message?.includes("auth") ||

@@ -373,7 +373,7 @@ export default function JobTrackerDashboard() {
       console.error("[Push] Error enabling subscription:", err.message);
       let errMsg = err.message || "";
       if (errMsg.toLowerCase().includes("push service error")) {
-        errMsg += "\n\n💡 Brave Browser Tip: Go to Brave Settings -> 'Privacy and security' and toggle ON 'Use Google services for push messaging', then restart Brave.";
+        errMsg += "\n\nFor Brave Browser: Go to Brave Settings -> 'Privacy and security' and toggle ON 'Use Google services for push messaging', then restart Brave.";
       }
       alert("Failed to enable push notifications: " + errMsg);
     }
@@ -475,6 +475,12 @@ export default function JobTrackerDashboard() {
 
       if (error === "unauthorized") {
         alert("Access Denied: Your account is not authorized to view this dashboard.");
+        window.history.replaceState({}, document.title, "/");
+        return;
+      }
+
+      if (error === "insufficient_scopes") {
+        alert("Access Denied: Gmail access permission was not granted. Please sign in again and check the checkbox to allow access to your email messages.");
         window.history.replaceState({}, document.title, "/");
         return;
       }
