@@ -2536,12 +2536,12 @@ export default function JobTrackerDashboard() {
                                 </button>
                               ) : pushPermission === "default" ? (
                                 <button className="settings-item" onClick={handleRequestPushPermission}>
-                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>🔔 Enable Notifications</span>
+                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>Enable Notifications</span>
                                   <span className="settings-item-arrow">❯</span>
                                 </button>
                               ) : (
                                 <button className="settings-item" onClick={handleEnablePushSubscription}>
-                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>🔔 Enable on this device</span>
+                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>Enable on this device</span>
                                   <span className="settings-item-arrow">❯</span>
                                 </button>
                               )}
