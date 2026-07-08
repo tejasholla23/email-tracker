@@ -834,6 +834,9 @@ export default function JobTrackerDashboard() {
   };
 
   const handleLogout = async () => {
+    if (!confirm("Are you sure you want to log out?")) {
+      return;
+    }
     let pushEndpoint = "";
     try {
       const { getCurrentPushEndpoint } = await import("./utils/pushManager");
