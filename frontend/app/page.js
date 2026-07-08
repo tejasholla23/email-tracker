@@ -281,7 +281,7 @@ export default function JobTrackerDashboard() {
             if (isMounted) setIsSubscribed(false);
           }
         }
-        
+
         // Refresh registered device count
         try {
           const res = await apiFetch(`${BASE_URL}/auth/me`);
@@ -382,7 +382,7 @@ export default function JobTrackerDashboard() {
       setPushPermission(getPushPermissionState());
       const active = await hasActiveSubscription();
       setIsSubscribed(active);
-      
+
       const res = await apiFetch(`${BASE_URL}/auth/me`);
       if (res.ok) {
         const data = await res.json();
@@ -555,7 +555,7 @@ export default function JobTrackerDashboard() {
       setSyncingCalendar(true);
       setCalendarSuccessMsg("");
       setCalendarErrorMsg("");
-      
+
       const res = await apiFetch(`${BASE_URL}/auth/calendar/toggle`, {
         method: "POST"
       });
@@ -580,7 +580,7 @@ export default function JobTrackerDashboard() {
       setSyncingCalendar(true);
       setCalendarSuccessMsg("");
       setCalendarErrorMsg("");
-      
+
       const res = await apiFetch(`${BASE_URL}/auth/calendar/sync`, {
         method: "POST"
       });
@@ -2230,15 +2230,15 @@ export default function JobTrackerDashboard() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button 
-                    onClick={handleRequestPushPermission} 
+                  <button
+                    onClick={handleRequestPushPermission}
                     className="btn-primary"
                     style={{ padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: '600' }}
                   >
                     Enable
                   </button>
-                  <button 
-                    onClick={handleDismissPushBanner} 
+                  <button
+                    onClick={handleDismissPushBanner}
                     className="btn-outline"
                     style={{ padding: '6px 14px', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer' }}
                   >
@@ -2252,14 +2252,14 @@ export default function JobTrackerDashboard() {
               <div className="settings-container">
                 <div className="settings-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                   <h1 className="settings-main-title" style={{ margin: 0 }}>Google Calendar Integration</h1>
-                  <a 
-                    href={userEmail ? `https://calendar.google.com/calendar/r?authuser=${encodeURIComponent(userEmail)}` : "https://calendar.google.com"} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
+                  <a
+                    href={userEmail ? `https://calendar.google.com/calendar/r?authuser=${encodeURIComponent(userEmail)}` : "https://calendar.google.com"}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn-primary"
-                    style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
                       justifyContent: 'center',
                       textDecoration: 'none',
                       padding: '10px 24px',
@@ -2305,9 +2305,9 @@ export default function JobTrackerDashboard() {
                       <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
                         To create and update calendar events, Email Tracker needs permission to access your Google Calendar events. We request the <b>least-privilege</b> scope (<code>calendar.events</code>) to read, create, and modify events strictly on your primary college calendar. We will never view or edit unrelated personal events.
                       </p>
-                      <a 
-                        href={`${BASE_URL}/auth/google/calendar`} 
-                        className="btn-primary" 
+                      <a
+                        href={`${BASE_URL}/auth/google/calendar`}
+                        className="btn-primary"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', fontWeight: '500', padding: '12px 24px', borderRadius: '8px' }}
                       >
                         Authorize & Connect Google Calendar
@@ -2319,25 +2319,25 @@ export default function JobTrackerDashboard() {
                         <div style={{ flex: '1', minWidth: '250px' }}>
                           <div style={{ fontWeight: '600', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span>Integration Status:</span>
-                            <span style={{ 
-                              padding: '4px 8px', 
-                              borderRadius: '12px', 
-                              fontSize: '11px', 
+                            <span style={{
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
                               fontWeight: '600',
-                              background: calendarSyncEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)', 
+                              background: calendarSyncEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                               color: calendarSyncEnabled ? '#2ed573' : 'var(--text-secondary)'
                             }}>
                               {calendarSyncEnabled ? "ACTIVE" : "PAUSED"}
                             </span>
                           </div>
                           <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                            {calendarSyncEnabled 
-                              ? "Deadlines and placement events are synced automatically in the background." 
+                            {calendarSyncEnabled
+                              ? "Deadlines and placement events are synced automatically in the background."
                               : "Background calendar synchronization is currently paused."}
                           </p>
                         </div>
-                        <button 
-                          className={calendarSyncEnabled ? "btn-danger" : "btn-primary"} 
+                        <button
+                          className={calendarSyncEnabled ? "btn-danger" : "btn-primary"}
                           onClick={handleToggleCalendarSync}
                           disabled={syncingCalendar}
                           style={{ minWidth: '130px' }}
@@ -2352,8 +2352,8 @@ export default function JobTrackerDashboard() {
                           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
                             Email Tracker is the single source of truth. If any calendar events are out of sync or if you want to push all active deadlines to your Google Calendar immediately, click "Re-sync All" below. This runs a delta sync using payload verification to ensure zero duplicate events are created.
                           </p>
-                          <button 
-                            className="btn-outline-primary" 
+                          <button
+                            className="btn-outline-primary"
                             onClick={handleManualCalendarSync}
                             disabled={syncingCalendar}
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px' }}
@@ -2494,12 +2494,12 @@ export default function JobTrackerDashboard() {
                               <div className="settings-item" style={{ cursor: 'default', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', padding: '16px 20px' }}>
                                 <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span style={{ fontSize: '13px', fontWeight: '500' }}>Permission Status:</span>
-                                  <span style={{ 
-                                    padding: '4px 8px', 
-                                    borderRadius: '12px', 
-                                    fontSize: '11px', 
+                                  <span style={{
+                                    padding: '4px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '11px',
                                     fontWeight: '600',
-                                    background: pushPermission === 'granted' ? 'rgba(46, 213, 115, 0.15)' : pushPermission === 'denied' ? 'rgba(255, 71, 87, 0.15)' : 'rgba(255, 255, 255, 0.05)', 
+                                    background: pushPermission === 'granted' ? 'rgba(46, 213, 115, 0.15)' : pushPermission === 'denied' ? 'rgba(255, 71, 87, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                                     color: pushPermission === 'granted' ? '#2ed573' : pushPermission === 'denied' ? '#ff4757' : 'var(--text-secondary)'
                                   }}>
                                     {pushPermission.toUpperCase()}
@@ -2507,12 +2507,12 @@ export default function JobTrackerDashboard() {
                                 </div>
                                 <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span style={{ fontSize: '13px', fontWeight: '500' }}>Device Notifications:</span>
-                                  <span style={{ 
-                                    padding: '4px 8px', 
-                                    borderRadius: '12px', 
-                                    fontSize: '11px', 
+                                  <span style={{
+                                    padding: '4px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '11px',
                                     fontWeight: '600',
-                                    background: isSubscribed ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)', 
+                                    background: isSubscribed ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                                     color: isSubscribed ? '#2ed573' : 'var(--text-secondary)'
                                   }}>
                                     {isSubscribed ? "ENABLED" : "DISABLED"}
@@ -2524,14 +2524,14 @@ export default function JobTrackerDashboard() {
                                   </div>
                                 )}
                               </div>
-                              
+
                               {pushPermission === "denied" ? (
                                 <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(255, 71, 87, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 71, 87, 0.1)', margin: '8px 20px' }}>
                                   Notifications are blocked. Please enable them in browser site settings to receive updates.
                                 </div>
                               ) : isSubscribed ? (
                                 <button className="settings-item" onClick={handleDisablePushNotifications}>
-                                  <span className="settings-item-label text-danger">🔕 Disable on this device</span>
+                                  <span className="settings-item-label text-danger">Disable on this device</span>
                                   <span className="settings-item-arrow">❯</span>
                                 </button>
                               ) : pushPermission === "default" ? (
@@ -2546,7 +2546,7 @@ export default function JobTrackerDashboard() {
                                 </button>
                               )}
 
-        
+
                             </>
                           ) : (
                             <div style={{ padding: '16px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -2854,7 +2854,7 @@ export default function JobTrackerDashboard() {
                         const matchesSearch =
                           (app.company || "").toLowerCase().includes(query) ||
                           (app.role || "").toLowerCase().includes(query) ||
-                          (app.displayFields || []).some(f => 
+                          (app.displayFields || []).some(f =>
                             (f.value || "").toLowerCase().includes(query)
                           );
 
@@ -3011,15 +3011,15 @@ export default function JobTrackerDashboard() {
                             })()}
 
                             {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
-                            {app.deadline && !app.deadlineText && 
-                             (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && 
-                             (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
-                              <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
-                                ? 'urgent' : ''
-                                }`}>
-                                Deadline: {app.deadline}
-                              </div>
-                            )}
+                            {app.deadline && !app.deadlineText &&
+                              (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) &&
+                              (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
+                                <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
+                                  ? 'urgent' : ''
+                                  }`}>
+                                  Deadline: {app.deadline}
+                                </div>
+                              )}
 
                             <div className="app-footer">
                               <div className="email-info">
@@ -3537,12 +3537,12 @@ export default function JobTrackerDashboard() {
         const isUrgent = app.deadlineISO && new Date(app.deadlineISO) - Date.now() < 72 * 60 * 60 * 1000;
         const logoSrc = app.companyInfo?.logo;
         const FIELD_CONFIG = {
-          role:      { label: "Role(s)",   value: app.programRoles    },
-          stipend:   { label: "Stipend",   value: app.programStipend  },
-          deadline:  { label: "Deadline",  value: app.deadlineText    },
-          duration:  { label: "Duration",  value: app.programDuration },
-          venue:     { label: "Venue",     value: app.venue           },
-          eventName: { label: "Event",     value: app.subtitle        },
+          role: { label: "Role(s)", value: app.programRoles },
+          stipend: { label: "Stipend", value: app.programStipend },
+          deadline: { label: "Deadline", value: app.deadlineText },
+          duration: { label: "Duration", value: app.programDuration },
+          venue: { label: "Venue", value: app.venue },
+          eventName: { label: "Event", value: app.subtitle },
         };
         const displayRowsFromFields = Array.isArray(app.fieldsToDisplay)
           ? app.fieldsToDisplay.map(f => FIELD_CONFIG[f]).filter(r => r && r.value?.trim())
@@ -3620,8 +3620,8 @@ export default function JobTrackerDashboard() {
                                 {ev.link && (
                                   <div style={{ marginTop: '6px' }}>
                                     <a href={ev.link} target="_blank" rel="noopener noreferrer"
-                                       style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'underline', fontWeight: '500' }}
-                                       onClick={e => e.stopPropagation()}>
+                                      style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'underline', fontWeight: '500' }}
+                                      onClick={e => e.stopPropagation()}>
                                       {ev.classification === 'Registration Link' || ev.classification === 'New Hiring Opportunity' || ev.classification === 'Internship Opportunity' ? 'Apply Link ↗' : 'Open Link ↗'}
                                     </a>
                                   </div>
