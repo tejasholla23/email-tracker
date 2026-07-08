@@ -349,7 +349,7 @@ export default function JobTrackerDashboard() {
       console.error("[Push] Error enabling notifications:", err.message);
       let errMsg = err.message || "";
       if (errMsg.toLowerCase().includes("push service error")) {
-        errMsg += "\n\n💡 Brave Browser Tip: Go to Brave Settings -> 'Privacy and security' and toggle ON 'Use Google services for push messaging', then restart Brave.";
+        errMsg += "\n\nFor Brave Browser: Go to Brave Settings -> 'Privacy and security' and toggle ON 'Use Google services for push messaging', then restart Brave.";
       }
       alert("Failed to enable push notifications: " + errMsg);
     }
