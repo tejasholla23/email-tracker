@@ -5,6 +5,9 @@
  * Converts a Base64 VAPID public key string into a Uint8Array required by PushManager.subscribe.
  */
 function urlBase64ToUint8Array(base64String) {
+  if (!base64String || typeof base64String !== "string") {
+    throw new Error("Invalid VAPID public key configuration on server.");
+  }
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)
     .replace(/\-/g, "+")
@@ -86,6 +89,9 @@ export async function registerAndSubscribe(apiFetch) {
         throw new Error("Failed to fetch VAPID public key from backend.");
       }
       const { publicKey } = await vapidRes.json();
+      if (!publicKey) {
+        throw new Error("VAPID public key is missing from backend configuration. Please set VAPID_PUBLIC_KEY in server environment settings.");
+      }
       
       // Subscribe browser
       const convertedKey = urlBase64ToUint8Array(publicKey);
