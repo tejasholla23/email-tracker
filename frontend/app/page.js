@@ -1946,6 +1946,16 @@ export default function JobTrackerDashboard() {
         .dark .skeleton-line { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; }
 
         
+        @keyframes slideDownFade {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
         /* Sync Warning Banner */
         .sync-warning-banner {
           background-color: #fef2f2;
@@ -1958,6 +1968,7 @@ export default function JobTrackerDashboard() {
           justify-content: space-between;
           gap: 16px;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          animation: slideDownFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         .sync-warning-content {
           display: flex;
@@ -2475,6 +2486,10 @@ export default function JobTrackerDashboard() {
                                   Notifications are blocked. Please enable them in browser site settings to receive updates.
                                 </div>
                               )}
+
+                              <div style={{ padding: '12px 20px', fontSize: '11.5px', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-color)', opacity: 0.85, lineHeight: '1.4' }}>
+                                💡 <b>iOS / iPhone Users:</b> To receive push notifications, open this site in Safari, tap the <b>Share</b> button, select <b>"Add to Home Screen"</b>, and launch it from your home screen as a Web App.
+                              </div>
                             </>
                           ) : (
                             <div style={{ padding: '16px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>
