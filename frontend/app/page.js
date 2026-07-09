@@ -1377,13 +1377,14 @@ export default function JobTrackerDashboard() {
           color: var(--text-secondary);
           background: none;
           border: none;
-          padding: 0;
+          padding: 14px 0;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           outline: none;
-          transition: color 0.2s ease;
+          transition: color 0.25s ease;
+          position: relative;
         }
 
         .filter-tab:hover {
@@ -1397,27 +1398,26 @@ export default function JobTrackerDashboard() {
 
         .filter-tab-text {
           position: relative;
-          padding: 14px 4px;
           display: inline-block;
         }
 
-        .filter-tab-text::after {
+        .filter-tab::after {
           content: "";
           position: absolute;
           bottom: 0;
-          left: -8px;
-          right: -8px;
+          left: 12px;
+          right: 12px;
           height: 3px;
-          background: linear-gradient(90deg, rgba(20, 184, 166, 0) 0%, rgba(20, 184, 166, 1) 25%, rgba(20, 184, 166, 1) 75%, rgba(20, 184, 166, 0) 100%);
+          background: linear-gradient(90deg, rgba(20, 184, 166, 0) 0%, rgba(20, 184, 166, 1) 20%, rgba(20, 184, 166, 1) 80%, rgba(20, 184, 166, 0) 100%);
           transform: scaleX(0);
           transform-origin: bottom center;
           opacity: 0;
           transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease-out;
           border-radius: 99px;
-          box-shadow: 0 1px 8px rgba(20, 184, 166, 0.5), 0 3px 16px rgba(20, 184, 166, 0.2);
+          box-shadow: 0 1px 8px rgba(20, 184, 166, 0.4), 0 3px 16px rgba(20, 184, 166, 0.15);
         }
 
-        .filter-tab.active .filter-tab-text::after {
+        .filter-tab.active::after {
           transform: scaleX(1);
           opacity: 1;
         }
@@ -1426,9 +1426,9 @@ export default function JobTrackerDashboard() {
           color: #2dd4bf;
         }
 
-        .dark .filter-tab-text::after {
-          background: linear-gradient(90deg, rgba(45, 212, 191, 0) 0%, rgba(45, 212, 191, 1) 25%, rgba(45, 212, 191, 1) 75%, rgba(45, 212, 191, 0) 100%);
-          box-shadow: 0 0 12px rgba(45, 212, 191, 0.9), 0 4px 22px rgba(45, 212, 191, 0.6), 0 8px 36px rgba(45, 212, 191, 0.3);
+        .dark .filter-tab::after {
+          background: linear-gradient(90deg, rgba(45, 212, 191, 0) 0%, rgba(45, 212, 191, 1) 20%, rgba(45, 212, 191, 1) 80%, rgba(45, 212, 191, 0) 100%);
+          box-shadow: 0 0 12px rgba(45, 212, 191, 0.95), 0 4px 22px rgba(45, 212, 191, 0.65), 0 10px 45px rgba(45, 212, 191, 0.4), 0 16px 65px rgba(45, 212, 191, 0.2);
         }
         
         .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
