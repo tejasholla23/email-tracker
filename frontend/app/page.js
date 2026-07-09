@@ -1445,7 +1445,9 @@ export default function JobTrackerDashboard() {
         .logo-text-wrapper {
           display: flex;
           flex-direction: column;
-          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+          max-width: 200px;
+          overflow: hidden;
         }
         
         .logo-title-text {
@@ -1467,6 +1469,7 @@ export default function JobTrackerDashboard() {
         
         .layout:not(.sidebar-expanded) .logo-text-wrapper {
           opacity: 0;
+          max-width: 0;
           pointer-events: none;
         }
         .layout:not(.sidebar-expanded) .logo-title-text {
@@ -2096,21 +2099,115 @@ export default function JobTrackerDashboard() {
         }
 
         @media (max-width: 768px) {
-          .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
-          .sidebar.open { transform: translateX(0); }
-          .sidebar-overlay.show { display: block; }
-          .main-wrapper { margin-left: 0; }
-          .hamburger { display: block; }
-          .topbar { padding: 0 16px; }
-          .search-container { flex: 1; max-width: none; }
-          .search-container input { width: 100%; }
-          .topbar-actions { gap: 8px; }
-          .content { padding: 20px 16px; }
-          .page-title { font-size: 24px; }
-          .stats-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-          .app-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-          .modal-content { padding: 20px; width: calc(100% - 24px); margin: 0 auto; max-width: 500px; }
-          .modal-grid-2col { grid-template-columns: 1fr; gap: 12px; }
+          .sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            width: 280px !important;
+            padding: 24px 16px !important;
+            align-items: stretch !important;
+          }
+          .sidebar.open {
+            transform: translateX(0);
+          }
+          .sidebar-overlay.show {
+            display: block;
+          }
+          .sidebar-header {
+            justify-content: flex-start !important;
+            padding: 0 4px !important;
+          }
+          .logo-text-wrapper {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+          }
+          .logo-title-text {
+            transform: none !important;
+            opacity: 1 !important;
+          }
+          .logo-subtitle-text {
+            transform: none !important;
+            opacity: 1 !important;
+          }
+          .sidebar-divider {
+            width: 100% !important;
+          }
+          .nav-item {
+            width: 100% !important;
+            height: 48px !important;
+            padding: 4px !important;
+            justify-content: flex-start !important;
+            margin-bottom: 8px !important;
+          }
+          .nav-text {
+            opacity: 1 !important;
+            max-width: 150px !important;
+            transform: none !important;
+            overflow: visible !important;
+          }
+          .sidebar-bottom {
+            align-items: stretch !important;
+          }
+          .sync-btn {
+            width: 100% !important;
+            height: 40px !important;
+            border-radius: var(--radius-btn) !important;
+            padding: 0 12px !important;
+            gap: 8px !important;
+            margin: 0 !important;
+          }
+          .sync-btn-text {
+            opacity: 1 !important;
+            width: auto !important;
+            pointer-events: auto !important;
+          }
+          .sync-time-text {
+            font-size: 11px !important;
+            margin-top: 0 !important;
+          }
+          .main-wrapper {
+            margin-left: 0 !important;
+          }
+          .hamburger {
+            display: block;
+          }
+          .topbar {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          .search-container {
+            flex: 1;
+            max-width: none;
+          }
+          .search-container input {
+            width: 100%;
+          }
+          .topbar-actions {
+            gap: 8px;
+          }
+          .content {
+            padding: 20px 16px !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          .page-title {
+            font-size: 24px;
+          }
+          .stats-grid {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          }
+          .app-grid {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          }
+          .modal-content {
+            padding: 20px;
+            width: calc(100% - 24px);
+            margin: 0 auto;
+            max-width: 500px;
+          }
+          .modal-grid-2col {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
         }
 
         @media (max-width: 480px) {
