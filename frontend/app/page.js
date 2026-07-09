@@ -1424,6 +1424,15 @@ export default function JobTrackerDashboard() {
           padding: 0 4px;
         }
         
+        .sidebar-logo-box {
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        
         .logo-img {
           width: 40px;
           height: 40px;
@@ -1666,6 +1675,7 @@ export default function JobTrackerDashboard() {
           padding: 0;
           border-radius: 10px;
           margin: 0 auto;
+          gap: 0;
         }
         
         .sync-btn-icon-wrapper {
@@ -2471,7 +2481,7 @@ export default function JobTrackerDashboard() {
           onClick={handleSidebarClick}
         >
           <div className="sidebar-header">
-            <div className="logo-box" style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
+            <div className="sidebar-logo-box">
               <img src="/logo.png" alt="Email Tracker Logo" className="logo-img" />
             </div>
             <div className="logo-text-wrapper">
