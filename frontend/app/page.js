@@ -61,6 +61,9 @@ export default function JobTrackerDashboard() {
   const [clearError, setClearError] = useState("");
   const [accountDeletedJustNow, setAccountDeletedJustNow] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isClickedToKeepOpen, setIsClickedToKeepOpen] = useState(false);
+  const collapseTimeoutRef = React.useRef(null);
   const [timeTick, setTimeTick] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -651,6 +654,33 @@ export default function JobTrackerDashboard() {
     if (diffHours < 24) return `Last Synced: ${diffHours} hours ago`;
 
     return `Last Synced: ${date.toLocaleDateString()}`;
+  };
+
+  const getCompactRelativeTime = (dateString) => {
+    const formatted = formatRelativeTime(dateString);
+    return formatted.replace("Last Synced: ", "");
+  };
+
+  const handleSidebarMouseEnter = () => {
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+      collapseTimeoutRef.current = null;
+    }
+    setIsSidebarCollapsed(false);
+  };
+
+  const handleSidebarMouseLeave = () => {
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+    }
+    collapseTimeoutRef.current = setTimeout(() => {
+      setIsSidebarCollapsed(true);
+      setIsClickedToKeepOpen(false);
+    }, 250);
+  };
+
+  const handleSidebarClick = () => {
+    setIsClickedToKeepOpen(true);
   };
 
   useEffect(() => {
@@ -1345,19 +1375,154 @@ export default function JobTrackerDashboard() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: var(--font-geist); background-color: var(--bg-color); color: var(--text-primary); transition: background-color 0.25s ease-out, color 0.25s ease-out; }
         
-        .layout { display: flex; min-height: 100vh; }
+        .layout {
+          display: flex;
+          min-height: 100vh;
+          --sidebar-width: 64px;
+        }
+        
+        .layout.sidebar-expanded {
+          --sidebar-width: 280px;
+        }
         
         /* Sidebar */
-        .sidebar { width: 280px; background-color: #f3f4f6a6; border-right: 1px solid #e5e7eb; padding: 24px 16px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 50; }
-        .sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; padding: 0 8px; }
-        .logo-box { width: 40px; height: 40px; background: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 700; font-size: 16px; }
-        .logo-text { font-family: 'IBM Plex Sans', sans-serif; font-size: 20px; font-weight: 700; color: #0d9488; line-height: 1.2; }
-        .logo-sub { font-size: 12px; color: #6b7280; }
+        .sidebar {
+          width: var(--sidebar-width);
+          background-color: rgba(243, 244, 246, 0.65);
+          backdrop-filter: blur(12px);
+          border-right: 1px solid #e5e7eb;
+          padding: 24px 12px;
+          display: flex;
+          flex-direction: column;
+          position: fixed;
+          height: 100vh;
+          z-index: 50;
+          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          overflow: hidden;
+        }
         
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: #475569; text-decoration: none; font-weight: 500; margin-bottom: 8px; cursor: pointer; transition: all 0.15s ease-out; font-size: 15px; position: relative; overflow: hidden; }
-        .nav-item:hover { background: #e5e7eb; color: #0f172a; }
-        .nav-item.active { background: linear-gradient(90deg, rgba(20, 184, 166, 0.12) 0%, rgba(20, 184, 166, 0.01) 100%); color: #0f766e; }
-        .nav-item.active::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(90deg, #14b8a6, #2dd4bf); border-radius: 0 4px 4px 0; }
+        .sidebar-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 24px;
+          padding: 0 4px;
+          height: 48px;
+          flex-shrink: 0;
+        }
+        
+        .logo-img {
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          object-fit: contain;
+          flex-shrink: 0;
+          transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .logo-text-wrapper {
+          display: flex;
+          flex-direction: column;
+          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .logo-title-text {
+          font-family: 'IBM Plex Sans', sans-serif;
+          font-size: 19px;
+          font-weight: 700;
+          color: #0d9488;
+          line-height: 1.2;
+          white-space: nowrap;
+          transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.05s, opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.05s;
+        }
+        
+        .logo-subtitle-text {
+          font-size: 11px;
+          color: #6b7280;
+          white-space: nowrap;
+          transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.12s, opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.12s;
+        }
+        
+        .layout:not(.sidebar-expanded) .logo-text-wrapper {
+          opacity: 0;
+          pointer-events: none;
+        }
+        .layout:not(.sidebar-expanded) .logo-title-text {
+          transform: translateX(-15px);
+          opacity: 0;
+        }
+        .layout:not(.sidebar-expanded) .logo-subtitle-text {
+          transform: translateX(-20px);
+          opacity: 0;
+        }
+        
+        .nav-item {
+          display: flex;
+          align-items: center;
+          padding: 4px;
+          border-radius: 12px;
+          color: #475569;
+          text-decoration: none;
+          font-weight: 500;
+          margin-bottom: 8px;
+          cursor: pointer;
+          transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+          font-size: 15px;
+          position: relative;
+          height: 48px;
+          width: 100%;
+          gap: 12px;
+        }
+        
+        .nav-item:hover {
+          background: rgba(229, 231, 235, 0.5);
+          color: #0f172a;
+        }
+        
+        .nav-icon-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+          flex-shrink: 0;
+        }
+        
+        .nav-text {
+          opacity: 1;
+          max-width: 150px;
+          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.1s, max-width 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.1s, transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.1s;
+          white-space: nowrap;
+        }
+        
+        .layout:not(.sidebar-expanded) .nav-text {
+          opacity: 0;
+          max-width: 0;
+          overflow: hidden;
+          transform: translateX(-10px);
+        }
+
+        .nav-item.active {
+          color: #0f766e;
+          font-weight: 600;
+        }
+        
+        .nav-item.active .nav-icon-wrapper {
+          background: rgba(20, 184, 166, 0.12);
+          border: 1px solid rgba(20, 184, 166, 0.35);
+          box-shadow: 0 0 10px rgba(20, 184, 166, 0.25);
+          color: #0d9488;
+        }
+
+        .sidebar-divider {
+          height: 1px;
+          background: #e2e8f0;
+          margin: 16px 0;
+          opacity: 0.5;
+          flex-shrink: 0;
+        }
         
         /* Dashboard Filters Row */
         .dashboard-filters-row {
@@ -1431,16 +1596,102 @@ export default function JobTrackerDashboard() {
           box-shadow: 0 0 16px rgba(45, 212, 191, 0.95), 0 6px 28px rgba(45, 212, 191, 0.65), 0 12px 50px rgba(45, 212, 191, 0.4), 0 20px 80px rgba(45, 212, 191, 0.2);
         }
         
-        .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
-        .sync-btn { width: 100%; padding: 12px; background: var(--brand-primary); color: white; border: none; border-radius: var(--radius-btn); font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: background-color 0.2s ease-out, transform 0.15s ease-out, filter 0.2s ease-out; font-size: 14px; }
+        .sidebar-bottom {
+          margin-top: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          padding-bottom: 8px;
+          flex-shrink: 0;
+        }
+        .sync-btn {
+          width: 100%;
+          height: 40px;
+          padding: 0 12px;
+          background: var(--brand-primary);
+          color: white;
+          border: none;
+          border-radius: var(--radius-btn);
+          font-weight: 600;
+          cursor: pointer;
+          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), border-radius 0.4s ease, background-color 0.2s ease-out, transform 0.15s ease-out, filter 0.2s ease-out;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          overflow: hidden;
+          flex-shrink: 0;
+        }
         .sync-btn:hover:not(:disabled) { filter: brightness(1.05); }
         .sync-btn:active:not(:disabled) { transform: scale(0.98); }
         .sync-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
-        /* Main Area */
-        .main-wrapper { margin-left: 280px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .layout:not(.sidebar-expanded) .sync-btn {
+          width: 40px;
+          height: 40px;
+          padding: 0;
+          border-radius: 10px;
+          margin: 0 auto;
+        }
         
-        .topbar { height: 64px; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; position: sticky; top: 0; z-index: 40; }
+        .sync-btn-icon-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        
+        .sync-btn-text {
+          white-space: nowrap;
+          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .layout:not(.sidebar-expanded) .sync-btn-text {
+          opacity: 0;
+          width: 0;
+          pointer-events: none;
+        }
+        
+        .sync-time-text {
+          font-size: 11px;
+          color: var(--text-secondary);
+          text-align: center;
+          transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          white-space: nowrap;
+          opacity: 0.85;
+        }
+        
+        .layout:not(.sidebar-expanded) .sync-time-text {
+          font-size: 10px;
+          margin-top: 4px;
+        }
+        
+        /* Main Area */
+        .main-wrapper {
+          margin-left: var(--sidebar-width);
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          transition: margin-left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .topbar {
+          height: 64px;
+          background: rgba(255, 255, 255, 0.8);
+          backdrop-filter: blur(8px);
+          border-bottom: 1px solid #e5e7eb;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          position: sticky;
+          top: 0;
+          z-index: 40;
+          transition: padding-left 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding-right 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          padding-left: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+          padding-right: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+        }
         .search-container { flex: 1; width: 100%; position: relative; }
         .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--surface-color) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 100%; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: var(--surface-color); }
@@ -1469,7 +1720,16 @@ export default function JobTrackerDashboard() {
         .dark .btn-outline-primary:hover:not(:disabled) { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; filter: none; }
         
         /* Content */
-        .content { padding: 32px; max-width: 1400px; margin: 0 auto; width: 100%; }
+        .content {
+          max-width: 1400px;
+          margin: 0 auto;
+          width: 100%;
+          transition: padding-left 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding-right 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          padding-top: 32px;
+          padding-bottom: 32px;
+          padding-left: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+          padding-right: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+        }
         .page-header { margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end; }
         .page-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 4px; }
         .page-subtitle { color: #64748b; font-size: 15px; }
@@ -1852,14 +2112,35 @@ export default function JobTrackerDashboard() {
           color: var(--text-primary); 
           min-height: 100vh; 
         }
-        .dark .sidebar { background-color: #111827; border-color: #1f2937; }
-        .dark .logo-box { background: #0f766e; color: #ccfbf1; }
-        .dark .logo-text { color: #2dd4bf; }
-        .dark .nav-item { color: #9ca3af; }
-        .dark .nav-item:hover { background: #1f2937; color: #f9fafb; }
-        .dark .nav-item.active { background: linear-gradient(90deg, rgba(45, 212, 191, 0.12) 0%, rgba(45, 212, 191, 0.01) 100%); color: #2dd4bf; }
-        .dark .nav-item.active::before { background: linear-gradient(90deg, #2dd4bf, #14b8a6); }
-        .dark .sidebar-bottom { border-color: #1f2937; }
+        .dark .sidebar {
+          background-color: rgba(17, 24, 39, 0.7);
+          border-color: #1f2937;
+        }
+        .dark .logo-title-text {
+          color: #2dd4bf;
+        }
+        .dark .logo-subtitle-text {
+          color: #9ca3af;
+        }
+        .dark .nav-item {
+          color: #9ca3af;
+        }
+        .dark .nav-item:hover {
+          background: rgba(31, 41, 55, 0.4);
+          color: #f9fafb;
+        }
+        .dark .nav-item.active {
+          color: #2dd4bf;
+        }
+        .dark .nav-item.active .nav-icon-wrapper {
+          background: rgba(45, 212, 191, 0.15);
+          border: 1px solid rgba(45, 212, 191, 0.4);
+          box-shadow: 0 0 12px rgba(45, 212, 191, 0.25);
+          color: #2dd4bf;
+        }
+        .dark .sidebar-divider {
+          background: #374151;
+        }
         
         .dark .topbar { background: rgba(3, 7, 18, 0.8); border-color: var(--border-color); }
         .dark .search-container input { background-color: #111827; border-color: var(--border-color); color: var(--text-primary); }
@@ -2147,55 +2428,75 @@ export default function JobTrackerDashboard() {
           background-color: #dc2626;
         }
       `}} />
-
-      <div className={`layout ${isDarkMode ? 'dark' : ''}`}>
+      <div className={`layout ${isDarkMode ? 'dark' : ''} ${!isSidebarCollapsed ? 'sidebar-expanded' : ''}`}>
         <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
 
-        <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <aside
+          className={`sidebar ${isSidebarOpen ? 'open' : ''}`}
+          onMouseEnter={handleSidebarMouseEnter}
+          onMouseLeave={handleSidebarMouseLeave}
+          onClick={handleSidebarClick}
+        >
           <div className="sidebar-header">
-            <div className="logo-box" style={{ background: 'transparent', border: 'none', boxShadow: 'none' }}>
-              <img src="/logo.png" alt="Email Tracker Logo" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'contain' }} />
+            <div className="logo-box" style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
+              <img src="/logo.png" alt="Email Tracker Logo" className="logo-img" />
             </div>
-            <div>
-              <div className="logo-text">Email Tracker</div>
-              <div className="logo-sub">Placement Department Mails</div>
+            <div className="logo-text-wrapper">
+              <div className="logo-title-text">Email Tracker</div>
+              <div className="logo-subtitle-text">Placement Department Mails</div>
             </div>
           </div>
 
-          <nav>
+          <div className="sidebar-divider" />
+
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div
               className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' ? 'active' : ''}`}
               onClick={() => { setActiveFilter('all'); setIsSidebarOpen(false); }}
             >
-              Dashboard
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              </div>
+              <span className="nav-text">Dashboard</span>
+            </div>
+
+            <div
+              className={`nav-item ${activeFilter === 'calendar' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('calendar'); setIsSidebarOpen(false); }}
+            >
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              </div>
+              <span className="nav-text">Calendar</span>
+            </div>
+
+            <div
+              className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setIsSidebarOpen(false); }}
+            >
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              </div>
+              <span className="nav-text">Settings</span>
             </div>
           </nav>
 
-          <div className="sidebar-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="sidebar-divider" />
+
+          <div className="sidebar-bottom">
             <button className="sync-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
-              {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
+              <span className="sync-btn-icon-wrapper">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={syncing || syncStatus === "pending" ? "spin" : ""}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              </span>
+              <span className="sync-btn-text">
+                {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
+              </span>
             </button>
             {lastSyncTime && (
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '4px' }}>
-                {formatRelativeTime(lastSyncTime)}
+              <div className="sync-time-text">
+                {isSidebarCollapsed ? getCompactRelativeTime(lastSyncTime) : formatRelativeTime(lastSyncTime)}
               </div>
             )}
-            <div style={{ borderTop: '1px solid var(--border-color)', margin: '8px 0', opacity: 0.8 }} />
-            <div
-              className={`nav-item ${activeFilter === 'calendar' ? 'active' : ''}`}
-              style={{ marginTop: 0 }}
-              onClick={() => { setActiveFilter('calendar'); setIsSidebarOpen(false); }}
-            >
-              <span>Calendar</span>
-            </div>
-            <div style={{ borderTop: '1px solid var(--border-color)', margin: '8px 0', opacity: 0.8 }} />
-            <div
-              className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
-              style={{ marginTop: 0 }}
-              onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setIsSidebarOpen(false); }}
-            >
-              <span>Settings ⚙️</span>
-            </div>
           </div>
         </aside>
 
