@@ -1391,24 +1391,37 @@ export default function JobTrackerDashboard() {
           background-color: rgba(243, 244, 246, 0.65);
           backdrop-filter: blur(12px);
           border-right: 1px solid #e5e7eb;
-          padding: 24px 12px;
+          padding: 24px 0;
           display: flex;
           flex-direction: column;
+          align-items: center;
           position: fixed;
           height: 100vh;
           z-index: 50;
-          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding 0.4s cubic-bezier(0.25, 1, 0.5, 1);
           overflow: hidden;
+        }
+
+        .layout.sidebar-expanded .sidebar {
+          padding: 24px 16px;
+          align-items: stretch;
         }
         
         .sidebar-header {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 12px;
-          margin-bottom: 24px;
-          padding: 0 4px;
+          margin-bottom: 32px;
           height: 48px;
           flex-shrink: 0;
+          width: 100%;
+          transition: justify-content 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .layout.sidebar-expanded .sidebar-header {
+          justify-content: flex-start;
+          padding: 0 4px;
         }
         
         .logo-img {
@@ -1459,19 +1472,28 @@ export default function JobTrackerDashboard() {
         .nav-item {
           display: flex;
           align-items: center;
-          padding: 4px;
+          justify-content: center;
+          padding: 0;
           border-radius: 12px;
           color: #475569;
           text-decoration: none;
           font-weight: 500;
-          margin-bottom: 8px;
+          margin-bottom: 12px;
           cursor: pointer;
           transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
           font-size: 15px;
           position: relative;
-          height: 48px;
-          width: 100%;
+          height: 40px;
+          width: 40px;
           gap: 12px;
+          flex-shrink: 0;
+        }
+
+        .layout.sidebar-expanded .nav-item {
+          width: 100%;
+          height: 48px;
+          padding: 4px;
+          justify-content: flex-start;
         }
         
         .nav-item:hover {
@@ -1519,9 +1541,15 @@ export default function JobTrackerDashboard() {
         .sidebar-divider {
           height: 1px;
           background: #e2e8f0;
-          margin: 16px 0;
+          margin: 20px 0;
           opacity: 0.5;
           flex-shrink: 0;
+          width: 24px;
+          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .layout.sidebar-expanded .sidebar-divider {
+          width: 100%;
         }
         
         /* Dashboard Filters Row */
@@ -1600,9 +1628,14 @@ export default function JobTrackerDashboard() {
           margin-top: auto;
           display: flex;
           flex-direction: column;
+          align-items: center;
           gap: 12px;
           padding-bottom: 8px;
           flex-shrink: 0;
+          width: 100%;
+        }
+        .layout.sidebar-expanded .sidebar-bottom {
+          align-items: stretch;
         }
         .sync-btn {
           width: 100%;
@@ -1721,10 +1754,10 @@ export default function JobTrackerDashboard() {
         
         /* Content */
         .content {
-          max-width: 1400px;
+          max-width: calc(1400px + (280px - var(--sidebar-width)));
           margin: 0 auto;
           width: 100%;
-          transition: padding-left 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding-right 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          transition: padding-left 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding-right 0.4s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
           padding-top: 32px;
           padding-bottom: 32px;
           padding-left: calc(32px + (280px - var(--sidebar-width)) * 0.5);
