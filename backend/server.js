@@ -254,6 +254,7 @@ app.get("/auth/google", authLimiter, (req, res) => {
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/userinfo.email",
     ],
+    include_granted_scopes: true,
     prompt: "consent",
   });
 
@@ -314,15 +315,43 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
       return res.redirect(`${frontendUrl}?error=insufficient_scopes`);
     }
 
+    // Find existing account first to preserve long-lived credentials/scopes
+    const existingAccount = await Account.findOne({ email });
+    let mergedTokens = { ...tokens };
+    let wasCalendarEnabled = false;
+
+    if (existingAccount && existingAccount.tokens) {
+      // 1. Preserve the refresh_token if the new callback didn't return one
+      if (!mergedTokens.refresh_token && existingAccount.tokens.refresh_token) {
+        mergedTokens.refresh_token = existingAccount.tokens.refresh_token;
+      }
+
+      // 2. Preserve calendar scope if the user previously had it authorized
+      const hadCalendarScope = existingAccount.tokens.scope && existingAccount.tokens.scope.includes("auth/calendar.events");
+      const hasCalendarScopeNow = mergedTokens.scope && mergedTokens.scope.includes("auth/calendar.events");
+
+      if (hadCalendarScope && !hasCalendarScopeNow) {
+        const oldScopes = existingAccount.tokens.scope.split(" ");
+        const newScopes = (mergedTokens.scope || "").split(" ");
+        const mergedScopes = Array.from(new Set([...oldScopes, ...newScopes])).join(" ");
+        mergedTokens.scope = mergedScopes;
+        console.log(`[AUTH_CALLBACK] Merged existing calendar scope for ${email}. Combined scope: ${mergedTokens.scope}`);
+      }
+
+      if (existingAccount.calendarSyncEnabled) {
+        wasCalendarEnabled = true;
+      }
+    }
+
     const updatePayload = {
-      tokens,
+      tokens: mergedTokens,
       syncStatus: "idle",
       syncError: ""
     };
 
     // Auto-detect calendar permission consent in scope string
-    if (tokens.scope && tokens.scope.includes("auth/calendar.events")) {
-      updatePayload.calendarSyncEnabled = true;
+    if (mergedTokens.scope && mergedTokens.scope.includes("auth/calendar.events")) {
+      updatePayload.calendarSyncEnabled = existingAccount ? wasCalendarEnabled : true;
     }
 
     await Account.findOneAndUpdate(

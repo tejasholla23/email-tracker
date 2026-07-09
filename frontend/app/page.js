@@ -1405,16 +1405,16 @@ export default function JobTrackerDashboard() {
           content: "";
           position: absolute;
           bottom: 0;
-          left: 12px;
-          right: 12px;
+          left: 0;
+          right: 0;
           height: 3px;
-          background: linear-gradient(90deg, rgba(20, 184, 166, 0) 0%, rgba(20, 184, 166, 1) 20%, rgba(20, 184, 166, 1) 80%, rgba(20, 184, 166, 0) 100%);
+          background: linear-gradient(90deg, rgba(20, 184, 166, 0) 0%, rgba(20, 184, 166, 1) 40%, rgba(20, 184, 166, 1) 60%, rgba(20, 184, 166, 0) 100%);
           transform: scaleX(0);
           transform-origin: bottom center;
           opacity: 0;
-          transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease-out;
+          transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease-out;
           border-radius: 99px;
-          box-shadow: 0 1px 8px rgba(20, 184, 166, 0.4), 0 3px 16px rgba(20, 184, 166, 0.15);
+          box-shadow: 0 1px 12px rgba(20, 184, 166, 0.4), 0 3px 20px rgba(20, 184, 166, 0.15);
         }
 
         .filter-tab.active::after {
@@ -1427,8 +1427,8 @@ export default function JobTrackerDashboard() {
         }
 
         .dark .filter-tab::after {
-          background: linear-gradient(90deg, rgba(45, 212, 191, 0) 0%, rgba(45, 212, 191, 1) 20%, rgba(45, 212, 191, 1) 80%, rgba(45, 212, 191, 0) 100%);
-          box-shadow: 0 0 12px rgba(45, 212, 191, 0.95), 0 4px 22px rgba(45, 212, 191, 0.65), 0 10px 45px rgba(45, 212, 191, 0.4), 0 16px 65px rgba(45, 212, 191, 0.2);
+          background: linear-gradient(90deg, rgba(45, 212, 191, 0) 0%, rgba(45, 212, 191, 1) 40%, rgba(45, 212, 191, 1) 60%, rgba(45, 212, 191, 0) 100%);
+          box-shadow: 0 0 16px rgba(45, 212, 191, 0.95), 0 6px 28px rgba(45, 212, 191, 0.65), 0 12px 50px rgba(45, 212, 191, 0.4), 0 20px 80px rgba(45, 212, 191, 0.2);
         }
         
         .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
