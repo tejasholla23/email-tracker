@@ -1359,6 +1359,74 @@ export default function JobTrackerDashboard() {
         .nav-item.active { background: linear-gradient(90deg, rgba(20, 184, 166, 0.12) 0%, rgba(20, 184, 166, 0.01) 100%); color: #0f766e; }
         .nav-item.active::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(90deg, #14b8a6, #2dd4bf); border-radius: 0 4px 4px 0; }
         
+        /* Dashboard Filters Row */
+        .dashboard-filters-row {
+          display: flex;
+          width: 100%;
+          border-bottom: 1px solid var(--border-color);
+          margin-top: 32px;
+          margin-bottom: 24px;
+          gap: 16px;
+        }
+        
+        .filter-tab {
+          flex: 1;
+          font-family: var(--font-geist);
+          font-size: 14.5px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          background: none;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          outline: none;
+          transition: color 0.2s ease;
+        }
+
+        .filter-tab:hover {
+          color: var(--text-primary);
+        }
+
+        .filter-tab.active {
+          color: #0f766e;
+          font-weight: 600;
+        }
+
+        .filter-tab-text {
+          position: relative;
+          padding: 14px 4px;
+          display: inline-block;
+        }
+
+        .filter-tab-text::after {
+          content: "";
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, #14b8a6, #2dd4bf);
+          transform: scaleX(0);
+          transform-origin: bottom center;
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 3px 3px 0 0;
+        }
+
+        .filter-tab.active .filter-tab-text::after {
+          transform: scaleX(1);
+        }
+
+        .dark .filter-tab.active {
+          color: #2dd4bf;
+        }
+
+        .dark .filter-tab-text::after {
+          background: #2dd4bf;
+        }
+        
         .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
         .sync-btn { width: 100%; padding: 12px; background: var(--brand-primary); color: white; border: none; border-radius: var(--radius-btn); font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: background-color 0.2s ease-out, transform 0.15s ease-out, filter 0.2s ease-out; font-size: 14px; }
         .sync-btn:hover:not(:disabled) { filter: brightness(1.05); }
@@ -2091,22 +2159,12 @@ export default function JobTrackerDashboard() {
           </div>
 
           <nav>
-            {[
-              { label: "Dashboard", value: "all" },
-              { label: "New", value: "new" },
-              { label: "Deadline today", value: "deadlines" },
-              { label: "Applied", value: "applied" },
-              { label: "Done", value: "done" },
-              { label: "Unmarked", value: "unmarked" },
-            ].map(({ label, value }) => (
-              <div
-                key={value}
-                className={`nav-item ${activeFilter === value ? 'active' : ''}`}
-                onClick={() => { setActiveFilter(value); setIsSidebarOpen(false); }}
-              >
-                {label}
-              </div>
-            ))}
+            <div
+              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('all'); setIsSidebarOpen(false); }}
+            >
+              Dashboard
+            </div>
           </nav>
 
           <div className="sidebar-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2847,6 +2905,33 @@ export default function JobTrackerDashboard() {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                <div className="dashboard-filters-row">
+                  {[
+                    { label: "New Emails", value: "new" },
+                    { label: "Deadline today", value: "deadlines" },
+                    { label: "Applied", value: "applied" },
+                    { label: "Marked Done", value: "done" },
+                    { label: "Unmarked", value: "unmarked" }
+                  ].map(({ label, value }) => {
+                    const isActive = activeFilter === value;
+                    return (
+                      <button
+                        key={value}
+                        className={`filter-tab ${isActive ? "active" : ""}`}
+                        onClick={() => {
+                          if (isActive) {
+                            setActiveFilter("all");
+                          } else {
+                            setActiveFilter(value);
+                          }
+                        }}
+                      >
+                        <span className="filter-tab-text">{label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
 
 
