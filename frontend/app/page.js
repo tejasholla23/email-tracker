@@ -1411,12 +1411,15 @@ export default function JobTrackerDashboard() {
           background: linear-gradient(90deg, #14b8a6, #2dd4bf);
           transform: scaleX(0);
           transform-origin: bottom center;
-          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          opacity: 0;
+          transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease-out;
           border-radius: 3px 3px 0 0;
+          box-shadow: 0 0 8px rgba(20, 184, 166, 0.8), 0 0 16px rgba(20, 184, 166, 0.4);
         }
 
         .filter-tab.active .filter-tab-text::after {
           transform: scaleX(1);
+          opacity: 1;
         }
 
         .dark .filter-tab.active {
@@ -1425,6 +1428,7 @@ export default function JobTrackerDashboard() {
 
         .dark .filter-tab-text::after {
           background: #2dd4bf;
+          box-shadow: 0 0 10px rgba(45, 212, 191, 0.95), 0 0 20px rgba(45, 212, 191, 0.6), 0 0 35px rgba(45, 212, 191, 0.3);
         }
         
         .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
