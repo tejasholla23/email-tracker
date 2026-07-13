@@ -2382,21 +2382,21 @@ export default function JobTrackerDashboard() {
         .dark .note-input:focus { background: #0d1321; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         
         .dark .card-actions { border-color: #1f2937; }
-        .dark .card-btn-edit { background: transparent; border-color: #475569; color: #CBD5E1; }
-        .dark .card-btn-edit:hover:not(:disabled) { background: rgba(71, 85, 105, 0.12); border-color: #64748B; color: #F1F5F9; }
-        .dark .card-btn-edit:active:not(:disabled) { background: rgba(71, 85, 105, 0.20); }
-        .dark .card-btn-apply { background: transparent; border-color: #14B8A6; color: #14B8A6; }
-        .dark .card-btn-apply:hover:not(:disabled) { background: rgba(20, 184, 166, 0.12); border-color: #2DD4BF; color: #5EEAD4; }
-        .dark .card-btn-apply:active:not(:disabled) { background: rgba(20, 184, 166, 0.20); }
-        .dark .card-btn-done { background: transparent; border-color: #22C55E; color: #22C55E; }
-        .dark .card-btn-done:hover:not(:disabled) { background: rgba(34, 197, 94, 0.12); border-color: #4ADE80; color: #86EFAC; }
-        .dark .card-btn-done:active:not(:disabled) { background: rgba(34, 197, 94, 0.20); }
-        .dark .card-btn-done.active { background: transparent; border-color: #F59E0B; color: #F59E0B; }
-        .dark .card-btn-done.active:hover:not(:disabled) { background: rgba(245, 158, 11, 0.12); border-color: #FBBF24; color: #FCD34D; }
-        .dark .card-btn-done.active:active:not(:disabled) { background: rgba(245, 158, 11, 0.20); }
-        .dark .card-btn-remove { background: transparent; border-color: #EF4444; color: #EF4444; }
-        .dark .card-btn-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.12); border-color: #F87171; color: #FCA5A5; }
-        .dark .card-btn-remove:active:not(:disabled) { background: rgba(239, 68, 68, 0.20); }
+        .dark .card-btn-edit { background: transparent; border-color: #334155; color: #94A3B8; }
+        .dark .card-btn-edit:hover:not(:disabled) { background: rgba(148, 163, 184, 0.08); border-color: #475569; color: #CBD5E1; }
+        .dark .card-btn-edit:active:not(:disabled) { background: rgba(148, 163, 184, 0.15); }
+        .dark .card-btn-apply { background: transparent; border-color: #115E59; color: #0D9488; }
+        .dark .card-btn-apply:hover:not(:disabled) { background: rgba(20, 184, 166, 0.08); border-color: #14B8A6; color: #2DD4BF; }
+        .dark .card-btn-apply:active:not(:disabled) { background: rgba(20, 184, 166, 0.15); }
+        .dark .card-btn-done { background: transparent; border-color: #166534; color: #16A34A; }
+        .dark .card-btn-done:hover:not(:disabled) { background: rgba(34, 197, 94, 0.08); border-color: #22C55E; color: #4ADE80; }
+        .dark .card-btn-done:active:not(:disabled) { background: rgba(34, 197, 94, 0.15); }
+        .dark .card-btn-done.active { background: transparent; border-color: #92400E; color: #D97706; }
+        .dark .card-btn-done.active:hover:not(:disabled) { background: rgba(245, 158, 11, 0.08); border-color: #F59E0B; color: #FBBF24; }
+        .dark .card-btn-done.active:active:not(:disabled) { background: rgba(245, 158, 11, 0.15); }
+        .dark .card-btn-remove { background: transparent; border-color: #991B1B; color: #DC2626; }
+        .dark .card-btn-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08); border-color: #EF4444; color: #F87171; }
+        .dark .card-btn-remove:active:not(:disabled) { background: rgba(239, 68, 68, 0.15); }
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
         .dark .app-card.is-done:hover { opacity: 0.6; filter: blur(0.5px); }
