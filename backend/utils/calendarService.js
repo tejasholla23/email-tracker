@@ -262,7 +262,7 @@ async function syncAppToCalendar(account, app) {
     eventType = "interview";
   } else if (app.classification === "Assessment Announcement" || (roleVal && roleVal.toLowerCase().includes("oa"))) {
     eventType = "oa";
-  } else if (app.classification === "Workshop / Webinar" || app.classification === "Expert Talk Series") {
+  } else if (app.classification === "Workshop / Webinar" || app.classification === "Expert Talk Series" || app.classification === "PPT Announcement") {
     eventType = "talk";
   }
 

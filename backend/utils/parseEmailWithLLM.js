@@ -139,6 +139,29 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
   return "";
 }
 
+function resolveEventDateISO(dateText, timeText, referenceDate = new Date()) {
+  if (!dateText || typeof dateText !== "string") return null;
+  const parsedDate = parseDateString(dateText, referenceDate);
+  if (!parsedDate) return null;
+
+  let hours = 12, minutes = 0;
+  if (timeText && typeof timeText === "string") {
+    const timeMatch = timeText.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (timeMatch) {
+      hours = parseInt(timeMatch[1], 10);
+      minutes = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      const meridian = timeMatch[3].toLowerCase();
+      if (meridian === "pm" && hours !== 12) hours += 12;
+      if (meridian === "am" && hours === 12) hours = 0;
+    }
+  }
+
+  const pad = (num) => String(num).padStart(2, '0');
+  const isoString = `${parsedDate.getFullYear()}-${pad(parsedDate.getMonth() + 1)}-${pad(parsedDate.getDate())}T${pad(hours)}:${pad(minutes)}:00+05:30`;
+  const result = new Date(isoString);
+  return isNaN(result.getTime()) ? null : result;
+}
+
 // ---------------------------------------------------------------------------
 // Derive legacy flat fields from displayFields (single source of truth).
 // This ensures role, salaryText, deadlineText, etc. always mirror displayFields.
@@ -162,6 +185,8 @@ function deriveFromDisplayFields(displayFields = []) {
     venue:           get("Location", "Venue"),
     deadlineText:    get("Deadline", "Last Date", "Due Date", "Closing Date"),
     programRoles:    get("Role", "Roles"),
+    eventDateText:   get("Date", "Event Date", "Interview Date", "Presentation Date", "PPT Date", "Talk Date"),
+    eventTime:       get("Time", "Event Time", "Reporting Time", "Schedule Time", "PPT Time"),
   };
 }
 
@@ -2069,6 +2094,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     // They mirror displayFields so all consumers see consistent data.
     ...(() => {
       const derived = deriveFromDisplayFields(displayFields);
+      const resolvedEventDate = resolveEventDateISO(derived.eventDateText, derived.eventTime, referenceDate);
       return {
         fieldsToDisplay: [],
         programRoles:    derived.programRoles,
@@ -2080,6 +2106,9 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
         venue:           derived.venue,
         durationText:    derived.programDuration,
         salaryText:      derived.salaryText,
+        eventDate:       resolvedEventDate,
+        eventTime:       derived.eventTime,
+        reportingTime:   derived.eventTime,
       };
     })(),
 
@@ -2090,9 +2119,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
 
     // Legacy slots kept for schema compatibility
     jobRole:       "",
-    eventDate:     null,
-    eventTime:     "",
-    reportingTime: "",
 
     // Parse metadata
     parseMeta: {
