@@ -821,6 +821,25 @@ export default function JobTrackerDashboard() {
     }
   };
 
+  const handleUnmarkDone = async (id) => {
+    try {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status: "new" }),
+      });
+      if (!response.ok) throw new Error("Failed to unmark as done");
+      setApplications((prev) =>
+        prev.map((app) => app._id === id ? { ...app, status: "new" } : app)
+      );
+    } catch (error) {
+      console.error("Unmark done failed:", error);
+      alert("Could not unmark as done. Please try again.");
+    }
+  };
+
   const handleApply = async (id) => {
     try {
       const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
@@ -2068,6 +2087,8 @@ export default function JobTrackerDashboard() {
         .card-btn-apply:active:not(:disabled) { transform: scale(0.98); }
         .card-btn-done { background: #f3f4f6; color: #111827; border-color: #e5e7eb; }
         .card-btn-done:hover:not(:disabled) { background: #e5e7eb; }
+        .card-btn-done.active { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+        .card-btn-done.active:hover { background: #fecaca; }
         .card-btn-done:disabled { opacity: 0.5; cursor: default; }
         .card-btn-remove { background: #fff; color: #dc2626; border-color: #fca5a5; }
         .card-btn-remove:hover { background: #fef2f2; border-color: #ef4444; }
@@ -2359,6 +2380,8 @@ export default function JobTrackerDashboard() {
         .dark .card-actions { border-color: #1f2937; }
         .dark .card-btn-done { background: #27272a; border-color: transparent; color: #fafafa; }
         .dark .card-btn-done:hover:not(:disabled) { background: #3f3f46; border-color: #52525b; }
+        .dark .card-btn-done.active { background: #7f1d1d; color: #fca5a5; border-color: #991b1b; }
+        .dark .card-btn-done.active:hover { background: #991b1b; }
         .dark .card-btn-remove { background: transparent; border-color: #7f1d1d; color: #fca5a5; }
         .dark .card-btn-remove:hover { background: rgba(153, 27, 27, 0.2); border-color: #991b1b; }
         .dark .card-btn-apply { background: var(--brand-primary); border-color: transparent; color: #ffffff; }
@@ -3646,11 +3669,10 @@ export default function JobTrackerDashboard() {
                                 </a>
                               )}
                               <button
-                                className="card-btn card-btn-done"
-                                onClick={() => handleMarkDone(app._id)}
-                                disabled={isDone}
+                                className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
+                                onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
                               >
-                                {isDone ? "Done" : "Mark Done"}
+                                {isDone ? "Unmark Done" : "Mark Done"}
                               </button>
                               <button
                                 className="card-btn card-btn-remove"
