@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const Application = require("../models/Application");
 
 const CALENDAR_SYNC_VERSION = 2;
+const activeCalendarSyncs = new Set();
 
 /**
  * Normalizes input strings (case-insensitive, strips common suffixes, collapses spaces)
@@ -282,6 +283,7 @@ async function syncAppToCalendar(account, app) {
   if (!dateInput) {
     // No meaningful date found — skip calendar sync entirely
     app.needsCalendarSync = false;
+    app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = "No explicit deadline or event date found — skipping calendar event";
     await app.save();
     console.log(`[CALENDAR_SYNC] Skipping ${app.company} (${app._id}): no meaningful date`);
@@ -292,6 +294,7 @@ async function syncAppToCalendar(account, app) {
   const eventDate = new Date(dateInput);
   if (isNaN(eventDate.getTime())) {
     app.needsCalendarSync = false;
+    app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = `Invalid date value: ${dateInput}`;
     await app.save();
     return;
@@ -301,6 +304,7 @@ async function syncAppToCalendar(account, app) {
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   if (eventDate < oneDayAgo) {
     app.needsCalendarSync = false;
+    app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = `Deadline/event date is in the past (${eventDate.toISOString().substring(0, 10)})`;
     await app.save();
     console.log(`[CALENDAR_SYNC] Skipping ${app.company} (${app._id}): date in past (${eventDate.toISOString().substring(0, 10)})`);
@@ -310,6 +314,7 @@ async function syncAppToCalendar(account, app) {
   const dateInfo = parseEventTime(dateInput, timeInput, eventType);
   if (!dateInfo) {
     app.needsCalendarSync = false;
+    app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = "Failed to parse event time from date input";
     await app.save();
     return;
@@ -426,7 +431,15 @@ async function processCalendarSyncQueue(account) {
     return;
   }
 
+  const userIdStr = account._id.toString();
+  if (activeCalendarSyncs.has(userIdStr)) {
+    console.log(`[CALENDAR_QUEUE] Calendar sync already in progress for ${account.email} — skipping parallel trigger`);
+    return;
+  }
+
   try {
+    activeCalendarSyncs.add(userIdStr);
+
     const apps = await Application.find({
       userId: account._id,
       $or: [
@@ -448,6 +461,8 @@ async function processCalendarSyncQueue(account) {
     console.log(`[CALENDAR_QUEUE] Completed sync sweep for ${account.email}`);
   } catch (err) {
     console.error(`[CALENDAR_QUEUE] Queue sync failed for ${account.email}:`, err.message);
+  } finally {
+    activeCalendarSyncs.delete(userIdStr);
   }
 }
 
