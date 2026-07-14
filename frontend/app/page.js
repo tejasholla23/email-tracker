@@ -51,6 +51,10 @@ export default function JobTrackerDashboard() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeFilter]);
   const [settingsSubView, setSettingsSubView] = useState("main");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -1927,6 +1931,13 @@ export default function JobTrackerDashboard() {
         .filter-btn.active { background: var(--text-primary); color: var(--surface-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-weight: 600; }
         .filter-btn:hover:not(.active) { background: var(--bg-color); color: var(--text-primary); border-color: var(--border-color); }
         
+        /* Pagination */
+        .pagination-container { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 40px; margin-bottom: 24px; }
+        .pagination-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #e5e7eb; background: transparent; color: #4b5563; cursor: pointer; transition: all 180ms ease; }
+        .pagination-btn:hover:not(:disabled) { background: rgba(71, 85, 105, 0.08); border-color: #cbd5e1; color: #1f2937; }
+        .pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: rgba(148, 163, 184, 0.18) !important; color: rgba(148, 163, 184, 0.45) !important; }
+        .pagination-info { font-size: 14px; font-weight: 500; color: #4b5563; }
+        
         /* App Grid */
         .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
         .app-card {
@@ -2400,6 +2411,10 @@ export default function JobTrackerDashboard() {
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
         .dark .app-card.is-done:hover { opacity: 0.6; filter: blur(0.5px); }
+        .dark .pagination-btn { border-color: #334155; color: #94a3b8; }
+        .dark .pagination-btn:hover:not(:disabled) { background: rgba(148, 163, 184, 0.08); border-color: #475569; color: #cbd5e1; }
+        .dark .pagination-btn:disabled { border-color: rgba(148, 163, 184, 0.18) !important; color: rgba(148, 163, 184, 0.45) !important; }
+        .dark .pagination-info { color: #94a3b8; }
         
         .dark .deadline-badge {
           background: #1e293b;
@@ -3415,294 +3430,315 @@ export default function JobTrackerDashboard() {
 
                 {loading && applications.length === 0 ? (
                   <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
-                ) : (
-                  <div className="app-grid">
-                    {applications
-                      .map(app => {
-                        let derivedStatus = (app.status || "new").toLowerCase();
-                        if (derivedStatus === "new") {
-                          const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
-                          if (ageInMs > 24 * 60 * 60 * 1000) {
-                            derivedStatus = "unmarked";
-                          }
+                ) : (() => {
+                  const filteredApps = applications
+                    .map(app => {
+                      let derivedStatus = (app.status || "new").toLowerCase();
+                      if (derivedStatus === "new") {
+                        const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
+                        if (ageInMs > 24 * 60 * 60 * 1000) {
+                          derivedStatus = "unmarked";
                         }
-                        return { ...app, derivedStatus };
-                      })
-                      .filter((app) => {
-                        const query = searchQuery.toLowerCase();
-                        const matchesSearch =
-                          (app.company || "").toLowerCase().includes(query) ||
-                          (app.role || "").toLowerCase().includes(query) ||
-                          (app.displayFields || []).some(f =>
-                            (f.value || "").toLowerCase().includes(query)
-                          );
+                      }
+                      return { ...app, derivedStatus };
+                    })
+                    .filter((app) => {
+                      const query = searchQuery.toLowerCase();
+                      const matchesSearch =
+                        (app.company || "").toLowerCase().includes(query) ||
+                        (app.role || "").toLowerCase().includes(query) ||
+                        (app.displayFields || []).some(f =>
+                          (f.value || "").toLowerCase().includes(query)
+                        );
 
-                        const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
-                        const matchesFilter =
-                          activeFilter === "all" ||
-                          (activeFilter === "deadlines" && isDeadlineToday) ||
-                          activeFilter === app.derivedStatus;
+                      const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
+                      const matchesFilter =
+                        activeFilter === "all" ||
+                        (activeFilter === "deadlines" && isDeadlineToday) ||
+                        activeFilter === app.derivedStatus;
 
-                        return matchesSearch && matchesFilter;
-                      })
-                      .sort((a, b) => {
-                        const dateA = new Date(a.date || a.createdAt || 0);
-                        const dateB = new Date(b.date || b.createdAt || 0);
-                        return dateB - dateA;
-                      })
-                      .map((app) => {
-                        const dateToShow = app.date || app.createdAt;
-                        const formattedDate = dateToShow
-                          ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                          : "N/A";
-                        const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                        const statusKey = app.derivedStatus;
-                        const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
-                        const isDone = statusKey === "done";
+                      return matchesSearch && matchesFilter;
+                    })
+                    .sort((a, b) => {
+                      const dateA = new Date(a.date || a.createdAt || 0);
+                      const dateB = new Date(b.date || b.createdAt || 0);
+                      return dateB - dateA;
+                    });
 
-                        const getDeterministicColor = (str) => {
-                          let hash = 0;
-                          for (let i = 0; i < str.length; i++) {
-                            hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                          }
-                          const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-                          return "00000".substring(0, 6 - c.length) + c;
-                        };
-                        const fallbackColor = getDeterministicColor(app.company || "Unknown");
-                        const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
+                  const totalPages = Math.max(1, Math.ceil(filteredApps.length / 15));
+                  const activePage = Math.min(currentPage, totalPages);
+                  const paginatedApps = filteredApps.slice((activePage - 1) * 15, activePage * 15);
 
-                        return (
-                          <div
-                            key={app._id}
-                            className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
-                            style={{ cursor: "pointer" }}
-                            onClick={(e) => {
-                              if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
-                              setSelectedApp(app);
-                              setShowInfoModal(true);
-                            }}
-                          >
-                            <div className="app-header">
-                              <div className="app-info">
-                                <div className="company-logo-container">
-                                  {app.companyInfo?.logo || app.companyInfo?.domain ? (
-                                    <img
-                                      src={app.companyInfo?.logo || uiAvatarUrl}
-                                      alt={app.company}
-                                      className="company-logo-img"
-                                      onError={(e) => {
-                                        const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
-                                        const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-                                        if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
-                                          e.target.src = googleFallback;
-                                        } else if (!e.target.src.includes('ui-avatars.com')) {
-                                          e.target.src = uiAvatarUrl;
-                                        } else {
-                                          e.target.onerror = null;
-                                          e.target.style.display = 'none';
-                                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                        }
-                                      }}
-                                    />
-                                  ) : null}
-                                  <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
-                                    {companyInitials}
-                                  </div>
-                                </div>
-                                <div className="role-company">
-                                  <div className="role-title">{app.company || "Unknown Company"}</div>
-                                  {/* Show subtitle (new records) or fall back to role (legacy records) */}
-                                  {(() => {
-                                    const sub = app.subtitle
-                                      || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
-                                    return sub ? <div className="company-name">{sub}</div> : null;
-                                  })()}
-                                </div>
-                              </div>
-                              <div className="status-badge-container">
-                                <span className={`status-badge status-${app.derivedStatus}`}>
-                                  {app.derivedStatus}
-                                </span>
-                              </div>
-                            </div>
+                  return (
+                    <>
+                      {filteredApps.length > 0 ? (
+                        <>
+                          <div className="app-grid">
+                            {paginatedApps.map((app) => {
+                              const dateToShow = app.date || app.createdAt;
+                              const formattedDate = dateToShow
+                                ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                                : "N/A";
+                              const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
+                              const statusKey = app.derivedStatus;
+                              const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
+                              const isDone = statusKey === "done";
 
-
-
-                            {/* ── Display fields ─────────────────────────────────────────────────────
-                             NEW records: app.displayFields = [{label, value}] — rendered directly.
-                             LEGACY records: app.fieldsToDisplay = ["role","stipend",...] — rendered
-                             using FIELD_CONFIG lookup from individual programRoles/programStipend etc.
-                        ── */}
-                            {(() => {
-                              // NEW flexible format — [{label, value}]
-
-                              const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
-                                ? app.displayFields.filter(f => f && f.label && f.value)
-                                : null;
-
-                              if (flexFields && flexFields.length > 0) {
-                                return (
-                                  <div className="program-details">
-                                    {flexFields.map(({ label, value }) => (
-                                      <div key={label} className="program-detail">
-                                        <span className="program-detail-label">{label}</span>
-                                        <span className="program-detail-value">{value}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                );
-                              }
-
-                              // LEGACY format — string array + fixed FIELD_CONFIG lookup
-                              let legacyFields = app.fieldsToDisplay;
-                              if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
-                                legacyFields = [];
-                                if (app.programRoles) legacyFields.push("role");
-                                if (app.programStipend) legacyFields.push("stipend");
-                                if (app.deadlineText) legacyFields.push("deadline");
-                                if (app.programDuration) legacyFields.push("duration");
-                                if (app.venue) legacyFields.push("venue");
-                              }
-                              if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
-
-                              const FIELD_CONFIG = {
-                                role: { label: "Roles", value: app.programRoles },
-                                stipend: { label: "Stipend", value: app.programStipend },
-                                deadline: { label: "Deadline", value: app.deadlineText },
-                                duration: { label: "Duration", value: app.programDuration },
-                                venue: { label: "Venue", value: app.venue },
-                                eventName: { label: "Event", value: app.subtitle },
+                              const getDeterministicColor = (str) => {
+                                let hash = 0;
+                                for (let i = 0; i < str.length; i++) {
+                                  hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                                }
+                                const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                                return "00000".substring(0, 6 - c.length) + c;
                               };
-                              const rows = legacyFields
-                                .map(f => FIELD_CONFIG[f])
-                                .filter(r => r && r.value && r.value.trim().length > 0);
-                              if (rows.length === 0) return null;
+                              const fallbackColor = getDeterministicColor(app.company || "Unknown");
+                              const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
+
                               return (
-                                <div className="program-details">
-                                  {rows.map(({ label, value }) => (
-                                    <div key={label} className="program-detail">
-                                      <span className="program-detail-label">{label}</span>
-                                      <span className="program-detail-value">{value}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })()}
-
-                            {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
-                            {app.deadline && !app.deadlineText &&
-                              (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) &&
-                              (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
-                                <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
-                                  ? 'urgent' : ''
-                                  }`}>
-                                  Deadline: {app.deadline}
-                                </div>
-                              )}
-
-                            <div className="app-footer">
-                              <div className="email-info">
-                                <span style={{ fontSize: 16 }}>✉️</span>
-                                <span>{app.email || "user@gmail.com"}</span>
-                              </div>
-                              <span>{formattedDate}</span>
-                            </div>
-
-                            <div className="note-container">
-                              <textarea
-                                className="note-input"
-                                placeholder="Add a personal note..."
-                                value={app.note || ""}
-                                onChange={(e) => handleUpdateNote(app._id, e.target.value)}
-                                onBlur={(e) => handleSaveNote(app._id, e.target.value)}
-                              />
-                              <div className="note-save-hint">Auto-saves on blur</div>
-                            </div>
-
-                            <div className="card-actions">
-                              <button
-                                className="card-btn card-btn-edit"
-                                onClick={() => {
-                                  setEditingApp(app);
-
-                                  const getField = (label, dbField) => {
-                                    if (app.displayFields && app.displayFields.length > 0) {
-                                      const f = app.displayFields.find(df => df.label === label);
-                                      if (f) return f.value;
-                                    }
-                                    return dbField || "";
-                                  };
-
-                                  const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
-                                  const dynamicFields = [];
-                                  if (app.displayFields && app.displayFields.length > 0) {
-                                    app.displayFields.forEach(df => {
-                                      if (!standardLabels.includes(df.label)) {
-                                        dynamicFields.push({ label: df.label, value: df.value });
-                                      }
-                                    });
-                                  }
-
-                                  setEditFormData({
-                                    company: app.company || "",
-                                    subtitle: app.subtitle || "",
-                                    role: getField("Role", app.role),
-                                    stipend: getField("Stipend", app.programStipend),
-                                    ctc: getField("CTC", app.salaryText),
-                                    duration: getField("Duration", app.programDuration),
-                                    location: getField("Location", app.venue),
-                                    joining: getField("Joining", ""),
-                                    deadline: getField("Deadline", app.deadlineText),
-                                    date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
-                                    link: app.link || "",
-                                    dynamicFields: dynamicFields
-                                  });
-                                  setShowEditModal(true);
-                                }}
-                              >
-                                Edit
-                              </button>
-                              {app.link && !isDone && (
-                                <a
-                                  className="card-btn card-btn-apply"
-                                  href={app.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                <div
+                                  key={app._id}
+                                  className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
+                                  style={{ cursor: "pointer" }}
                                   onClick={(e) => {
-                                    if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
-                                      handleApply(app._id);
-                                    }
+                                    if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
+                                    setSelectedApp(app);
+                                    setShowInfoModal(true);
                                   }}
                                 >
-                                  {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
-                                </a>
-                              )}
+                                  <div className="app-header">
+                                    <div className="app-info">
+                                      <div className="company-logo-container">
+                                        {app.companyInfo?.logo || app.companyInfo?.domain ? (
+                                          <img
+                                            src={app.companyInfo?.logo || uiAvatarUrl}
+                                            alt={app.company}
+                                            className="company-logo-img"
+                                            onError={(e) => {
+                                              const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                                              const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                              if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
+                                                e.target.src = googleFallback;
+                                              } else if (!e.target.src.includes('ui-avatars.com')) {
+                                                e.target.src = uiAvatarUrl;
+                                              } else {
+                                                e.target.onerror = null;
+                                                e.target.style.display = 'none';
+                                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                              }
+                                            }}
+                                          />
+                                        ) : null}
+                                        <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
+                                          {companyInitials}
+                                        </div>
+                                      </div>
+                                      <div className="role-company">
+                                        <div className="role-title">{app.company || "Unknown Company"}</div>
+                                        {(() => {
+                                          const sub = app.subtitle
+                                            || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
+                                          return sub ? <div className="company-name">{sub}</div> : null;
+                                        })()}
+                                      </div>
+                                    </div>
+                                    <div className="status-badge-container">
+                                      <span className={`status-badge status-${app.derivedStatus}`}>
+                                        {app.derivedStatus}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {(() => {
+                                    const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
+                                      ? app.displayFields.filter(f => f && f.label && f.value)
+                                      : null;
+
+                                    if (flexFields && flexFields.length > 0) {
+                                      return (
+                                        <div className="program-details">
+                                          {flexFields.map(({ label, value }) => (
+                                            <div key={label} className="program-detail">
+                                              <span className="program-detail-label">{label}</span>
+                                              <span className="program-detail-value">{value}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+
+                                    let legacyFields = app.fieldsToDisplay;
+                                    if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
+                                      legacyFields = [];
+                                      if (app.programRoles) legacyFields.push("role");
+                                      if (app.programStipend) legacyFields.push("stipend");
+                                      if (app.deadlineText) legacyFields.push("deadline");
+                                      if (app.programDuration) legacyFields.push("duration");
+                                      if (app.venue) legacyFields.push("venue");
+                                    }
+                                    if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
+
+                                    const FIELD_CONFIG = {
+                                      role: { label: "Roles", value: app.programRoles },
+                                      stipend: { label: "Stipend", value: app.programStipend },
+                                      deadline: { label: "Deadline", value: app.deadlineText },
+                                      duration: { label: "Duration", value: app.programDuration },
+                                      venue: { label: "Venue", value: app.venue },
+                                      eventName: { label: "Event", value: app.subtitle },
+                                    };
+                                    const rows = legacyFields
+                                      .map(f => FIELD_CONFIG[f])
+                                      .filter(r => r && r.value && r.value.trim().length > 0);
+                                    if (rows.length === 0) return null;
+                                    return (
+                                      <div className="program-details">
+                                        {rows.map(({ label, value }) => (
+                                          <div key={label} className="program-detail">
+                                            <span className="program-detail-label">{label}</span>
+                                            <span className="program-detail-value">{value}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {app.deadline && !app.deadlineText &&
+                                    (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) &&
+                                    (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
+                                      <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
+                                        ? 'urgent' : ''
+                                        }`}>
+                                        Deadline: {app.deadline}
+                                      </div>
+                                    )}
+
+                                  <div className="app-footer">
+                                    <div className="email-info">
+                                      <span style={{ fontSize: 16 }}>✉️</span>
+                                      <span>{app.email || "user@gmail.com"}</span>
+                                    </div>
+                                    <span>{formattedDate}</span>
+                                  </div>
+
+                                  <div className="note-container">
+                                    <textarea
+                                      className="note-input"
+                                      placeholder="Add a personal note..."
+                                      value={app.note || ""}
+                                      onChange={(e) => handleUpdateNote(app._id, e.target.value)}
+                                      onBlur={(e) => handleSaveNote(app._id, e.target.value)}
+                                    />
+                                    <div className="note-save-hint">Auto-saves on blur</div>
+                                  </div>
+
+                                  <div className="card-actions">
+                                    <button
+                                      className="card-btn card-btn-edit"
+                                      onClick={() => {
+                                        setEditingApp(app);
+
+                                        const getField = (label, dbField) => {
+                                          if (app.displayFields && app.displayFields.length > 0) {
+                                            const f = app.displayFields.find(df => df.label === label);
+                                            if (f) return f.value;
+                                          }
+                                          return dbField || "";
+                                        };
+
+                                        const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
+                                        const dynamicFields = [];
+                                        if (app.displayFields && app.displayFields.length > 0) {
+                                          app.displayFields.forEach(df => {
+                                            if (!standardLabels.includes(df.label)) {
+                                              dynamicFields.push({ label: df.label, value: df.value });
+                                            }
+                                          });
+                                        }
+
+                                        setEditFormData({
+                                          company: app.company || "",
+                                          subtitle: app.subtitle || "",
+                                          role: getField("Role", app.role),
+                                          stipend: getField("Stipend", app.programStipend),
+                                          ctc: getField("CTC", app.salaryText),
+                                          duration: getField("Duration", app.programDuration),
+                                          location: getField("Location", app.venue),
+                                          joining: getField("Joining", ""),
+                                          deadline: getField("Deadline", app.deadlineText),
+                                          date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
+                                          link: app.link || "",
+                                          dynamicFields: dynamicFields
+                                        });
+                                        setShowEditModal(true);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    {app.link && !isDone && (
+                                      <a
+                                        className="card-btn card-btn-apply"
+                                        href={app.link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                          if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
+                                            handleApply(app._id);
+                                          }
+                                        }}
+                                      >
+                                        {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
+                                      </a>
+                                    )}
+                                    <button
+                                      className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
+                                      onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
+                                    >
+                                      {isDone ? "Unmark Done" : "Mark Done"}
+                                    </button>
+                                    <button
+                                      className="card-btn card-btn-remove"
+                                      onClick={() => handleDeleteOne(app._id)}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {totalPages > 1 && (
+                            <div className="pagination-container">
                               <button
-                                className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
-                                onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
+                                className="pagination-btn"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={activePage === 1}
+                                title="Previous Page"
                               >
-                                {isDone ? "Unmark Done" : "Mark Done"}
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                               </button>
+                              <span className="pagination-info">Page {activePage} of {totalPages}</span>
                               <button
-                                className="card-btn card-btn-remove"
-                                onClick={() => handleDeleteOne(app._id)}
+                                className="pagination-btn"
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={activePage === totalPages}
+                                title="Next Page"
                               >
-                                Remove
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                               </button>
                             </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-
-                {!loading && applications.length === 0 && (
-                  <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
-                    {syncStatus === "pending"
-                      ? "Emails are being synced in the background. Please wait..."
-                      : "No applications found. Try syncing emails."}
-                  </p>
-                )}
+                          )}
+                        </>
+                      ) : (
+                        <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
+                          {syncStatus === "pending"
+                            ? "Emails are being synced in the background. Please wait..."
+                            : "No applications found. Try syncing emails."}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </main>
