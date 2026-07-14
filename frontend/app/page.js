@@ -2065,7 +2065,7 @@ export default function JobTrackerDashboard() {
         .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
         .new-tag { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; background: #dbeafe; color: #1e40af; margin-left: 8px; vertical-align: middle; }
         
-        .note-container { margin-top: 4px; display: flex; flex-direction: column; gap: 8px; }
+        .note-container { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
         .note-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 13px; color: var(--text-primary); outline: none; transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out; background: #f8fafc; resize: none; min-height: 60px; }
         .note-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); background: #ffffff; }
         .note-save-hint { font-size: 11px; color: #9ca3af; text-align: right; margin-top: -4px; }
