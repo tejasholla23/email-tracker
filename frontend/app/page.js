@@ -2391,20 +2391,20 @@ export default function JobTrackerDashboard() {
         .dark .note-input:focus { background: #0d1321; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         
         .dark .card-actions { border-color: #1f2937; }
-        .dark .card-btn-edit { background: transparent; border-color: #334155; color: #94A3B8; }
-        .dark .card-btn-edit:hover:not(:disabled) { background: rgba(148, 163, 184, 0.08); border-color: #475569; color: #CBD5E1; }
-        .dark .card-btn-edit:active:not(:disabled) { background: rgba(148, 163, 184, 0.15); }
-        .dark .card-btn-apply { background: transparent; border-color: #115E59; color: #0D9488; }
-        .dark .card-btn-apply:hover:not(:disabled) { background: rgba(20, 184, 166, 0.08); border-color: #14B8A6; color: #2DD4BF; }
-        .dark .card-btn-apply:active:not(:disabled) { background: rgba(20, 184, 166, 0.15); }
-        .dark .card-btn-done { background: transparent; border-color: #166534; color: #16A34A; }
-        .dark .card-btn-done:hover:not(:disabled) { background: rgba(34, 197, 94, 0.08); border-color: #22C55E; color: #4ADE80; }
+        .dark .card-btn-edit { background: transparent; border-color: rgba(148, 163, 184, 0.25); color: #64748B; }
+        .dark .card-btn-edit:hover:not(:disabled) { background: rgba(203, 213, 225, 0.06); border-color: #cbd5e1; color: #cbd5e1; }
+        .dark .card-btn-edit:active:not(:disabled) { background: rgba(203, 213, 225, 0.15); }
+        .dark .card-btn-apply { background: transparent; border-color: rgba(20, 184, 166, 0.45); color: #14B8A6; }
+        .dark .card-btn-apply:hover:not(:disabled) { background: rgba(45, 212, 191, 0.06); border-color: #2dd4bf; color: #5eead4; }
+        .dark .card-btn-apply:active:not(:disabled) { background: rgba(45, 212, 191, 0.15); }
+        .dark .card-btn-done { background: transparent; border-color: rgba(34, 197, 94, 0.25); color: #16A34A; }
+        .dark .card-btn-done:hover:not(:disabled) { background: rgba(34, 197, 94, 0.06); border-color: #22C55E; color: #4ADE80; }
         .dark .card-btn-done:active:not(:disabled) { background: rgba(34, 197, 94, 0.15); }
-        .dark .card-btn-done.active { background: transparent; border-color: #92400E; color: #D97706; }
-        .dark .card-btn-done.active:hover:not(:disabled) { background: rgba(245, 158, 11, 0.08); border-color: #F59E0B; color: #FBBF24; }
+        .dark .card-btn-done.active { background: transparent; border-color: rgba(245, 158, 11, 0.25); color: #D97706; }
+        .dark .card-btn-done.active:hover:not(:disabled) { background: rgba(245, 158, 11, 0.06); border-color: #F59E0B; color: #FBBF24; }
         .dark .card-btn-done.active:active:not(:disabled) { background: rgba(245, 158, 11, 0.15); }
-        .dark .card-btn-remove { background: transparent; border-color: #991B1B; color: #DC2626; }
-        .dark .card-btn-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08); border-color: #EF4444; color: #F87171; }
+        .dark .card-btn-remove { background: transparent; border-color: rgba(239, 68, 68, 0.25); color: #DC2626; }
+        .dark .card-btn-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.06); border-color: #EF4444; color: #F87171; }
         .dark .card-btn-remove:active:not(:disabled) { background: rgba(239, 68, 68, 0.15); }
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
@@ -3670,6 +3670,10 @@ export default function JobTrackerDashboard() {
                                         setShowEditModal(true);
                                       }}
                                     >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                      </svg>
                                       Edit
                                     </button>
                                     {app.link && !isDone && (
@@ -3684,6 +3688,11 @@ export default function JobTrackerDashboard() {
                                           }
                                         }}
                                       >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                          <polyline points="15 3 21 3 21 9"></polyline>
+                                          <line x1="10" y1="14" x2="21" y2="3"></line>
+                                        </svg>
                                         {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
                                       </a>
                                     )}
@@ -3691,12 +3700,32 @@ export default function JobTrackerDashboard() {
                                       className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
                                       onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
                                     >
-                                      {isDone ? "Unmark Done" : "Mark Done"}
+                                      {isDone ? (
+                                        <>
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                                            <path d="M3 7v6h6"></path>
+                                            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+                                          </svg>
+                                          Unmark Done
+                                        </>
+                                      ) : (
+                                        <>
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                          </svg>
+                                          Mark Done
+                                        </>
+                                      )}
                                     </button>
                                     <button
                                       className="card-btn card-btn-remove"
                                       onClick={() => handleDeleteOne(app._id)}
                                     >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                      </svg>
                                       Remove
                                     </button>
                                   </div>
