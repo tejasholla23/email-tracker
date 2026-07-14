@@ -2372,12 +2372,10 @@ export default function JobTrackerDashboard() {
         .dark .company-name {
           color: #94a3b8;
         }
-        .dark .status-new { background: rgba(75, 85, 99, 0.2); color: #9ca3af; border-color: rgba(107, 114, 128, 0.3); }
-        .dark .status-applied { background: rgba(55, 48, 163, 0.2); color: #a5b4fc; border-color: rgba(79, 70, 229, 0.3); }
-        .dark .status-interview { background: rgba(22, 101, 52, 0.2); color: #86efac; border-color: rgba(34, 197, 94, 0.3); }
-        .dark .status-offer { background: rgba(30, 64, 175, 0.2); color: #93c5fd; border-color: rgba(59, 130, 246, 0.3); }
-        .dark .status-rejected { background: rgba(153, 27, 27, 0.2); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
-        .dark .status-done { background: rgba(75, 85, 99, 0.2); color: #9ca3af; border-color: rgba(107, 114, 128, 0.3); }
+        .dark .status-new { background: rgba(37, 99, 235, 0.08); color: #3b82f6; border-color: #1d4ed8; }
+        .dark .status-unmarked { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: #d97706; }
+        .dark .status-applied { background: rgba(20, 184, 166, 0.08); color: #14b8a6; border-color: #0d9488; }
+        .dark .status-done { background: rgba(34, 197, 94, 0.08); color: #22c55e; border-color: #16a34a; }
         .dark .app-footer { border-color: #334155; color: #94a3b8; }
         
         .dark .modal-content { background: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); }
