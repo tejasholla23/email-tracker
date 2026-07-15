@@ -2015,7 +2015,8 @@ export default function JobTrackerDashboard() {
         
         .settings-list { display: flex; flex-direction: column; gap: 12px; }
         .settings-item { display: flex; align-items: center; padding: 14px 18px; border-radius: 12px; background: var(--bg-color); cursor: pointer; transition: all 0.2s ease; border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 500; font-size: 14.5px; text-align: left; width: 100%; gap: 12px; }
-        .settings-item:hover { background: #f1f5f9; border-color: #cbd5e1; color: var(--text-heading); transform: translateY(-1px); }
+        .settings-item:hover { background: rgba(0, 0, 0, 0.03); color: var(--text-heading); transform: translateY(-1px); }
+        .dark .settings-item:hover { background: rgba(255, 255, 255, 0.05); }
         .settings-item-label { flex: 1; }
         .settings-item-icon { color: var(--text-secondary); display: flex; align-items: center; font-size: 16px; width: 24px; justify-content: center; }
         .settings-item-arrow { color: var(--text-secondary); font-size: 12px; margin-left: auto; }
@@ -3318,30 +3319,29 @@ export default function JobTrackerDashboard() {
                           )}
                         </div>
                       </div>
-                    </div>
-
-                    <div className="settings-card" style={{ borderColor: 'rgba(239, 68, 68, 0.2)', marginTop: '24px', width: '100%' }}>
-                      <h3 className="settings-title" style={{ color: '#ef4444' }}>
-                        <span className="settings-title-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                        </span>
-                        <span>Delete</span>
-                      </h3>
-                      <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', width: '100%' }}>
-                        <button className="settings-item" onClick={() => { setShowClearModal(true); setClearConfirmText(""); setClearError(""); }} style={{ flex: '1', minWidth: '240px', maxWidth: '320px' }}>
-                          <span className="settings-item-icon" style={{ color: '#ef4444' }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                      <div className="settings-card" style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+                        <h3 className="settings-title" style={{ color: '#ef4444' }}>
+                          <span className="settings-title-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                           </span>
-                          <span className="settings-item-label">Clear Workspace</span>
-                          <span className="settings-item-arrow">❯</span>
-                        </button>
-                        <button className="settings-item" onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(""); setDeleteError(""); }} style={{ flex: '1', minWidth: '240px', maxWidth: '320px' }}>
-                          <span className="settings-item-icon" style={{ color: '#ef4444' }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>
-                          </span>
-                          <span className="settings-item-label" style={{ color: '#ef4444' }}>Delete Account</span>
-                          <span className="settings-item-arrow">❯</span>
-                        </button>
+                          <span>Delete</span>
+                        </h3>
+                        <div className="settings-list">
+                          <button className="settings-item" onClick={() => { setShowClearModal(true); setClearConfirmText(""); setClearError(""); }}>
+                            <span className="settings-item-icon" style={{ color: '#ef4444' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                            </span>
+                            <span className="settings-item-label">Clear Workspace</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                          <button className="settings-item" onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(""); setDeleteError(""); }}>
+                            <span className="settings-item-icon" style={{ color: '#ef4444' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>
+                            </span>
+                            <span className="settings-item-label" style={{ color: '#ef4444' }}>Delete Account</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </>
@@ -3555,7 +3555,7 @@ export default function JobTrackerDashboard() {
                               Resume Autofill
                             </button>
                           )}
-                          <button className="btn-outline-primary text-danger" style={{ borderColor: 'rgba(239, 68, 68, 0.4)' }} onClick={() => {
+                          <button className="btn-outline-primary text-danger" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444' }} onClick={() => {
                             if (confirm("WARNING: This will permanently delete your stored profile and all queued form tasks. This action cannot be undone.\n\nAre you sure you want to delete all Autofill data?")) {
                               handleDisableAutofill();
                             }
