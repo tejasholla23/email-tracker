@@ -83,6 +83,23 @@ export default function JobTrackerDashboard() {
   const [calendarSuccessMsg, setCalendarSuccessMsg] = useState("");
   const [calendarErrorMsg, setCalendarErrorMsg] = useState("");
 
+  // Autofill Feature State
+  const [autofillProfile, setAutofillProfile] = useState(null);
+  const [autofillTasks, setAutofillTasks] = useState([]);
+  const [autofillEnabled, setAutofillEnabled] = useState(false);
+  const [autofillSetupComplete, setAutofillSetupComplete] = useState(false);
+  const [loadingAutofill, setLoadingAutofill] = useState(false);
+  const [autofillSubView, setAutofillSubView] = useState("queue"); // "queue" | "profile" | "review"
+  const [reviewingTask, setReviewingTask] = useState(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [tempEdits, setTempEdits] = useState({}); // temporary overrides structured as { [fieldId]: { value, edited: true } }
+  const [profileFormData, setProfileFormData] = useState({
+    personal: { fullName: "", usn: "", gender: "", mobileNumber: "" },
+    education: { program: "", branch: "", tenthPercentage: "", twelfthPercentage: "", currentCGPA: "" },
+    contact: { personalEmail: "", collegeEmail: "", defaultEmailPreference: "personal" },
+    professional: { linkedinUrl: "", githubUrl: "" },
+  });
+
   // Push Notifications State
   const [pushSupported, setPushSupported] = useState(false);
   const [pushPermission, setPushPermission] = useState("default");
@@ -562,6 +579,189 @@ export default function JobTrackerDashboard() {
       console.error("Failed to fetch calendar status:", err);
     } finally {
       setLoadingCalendarStatus(false);
+    }
+  };
+
+  const fetchAutofillStatus = async () => {
+    try {
+      setLoadingAutofill(true);
+      const resProfile = await apiFetch(`${BASE_URL}/autofill/profile`);
+      if (resProfile.ok) {
+        const data = await resProfile.json();
+        setAutofillProfile(data);
+        if (data && data.personal) {
+          setProfileFormData({
+            personal: data.personal || { fullName: "", usn: "", gender: "", mobileNumber: "" },
+            education: data.education || { program: "", branch: "", tenthPercentage: "", twelfthPercentage: "", currentCGPA: "" },
+            contact: data.contact || { personalEmail: "", collegeEmail: "", defaultEmailPreference: "personal" },
+            professional: data.professional || { linkedinUrl: "", githubUrl: "" },
+          });
+        }
+      }
+
+      const resTasks = await apiFetch(`${BASE_URL}/autofill/tasks`);
+      if (resTasks.ok) {
+        const data = await resTasks.json();
+        setAutofillTasks(data);
+      }
+
+      const resMe = await apiFetch(`${BASE_URL}/auth/me`);
+      if (resMe.ok) {
+        const data = await resMe.json();
+        setAutofillEnabled(data.autofillEnabled || false);
+        setAutofillSetupComplete(data.autofillSetupComplete || false);
+      }
+    } catch (err) {
+      console.error("Failed to fetch autofill data:", err);
+    } finally {
+      setLoadingAutofill(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userEmail && (activeFilter === "autofill" || activeFilter === "settings")) {
+      fetchAutofillStatus();
+    }
+  }, [userEmail, activeFilter]);
+
+  const handleSaveAutofillProfile = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      setSavingProfile(true);
+      const res = await apiFetch(`${BASE_URL}/autofill/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profileFormData),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setAutofillProfile(updated);
+        setAutofillSetupComplete(true);
+        setAutofillSubView("queue");
+        // Reload tasks and profile
+        await fetchAutofillStatus();
+      } else {
+        alert("Failed to save profile. Please verify data inputs.");
+      }
+    } catch (err) {
+      console.error("Profile save error:", err);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleRefreshAutofillTask = async (taskId) => {
+    try {
+      const res = await apiFetch(`${BASE_URL}/autofill/tasks/${taskId}/refresh`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setAutofillTasks((prev) => prev.map((t) => (t._id === taskId ? updated : t)));
+        if (reviewingTask && reviewingTask._id === taskId) {
+          setReviewingTask(updated);
+          // Initialize edits mapping
+          const initEdits = {};
+          updated.formFields.forEach((field) => {
+            const temp = updated.temporaryEdits?.[field.fieldId] || updated.temporaryEdits?.get?.(field.fieldId);
+            initEdits[field.fieldId] = {
+              value: temp?.value !== undefined ? temp.value : (field.mappedValue || ""),
+              edited: !!temp,
+            };
+          });
+          setTempEdits(initEdits);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to refresh task:", err);
+    }
+  };
+
+  const handleUpdateTaskStatus = async (taskId, status) => {
+    try {
+      const res = await apiFetch(`${BASE_URL}/autofill/tasks/${taskId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setAutofillTasks((prev) => prev.map((t) => (t._id === taskId ? updated : t)));
+        if (reviewingTask && reviewingTask._id === taskId) {
+          setReviewingTask(updated);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    }
+  };
+
+  const handleApplyTempEditsAndOpen = async (taskId) => {
+    try {
+      // 1. Submit current tempEdits state to the task edits endpoint
+      const res = await apiFetch(`${BASE_URL}/autofill/tasks/${taskId}/edits`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ edits: tempEdits }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setAutofillTasks((prev) => prev.map((t) => (t._id === taskId ? updated : t)));
+        setReviewingTask(updated);
+
+        // 2. Advance task status to 'opened'
+        await handleUpdateTaskStatus(taskId, "opened");
+
+        // 3. Open prefilled URL in a new window/tab
+        window.open(updated.prefillUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      console.error("Failed to save overrides and pre-fill form:", err);
+    }
+  };
+
+  const handleEnableAutofill = async () => {
+    try {
+      const res = await apiFetch(`${BASE_URL}/autofill/enable`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setAutofillEnabled(data.enabled);
+        setAutofillSetupComplete(data.setupComplete);
+        if (!data.setupComplete) {
+          setAutofillSubView("profile");
+        }
+      }
+    } catch (err) {
+      console.error("Enable error:", err);
+    }
+  };
+
+  const handlePauseAutofill = async () => {
+    try {
+      const res = await apiFetch(`${BASE_URL}/autofill/pause`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setAutofillEnabled(data.enabled);
+      }
+    } catch (err) {
+      console.error("Pause error:", err);
+    }
+  };
+
+  const handleDisableAutofill = async () => {
+    try {
+      const res = await apiFetch(`${BASE_URL}/autofill/disable`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setAutofillEnabled(data.enabled);
+        setAutofillSetupComplete(data.setupComplete);
+        setAutofillProfile(null);
+        setAutofillTasks([]);
+        setAutofillSubView("queue");
+      }
+    } catch (err) {
+      console.error("Disable error:", err);
     }
   };
 
@@ -2642,7 +2842,7 @@ export default function JobTrackerDashboard() {
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div
-              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' ? 'active' : ''}`}
+              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' && activeFilter !== 'autofill' ? 'active' : ''}`}
               onClick={() => { setActiveFilter('all'); setIsSidebarOpen(false); }}
             >
               <div className="nav-icon-wrapper">
@@ -2659,6 +2859,16 @@ export default function JobTrackerDashboard() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
               </div>
               <span className="nav-text">Calendar</span>
+            </div>
+
+            <div
+              className={`nav-item ${activeFilter === 'autofill' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('autofill'); setAutofillSubView('queue'); setIsSidebarOpen(false); }}
+            >
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><polyline points="9 14 11 16 15 12"></polyline></svg>
+              </div>
+              <span className="nav-text">Autofill</span>
             </div>
 
             <div
@@ -3055,6 +3265,69 @@ export default function JobTrackerDashboard() {
                       <div className="settings-card">
                         <h3 className="settings-title">
                           <span className="settings-title-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><polyline points="9 14 11 16 15 12"></polyline></svg>
+                          </span>
+                          <span>Autofill Settings</span>
+                        </h3>
+                        <div className="settings-list">
+                          <div className="settings-item" style={{ cursor: 'default', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', padding: '16px 20px' }}>
+                            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '13px', fontWeight: '500' }}>Autofill Feature:</span>
+                              <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                background: autofillEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 71, 87, 0.15)',
+                                color: autofillEnabled ? '#2ed573' : '#ff4757'
+                              }}>
+                                {autofillEnabled ? "ACTIVE" : "DISABLED"}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '13px', fontWeight: '500' }}>Profile Setup:</span>
+                              <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                background: autofillSetupComplete ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 158, 11, 0.15)',
+                                color: autofillSetupComplete ? '#2ed573' : '#f59e0b'
+                              }}>
+                                {autofillSetupComplete ? "COMPLETED" : "INCOMPLETE"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {!autofillEnabled ? (
+                            <button className="settings-item" onClick={handleEnableAutofill}>
+                              <span className="settings-item-label" style={{ color: '#2563eb', fontWeight: '600' }}>
+                                {autofillSetupComplete ? "Enable Autofill" : "Setup & Enable Autofill"}
+                              </span>
+                              <span className="settings-item-arrow">❯</span>
+                            </button>
+                          ) : (
+                            <>
+                              <button className="settings-item" onClick={handlePauseAutofill}>
+                                <span className="settings-item-label" style={{ color: '#d97706', fontWeight: '600' }}>Pause Autofill</span>
+                                <span className="settings-item-arrow">❯</span>
+                              </button>
+                              <button className="settings-item" onClick={() => {
+                                if (confirm("WARNING: This will permanently delete your stored profile and all queued form tasks. This action cannot be undone.\n\nAre you sure you want to delete all Autofill data?")) {
+                                  handleDisableAutofill();
+                                }
+                              }}>
+                                <span className="settings-item-label text-danger" style={{ fontWeight: '600' }}>Disable & Delete Data</span>
+                                <span className="settings-item-arrow">❯</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="settings-card">
+                        <h3 className="settings-title">
+                          <span className="settings-title-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                           </span>
                           <span>Notifications</span>
@@ -3339,6 +3612,333 @@ export default function JobTrackerDashboard() {
                         <br />
                         <strong>tejasholla23@gmail.com</strong>
                       </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : activeFilter === "autofill" ? (
+              <div className="autofill-container" style={{ paddingBottom: '40px' }}>
+                {autofillSubView === "queue" && (
+                  <>
+                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h2 className="page-title">Smart Autofill Queue</h2>
+                        <p className="page-subtitle">Automated Google Forms processing for placement emails</p>
+                      </div>
+                      {autofillSetupComplete && (
+                        <button className="btn-outline-primary" onClick={() => setAutofillSubView("profile")}>
+                          Edit Autofill Profile
+                        </button>
+                      )}
+                    </div>
+
+                    {!autofillEnabled ? (
+                      <div className="settings-card" style={{ marginTop: '24px', padding: '32px', textAlign: 'center' }}>
+                        <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px' }}>Autofill is Disabled</h3>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', marginBottom: '24px', maxWidth: '600px', margin: '0 auto 24px' }}>
+                          Enable Smart Autofill to automatically parse Google Forms links in new placement emails. The parsed fields are matched against your profile and queued here for quick review before submission.
+                        </p>
+                        <button className="btn-primary" onClick={handleEnableAutofill} style={{ padding: '12px 24px' }}>
+                          Enable Smart Autofill
+                        </button>
+                      </div>
+                    ) : !autofillSetupComplete ? (
+                      <div className="settings-card" style={{ marginTop: '24px', padding: '32px', textAlign: 'center' }}>
+                        <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px' }}>Complete Profile Setup</h3>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', marginBottom: '24px', maxWidth: '600px', margin: '0 auto 24px' }}>
+                          You have enabled Smart Autofill, but you must complete your profile information before forms can be pre-filled and reviewed.
+                        </p>
+                        <button className="btn-primary" onClick={() => setAutofillSubView("profile")} style={{ padding: '12px 24px' }}>
+                          Setup Profile Now
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {loadingAutofill ? (
+                          <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                            <span className="spinner">Loading autofill tasks...</span>
+                          </div>
+                        ) : autofillTasks.length === 0 ? (
+                          <div className="settings-card" style={{ marginTop: '24px', padding: '32px', textAlign: 'center' }}>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', margin: 0 }}>
+                              No Google Forms detected in placement emails yet. Incoming forms will appear here automatically.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="app-grid" style={{ marginTop: '24px' }}>
+                            {autofillTasks.map((task) => (
+                              <div key={task._id} className="app-card">
+                                <div className="app-header">
+                                  <div className="app-info">
+                                    <div className="company-logo" style={{ background: '#2563eb', color: '#fff', fontWeight: '700', borderRadius: '8px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      {task.company ? task.company[0].toUpperCase() : "?"}
+                                    </div>
+                                    <div>
+                                      <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: 'var(--text-heading)' }}>{task.company}</h4>
+                                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>{task.role}</span>
+                                    </div>
+                                  </div>
+                                  <span className={`status-badge status-${task.status === "needs_attention" ? "unmarked" : task.status === "waiting" ? "new" : task.status === "opened" ? "applied" : "done"}`}>
+                                    {task.status === "needs_attention" ? "Needs Attention" : task.status === "waiting" ? "Waiting" : task.status === "opened" ? "Opened" : task.status === "submitted" ? "Submitted" : "Deleted"}
+                                  </span>
+                                </div>
+
+                                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0' }}>
+                                  <div>Received: {new Date(task.dateReceived).toLocaleDateString()}</div>
+                                  {task.lastSeenAt && new Date(task.lastSeenAt) - new Date(task.dateReceived) > 60000 && (
+                                    <div style={{ color: '#d97706', fontSize: '11.5px', marginTop: '4px', fontWeight: '500' }}>
+                                      🔄 Reminder received: {new Date(task.lastSeenAt).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {task.status === "needs_attention" && task.missingFields.length > 0 && (
+                                  <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '10px', borderRadius: '6px', fontSize: '12px', color: '#b45309' }}>
+                                    <strong>⚠️ {task.missingFields.length} missing fields:</strong>
+                                    <div style={{ marginTop: '2px', wordBreak: 'break-all' }}>{task.missingFields.join(", ")}</div>
+                                  </div>
+                                )}
+
+                                <div style={{ flexGrow: 1 }} />
+
+                                <div className="card-actions">
+                                  <button className="card-btn card-btn-edit" onClick={() => {
+                                    setReviewingTask(task);
+                                    const initEdits = {};
+                                    task.formFields.forEach(f => {
+                                      const temp = task.temporaryEdits?.[f.fieldId] || task.temporaryEdits?.get?.(f.fieldId);
+                                      initEdits[f.fieldId] = {
+                                        value: temp?.value !== undefined ? temp.value : (f.mappedValue || ""),
+                                        edited: !!temp
+                                      };
+                                    });
+                                    setTempEdits(initEdits);
+                                    setAutofillSubView("review");
+                                  }}>
+                                    Review
+                                  </button>
+                                  <button className="card-btn card-btn-apply" onClick={() => handleRefreshAutofillTask(task._id)}>
+                                    Refresh
+                                  </button>
+                                  <button className="card-btn card-btn-remove" onClick={() => {
+                                    if (confirm("Are you sure you want to remove this Autofill task?")) {
+                                      handleUpdateTaskStatus(task._id, "deleted");
+                                    }
+                                  }}>
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+
+                {autofillSubView === "profile" && (
+                  <div className="settings-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                      <button type="button" className="btn-outline-primary" style={{ padding: '6px 12px' }} onClick={() => setAutofillSubView("queue")}>
+                        ← Back
+                      </button>
+                      <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-heading)', margin: 0 }}>Autofill Profile Editor</h2>
+                    </div>
+
+                    <form onSubmit={handleSaveAutofillProfile}>
+                      <div style={{ marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '20px' }}>
+                        <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--brand-primary)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personal Info</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                          <div className="form-group">
+                            <label className="form-label">Full Name</label>
+                            <input type="text" className="form-input" value={profileFormData.personal.fullName} onChange={(e) => setProfileFormData(p => ({ ...p, personal: { ...p.personal, fullName: e.target.value } }))} required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">USN / Seat Number</label>
+                            <input type="text" className="form-input" value={profileFormData.personal.usn} onChange={(e) => setProfileFormData(p => ({ ...p, personal: { ...p.personal, usn: e.target.value } }))} required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Gender</label>
+                            <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+                              {["Male", "Female", "Other"].map((g) => (
+                                <label key={g} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', cursor: 'pointer' }}>
+                                  <input type="radio" name="gender" value={g} checked={profileFormData.personal.gender === g} onChange={(e) => setProfileFormData(p => ({ ...p, personal: { ...p.personal, gender: e.target.value } }))} />
+                                  {g}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Mobile Number</label>
+                            <input type="text" className="form-input" value={profileFormData.personal.mobileNumber} onChange={(e) => setProfileFormData(p => ({ ...p, personal: { ...p.personal, mobileNumber: e.target.value } }))} required />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '20px' }}>
+                        <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--brand-primary)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Education</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                          <div className="form-group" style={{ position: 'relative' }}>
+                            <label className="form-label">Program / Degree</label>
+                            <input type="text" className="form-input" value={profileFormData.education.program} onChange={(e) => setProfileFormData(p => ({ ...p, education: { ...p.education, program: e.target.value } }))} placeholder="e.g. BE, BTech, MCA" required />
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                              {["BE", "BTech", "MTech", "MCA", "MBA"].map((prog) => (
+                                <span key={prog} style={{ fontSize: '11px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }} onClick={() => setProfileFormData(p => ({ ...p, education: { ...p.education, program: prog } }))}>
+                                  {prog}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Branch / Specialization</label>
+                            <input type="text" className="form-input" value={profileFormData.education.branch} onChange={(e) => setProfileFormData(p => ({ ...p, education: { ...p.education, branch: e.target.value } }))} placeholder="e.g. Computer Science" required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">10th Percentage</label>
+                            <input type="text" className="form-input" value={profileFormData.education.tenthPercentage} onChange={(e) => setProfileFormData(p => ({ ...p, education: { ...p.education, tenthPercentage: e.target.value } }))} required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">12th / Diploma %</label>
+                            <input type="text" className="form-input" value={profileFormData.education.twelfthPercentage} onChange={(e) => setProfileFormData(p => ({ ...p, education: { ...p.education, twelfthPercentage: e.target.value } }))} required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Current CGPA</label>
+                            <input type="text" className="form-input" value={profileFormData.education.currentCGPA} onChange={(e) => setProfileFormData(p => ({ ...p, education: { ...p.education, currentCGPA: e.target.value } }))} required />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '20px' }}>
+                        <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--brand-primary)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact Details</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                          <div className="form-group">
+                            <label className="form-label">Personal Email</label>
+                            <input type="email" className="form-input" value={profileFormData.contact.personalEmail} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, personalEmail: e.target.value } }))} required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">College Email</label>
+                            <input type="email" className="form-input" value={profileFormData.contact.collegeEmail} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, collegeEmail: e.target.value } }))} required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Default Email Preference</label>
+                            <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', cursor: 'pointer' }}>
+                                <input type="radio" name="emailPref" value="personal" checked={profileFormData.contact.defaultEmailPreference === "personal"} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, defaultEmailPreference: e.target.value } }))} />
+                                Personal
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', cursor: 'pointer' }}>
+                                <input type="radio" name="emailPref" value="college" checked={profileFormData.contact.defaultEmailPreference === "college"} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, defaultEmailPreference: e.target.value } }))} />
+                                College
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '32px' }}>
+                        <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--brand-primary)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Professional Links</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                          <div className="form-group">
+                            <label className="form-label">LinkedIn URL</label>
+                            <input type="url" className="form-input" value={profileFormData.professional.linkedinUrl} onChange={(e) => setProfileFormData(p => ({ ...p, professional: { ...p.professional, linkedinUrl: e.target.value } }))} placeholder="https://linkedin.com/in/username" required />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">GitHub URL</label>
+                            <input type="url" className="form-input" value={profileFormData.professional.githubUrl} onChange={(e) => setProfileFormData(p => ({ ...p, professional: { ...p.professional, githubUrl: e.target.value } }))} placeholder="https://github.com/username" required />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                        <button type="button" className="btn-cancel" onClick={() => setAutofillSubView("queue")}>
+                          Cancel
+                        </button>
+                        <button type="submit" className="btn-submit" disabled={savingProfile}>
+                          {savingProfile ? "Saving..." : "Save Profile"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {autofillSubView === "review" && reviewingTask && (
+                  <div className="settings-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                      <button type="button" className="btn-outline-primary" style={{ padding: '6px 12px' }} onClick={() => setAutofillSubView("queue")}>
+                        ← Back
+                      </button>
+                      <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-heading)', margin: 0 }}>Review Autofill: {reviewingTask.company}</h2>
+                    </div>
+
+                    <div style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '16px', borderRadius: '12px', marginBottom: '24px' }}>
+                      <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: 'var(--text-heading)' }}>{reviewingTask.company}</h4>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        Role: {reviewingTask.role} | Received: {new Date(reviewingTask.dateReceived).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '16px', letterSpacing: '0.05em' }}>Fields Mappings</h3>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
+                      {reviewingTask.formFields.map((field) => {
+                        const isFile = field.type === "file";
+                        const hasOverride = tempEdits[field.fieldId]?.edited;
+                        const currentVal = tempEdits[field.fieldId]?.value || "";
+
+                        return (
+                          <div key={field.fieldId} style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderBottom: '1px solid var(--border-color)', paddingBottom: '14px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <label style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-heading)' }}>
+                                {field.label}
+                              </label>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                {isFile && (
+                                  <span style={{ fontSize: '11px', fontWeight: '600', background: 'rgba(37, 99, 235, 0.1)', color: '#2563eb', padding: '2px 8px', borderRadius: '10px' }}>
+                                    File Upload
+                                  </span>
+                                )}
+                                {hasOverride && (
+                                  <span style={{ fontSize: '11px', fontWeight: '600', background: 'rgba(217, 119, 6, 0.1)', color: '#d97706', padding: '2px 8px', borderRadius: '10px' }}>
+                                    Override
+                                  </span>
+                                )}
+                                {field.isMissing && !hasOverride && !isFile && (
+                                  <span style={{ fontSize: '11px', fontWeight: '600', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '2px 8px', borderRadius: '10px' }}>
+                                    Missing Match
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {isFile ? (
+                              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', background: 'var(--bg-color)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                📎 File Upload: Attach your resume PDF manually inside Google Forms.
+                              </div>
+                            ) : (
+                              <input
+                                type="text"
+                                className="form-input"
+                                value={currentVal}
+                                onChange={(e) => setTempEdits(prev => ({
+                                  ...prev,
+                                  [field.fieldId]: { value: e.target.value, edited: true }
+                                }))}
+                                placeholder="Fill value manually..."
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                      <button className="btn-outline-primary" onClick={() => handleUpdateTaskStatus(reviewingTask._id, "submitted").then(() => setAutofillSubView("queue"))}>
+                        Mark as Submitted
+                      </button>
+                      <button className="btn-primary" onClick={() => handleApplyTempEditsAndOpen(reviewingTask._id)} style={{ padding: '10px 20px' }}>
+                        Open Pre-filled Google Form
+                      </button>
                     </div>
                   </div>
                 )}
