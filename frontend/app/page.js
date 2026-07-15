@@ -1326,9 +1326,16 @@ export default function JobTrackerDashboard() {
     return d.toDateString() === now.toDateString() && (a.status || "").toLowerCase() !== "done";
   }).length;
 
-  const unmarkedCount = applications.filter(
-    (a) => (a.status || "").toLowerCase() === "new"
-  ).length;
+  const unmarkedCount = applications.filter(a => {
+    let derivedStatus = (a.status || "new").toLowerCase();
+    if (derivedStatus === "new") {
+      const ageInMs = Date.now() - new Date(a.date || a.createdAt || 0).getTime();
+      if (ageInMs > 24 * 60 * 60 * 1000) {
+        derivedStatus = "unmarked";
+      }
+    }
+    return derivedStatus === "unmarked";
+  }).length;
 
 
 
