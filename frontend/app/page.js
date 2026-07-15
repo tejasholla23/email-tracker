@@ -3217,32 +3217,7 @@ export default function JobTrackerDashboard() {
                           <span className="settings-title-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><circle cx="12" cy="11" r="3" /></svg>
                           </span>
-                          <span>Support</span>
-                        </h3>
-                        <div className="settings-list">
-                          <button className="settings-item" onClick={() => alert("Report an Issue functionality coming soon!")}>
-                            <span className="settings-item-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-                            </span>
-                            <span className="settings-item-label">Report an Issue</span>
-                            <span className="settings-item-arrow">❯</span>
-                          </button>
-                          <button className="settings-item" onClick={() => alert("Send Feedback functionality coming soon!")}>
-                            <span className="settings-item-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
-                            </span>
-                            <span className="settings-item-label">Send Feedback</span>
-                            <span className="settings-item-arrow">❯</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="settings-card">
-                        <h3 className="settings-title">
-                          <span className="settings-title-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22" /><line x1="5" y1="7" x2="19" y2="7" /><path d="M5 9c0 3 1.5 5 3.5 5S12 12 12 9" /><path d="M12 9c0 3 1.5 5 3.5 5S19 12 19 9" /></svg>
-                          </span>
-                          <span>Legal</span>
+                          <span>Legal & Support</span>
                         </h3>
                         <div className="settings-list">
                           <button className="settings-item" onClick={() => setSettingsSubView("privacy")}>
@@ -3259,69 +3234,13 @@ export default function JobTrackerDashboard() {
                             <span className="settings-item-label">Terms of Service</span>
                             <span className="settings-item-arrow">❯</span>
                           </button>
-                        </div>
-                      </div>
-
-                      <div className="settings-card">
-                        <h3 className="settings-title">
-                          <span className="settings-title-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><polyline points="9 14 11 16 15 12"></polyline></svg>
-                          </span>
-                          <span>Autofill Settings</span>
-                        </h3>
-                        <div className="settings-list">
-                          <div className="settings-item" style={{ cursor: 'default', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', padding: '16px 20px' }}>
-                            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '13px', fontWeight: '500' }}>Autofill Feature:</span>
-                              <span style={{
-                                padding: '4px 8px',
-                                borderRadius: '12px',
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                background: autofillEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 71, 87, 0.15)',
-                                color: autofillEnabled ? '#2ed573' : '#ff4757'
-                              }}>
-                                {autofillEnabled ? "ACTIVE" : "DISABLED"}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '13px', fontWeight: '500' }}>Profile Setup:</span>
-                              <span style={{
-                                padding: '4px 8px',
-                                borderRadius: '12px',
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                background: autofillSetupComplete ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 158, 11, 0.15)',
-                                color: autofillSetupComplete ? '#2ed573' : '#f59e0b'
-                              }}>
-                                {autofillSetupComplete ? "COMPLETED" : "INCOMPLETE"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {!autofillEnabled ? (
-                            <button className="settings-item" onClick={handleEnableAutofill}>
-                              <span className="settings-item-label" style={{ color: '#2563eb', fontWeight: '600' }}>
-                                {autofillSetupComplete ? "Enable Autofill" : "Setup & Enable Autofill"}
-                              </span>
-                              <span className="settings-item-arrow">❯</span>
-                            </button>
-                          ) : (
-                            <>
-                              <button className="settings-item" onClick={handlePauseAutofill}>
-                                <span className="settings-item-label" style={{ color: '#d97706', fontWeight: '600' }}>Pause Autofill</span>
-                                <span className="settings-item-arrow">❯</span>
-                              </button>
-                              <button className="settings-item" onClick={() => {
-                                if (confirm("WARNING: This will permanently delete your stored profile and all queued form tasks. This action cannot be undone.\n\nAre you sure you want to delete all Autofill data?")) {
-                                  handleDisableAutofill();
-                                }
-                              }}>
-                                <span className="settings-item-label text-danger" style={{ fontWeight: '600' }}>Disable & Delete Data</span>
-                                <span className="settings-item-arrow">❯</span>
-                              </button>
-                            </>
-                          )}
+                          <button className="settings-item" onClick={() => alert("Report an Issue functionality coming soon!")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                            </span>
+                            <span className="settings-item-label">Report an Issue</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
                         </div>
                       </div>
 
@@ -3622,13 +3541,31 @@ export default function JobTrackerDashboard() {
                   <>
                     <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <h2 className="page-title">Smart Autofill Queue</h2>
+                        <h2 className="page-title">Autofill Queue</h2>
                         <p className="page-subtitle">Automated Google Forms processing for placement emails</p>
                       </div>
                       {autofillSetupComplete && (
-                        <button className="btn-outline-primary" onClick={() => setAutofillSubView("profile")}>
-                          Edit Autofill Profile
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          {autofillEnabled ? (
+                            <button className="btn-outline-primary" style={{ borderColor: 'rgba(245, 158, 11, 0.4)', color: '#d97706' }} onClick={handlePauseAutofill}>
+                              Pause Autofill
+                            </button>
+                          ) : (
+                            <button className="btn-outline-primary" style={{ borderColor: 'rgba(34, 197, 94, 0.4)', color: '#16a34a' }} onClick={handleEnableAutofill}>
+                              Resume Autofill
+                            </button>
+                          )}
+                          <button className="btn-outline-primary text-danger" style={{ borderColor: 'rgba(239, 68, 68, 0.4)' }} onClick={() => {
+                            if (confirm("WARNING: This will permanently delete your stored profile and all queued form tasks. This action cannot be undone.\n\nAre you sure you want to delete all Autofill data?")) {
+                              handleDisableAutofill();
+                            }
+                          }}>
+                            Disable & Delete Data
+                          </button>
+                          <button className="btn-outline-primary" onClick={() => setAutofillSubView("profile")}>
+                            Edit Autofill Profile
+                          </button>
+                        </div>
                       )}
                     </div>
 
@@ -3636,17 +3573,17 @@ export default function JobTrackerDashboard() {
                       <div className="settings-card" style={{ marginTop: '24px', padding: '32px', textAlign: 'center' }}>
                         <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px' }}>Autofill is Disabled</h3>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', marginBottom: '24px', maxWidth: '600px', margin: '0 auto 24px' }}>
-                          Enable Smart Autofill to automatically parse Google Forms links in new placement emails. The parsed fields are matched against your profile and queued here for quick review before submission.
+                          Enable Autofill to automatically parse Google Forms links in new placement emails. The parsed fields are matched against your profile and queued here for quick review before submission.
                         </p>
                         <button className="btn-primary" onClick={handleEnableAutofill} style={{ padding: '12px 24px' }}>
-                          Enable Smart Autofill
+                          Enable Autofill
                         </button>
                       </div>
                     ) : !autofillSetupComplete ? (
                       <div className="settings-card" style={{ marginTop: '24px', padding: '32px', textAlign: 'center' }}>
                         <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px' }}>Complete Profile Setup</h3>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '14.5px', marginBottom: '24px', maxWidth: '600px', margin: '0 auto 24px' }}>
-                          You have enabled Smart Autofill, but you must complete your profile information before forms can be pre-filled and reviewed.
+                          You have enabled Autofill, but you must complete your profile information before forms can be pre-filled and reviewed.
                         </p>
                         <button className="btn-primary" onClick={() => setAutofillSubView("profile")} style={{ padding: '12px 24px' }}>
                           Setup Profile Now
@@ -3814,11 +3751,11 @@ export default function JobTrackerDashboard() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                           <div className="form-group">
                             <label className="form-label">Personal Email</label>
-                            <input type="email" className="form-input" value={profileFormData.contact.personalEmail} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, personalEmail: e.target.value } }))} required />
+                            <input type="email" className="form-input" value={profileFormData.contact.personalEmail} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, personalEmail: e.target.value } }))} />
                           </div>
                           <div className="form-group">
                             <label className="form-label">College Email</label>
-                            <input type="email" className="form-input" value={profileFormData.contact.collegeEmail} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, collegeEmail: e.target.value } }))} required />
+                            <input type="email" className="form-input" value={profileFormData.contact.collegeEmail} onChange={(e) => setProfileFormData(p => ({ ...p, contact: { ...p.contact, collegeEmail: e.target.value } }))} />
                           </div>
                           <div className="form-group">
                             <label className="form-label">Default Email Preference</label>
@@ -3841,11 +3778,11 @@ export default function JobTrackerDashboard() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                           <div className="form-group">
                             <label className="form-label">LinkedIn URL</label>
-                            <input type="url" className="form-input" value={profileFormData.professional.linkedinUrl} onChange={(e) => setProfileFormData(p => ({ ...p, professional: { ...p.professional, linkedinUrl: e.target.value } }))} placeholder="https://linkedin.com/in/username" required />
+                            <input type="url" className="form-input" value={profileFormData.professional.linkedinUrl} onChange={(e) => setProfileFormData(p => ({ ...p, professional: { ...p.professional, linkedinUrl: e.target.value } }))} placeholder="https://linkedin.com/in/username" />
                           </div>
                           <div className="form-group">
                             <label className="form-label">GitHub URL</label>
-                            <input type="url" className="form-input" value={profileFormData.professional.githubUrl} onChange={(e) => setProfileFormData(p => ({ ...p, professional: { ...p.professional, githubUrl: e.target.value } }))} placeholder="https://github.com/username" required />
+                            <input type="url" className="form-input" value={profileFormData.professional.githubUrl} onChange={(e) => setProfileFormData(p => ({ ...p, professional: { ...p.professional, githubUrl: e.target.value } }))} placeholder="https://github.com/username" />
                           </div>
                         </div>
                       </div>
