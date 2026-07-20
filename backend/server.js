@@ -11,7 +11,6 @@ const { google } = require("googleapis");
 const Application = require("./models/Application");
 const Account = require("./models/Account");
 const applicationRoutes = require("./routes/applicationRoutes");
-const autofillRoutes = require("./routes/autofillRoutes");
 const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmailWithLLM");
 const { getCompanyInfo } = require("./utils/companyInfoService");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
@@ -162,7 +161,6 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use("/applications", applicationRoutes);
-app.use("/autofill", autofillRoutes);
 
 // ==========================
 // 🟢 DB CONNECT
@@ -454,9 +452,7 @@ app.get("/auth/me", readLimiter, authenticate, async (req, res) => {
     res.json({
       _id: req.userId,
       email: req.userEmail,
-      pushSubscriptionsCount: account ? (account.pushSubscriptions?.length || 0) : 0,
-      autofillEnabled: account ? (account.autofillEnabled || false) : false,
-      autofillSetupComplete: account ? (account.autofillSetupComplete || false) : false
+      pushSubscriptionsCount: account ? (account.pushSubscriptions?.length || 0) : 0
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1209,21 +1205,6 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data and/or event history`);
       }
 
-      // Autofill: queue/refresh Google Forms if duplicate email has a form link
-      const effectiveLink = updatePayload.link || contentExists.link;
-      const effectiveIsFormLink = updatePayload.isFormLink || contentExists.isFormLink;
-      if (effectiveIsFormLink && effectiveLink && /docs\.google\.com\/forms|forms\.gle/.test(effectiveLink)) {
-        try {
-          const account = await Account.findById(acc._id);
-          if (account && account.autofillEnabled && account.autofillSetupComplete) {
-            const { createAutofillTask } = require("./utils/autofillService");
-            await createAutofillTask(acc._id, contentExists._id, effectiveLink);
-          }
-        } catch (afErr) {
-          console.error(`[AUTOFILL_ERROR] ${id} (duplicate):`, afErr.message);
-        }
-      }
-
       console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
       return { action: 'skipped', usedGemini };
     }
@@ -1294,19 +1275,6 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       await sendNewEmailNotification(acc, newApp);
     } catch (pushErr) {
       console.error(`[PUSH_ERROR] ${id}:`, pushErr.message);
-    }
-
-    // Autofill: queue Google Forms if enabled
-    if (newApp.isFormLink && newApp.link && /docs\.google\.com\/forms|forms\.gle/.test(newApp.link)) {
-      try {
-        const account = await Account.findById(acc._id);
-        if (account && account.autofillEnabled && account.autofillSetupComplete) {
-          const { createAutofillTask } = require("./utils/autofillService");
-          await createAutofillTask(acc._id, newApp._id, newApp.link);
-        }
-      } catch (afErr) {
-        console.error(`[AUTOFILL_ERROR] ${id}:`, afErr.message);
-      }
     }
 
     return { action: 'inserted', usedGemini };

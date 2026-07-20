@@ -37,14 +37,6 @@ const accountSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  autofillEnabled: {
-    type: Boolean,
-    default: false,
-  },
-  autofillSetupComplete: {
-    type: Boolean,
-    default: false,
-  },
   pushSubscriptions: {
     type: [{
       endpoint: { type: String, required: true },
