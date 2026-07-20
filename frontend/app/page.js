@@ -1323,7 +1323,8 @@ export default function JobTrackerDashboard() {
   const urgentDeadlines = applications.filter(a => {
     if (!a.deadlineISO) return false;
     const d = new Date(a.deadlineISO);
-    return d.toDateString() === now.toDateString() && (a.status || "").toLowerCase() !== "done";
+    const statusLower = (a.status || "").toLowerCase();
+    return d.toDateString() === now.toDateString() && statusLower !== "done" && statusLower !== "applied";
   }).length;
 
   const unmarkedCount = applications.filter(a => {
@@ -4029,7 +4030,7 @@ export default function JobTrackerDashboard() {
                                 : "N/A";
                               const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
                               const statusKey = app.derivedStatus;
-                              const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
+                              const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied";
                               const isDone = statusKey === "done";
 
                               const getDeterministicColor = (str) => {

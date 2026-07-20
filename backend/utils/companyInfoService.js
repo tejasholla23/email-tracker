@@ -46,7 +46,7 @@ async function getCompanyInfo(companyName, parsedDomain = "") {
     const fallbackColor = "00000".substring(0, 6 - c.length) + c;
     const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(str)}&background=${fallbackColor}&color=fff&size=128&bold=true`;
 
-    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=https://${domain}&sz=128`;
 
     let finalLogo = uiAvatarUrl;
 
