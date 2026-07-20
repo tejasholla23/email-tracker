@@ -83,22 +83,7 @@ export default function JobTrackerDashboard() {
   const [calendarSuccessMsg, setCalendarSuccessMsg] = useState("");
   const [calendarErrorMsg, setCalendarErrorMsg] = useState("");
 
-  // Autofill Feature State
-  const [autofillProfile, setAutofillProfile] = useState(null);
-  const [autofillTasks, setAutofillTasks] = useState([]);
-  const [autofillEnabled, setAutofillEnabled] = useState(false);
-  const [autofillSetupComplete, setAutofillSetupComplete] = useState(false);
-  const [loadingAutofill, setLoadingAutofill] = useState(false);
-  const [autofillSubView, setAutofillSubView] = useState("queue"); // "queue" | "profile" | "review"
-  const [reviewingTask, setReviewingTask] = useState(null);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [tempEdits, setTempEdits] = useState({}); // temporary overrides structured as { [fieldId]: { value, edited: true } }
-  const [profileFormData, setProfileFormData] = useState({
-    personal: { fullName: "", usn: "", gender: "", mobileNumber: "" },
-    education: { program: "", branch: "", tenthPercentage: "", twelfthPercentage: "", currentCGPA: "" },
-    contact: { personalEmail: "", collegeEmail: "", defaultEmailPreference: "personal" },
-    professional: { linkedinUrl: "", githubUrl: "" },
-  });
+
 
   // Push Notifications State
   const [pushSupported, setPushSupported] = useState(false);
@@ -582,188 +567,7 @@ export default function JobTrackerDashboard() {
     }
   };
 
-  const fetchAutofillStatus = async () => {
-    try {
-      setLoadingAutofill(true);
-      const resProfile = await apiFetch(`${BASE_URL}/autofill/profile`);
-      if (resProfile.ok) {
-        const data = await resProfile.json();
-        setAutofillProfile(data);
-        if (data && data.personal) {
-          setProfileFormData({
-            personal: data.personal || { fullName: "", usn: "", gender: "", mobileNumber: "" },
-            education: data.education || { program: "", branch: "", tenthPercentage: "", twelfthPercentage: "", currentCGPA: "" },
-            contact: data.contact || { personalEmail: "", collegeEmail: "", defaultEmailPreference: "personal" },
-            professional: data.professional || { linkedinUrl: "", githubUrl: "" },
-          });
-        }
-      }
 
-      const resTasks = await apiFetch(`${BASE_URL}/autofill/tasks`);
-      if (resTasks.ok) {
-        const data = await resTasks.json();
-        setAutofillTasks(data);
-      }
-
-      const resMe = await apiFetch(`${BASE_URL}/auth/me`);
-      if (resMe.ok) {
-        const data = await resMe.json();
-        setAutofillEnabled(data.autofillEnabled || false);
-        setAutofillSetupComplete(data.autofillSetupComplete || false);
-      }
-    } catch (err) {
-      console.error("Failed to fetch autofill data:", err);
-    } finally {
-      setLoadingAutofill(false);
-    }
-  };
-
-  useEffect(() => {
-    if (userEmail && (activeFilter === "autofill" || activeFilter === "settings")) {
-      fetchAutofillStatus();
-    }
-  }, [userEmail, activeFilter]);
-
-  const handleSaveAutofillProfile = async (e) => {
-    if (e) e.preventDefault();
-    try {
-      setSavingProfile(true);
-      const res = await apiFetch(`${BASE_URL}/autofill/profile`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profileFormData),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setAutofillProfile(updated);
-        setAutofillSetupComplete(true);
-        setAutofillSubView("queue");
-        // Reload tasks and profile
-        await fetchAutofillStatus();
-      } else {
-        alert("Failed to save profile. Please verify data inputs.");
-      }
-    } catch (err) {
-      console.error("Profile save error:", err);
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
-  const handleRefreshAutofillTask = async (taskId) => {
-    try {
-      const res = await apiFetch(`${BASE_URL}/autofill/tasks/${taskId}/refresh`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setAutofillTasks((prev) => prev.map((t) => (t._id === taskId ? updated : t)));
-        if (reviewingTask && reviewingTask._id === taskId) {
-          setReviewingTask(updated);
-          // Initialize edits mapping
-          const initEdits = {};
-          updated.formFields.forEach((field) => {
-            const temp = updated.temporaryEdits?.[field.fieldId] || updated.temporaryEdits?.get?.(field.fieldId);
-            initEdits[field.fieldId] = {
-              value: temp?.value !== undefined ? temp.value : (field.mappedValue || ""),
-              edited: !!temp,
-            };
-          });
-          setTempEdits(initEdits);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to refresh task:", err);
-    }
-  };
-
-  const handleUpdateTaskStatus = async (taskId, status) => {
-    try {
-      const res = await apiFetch(`${BASE_URL}/autofill/tasks/${taskId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setAutofillTasks((prev) => prev.map((t) => (t._id === taskId ? updated : t)));
-        if (reviewingTask && reviewingTask._id === taskId) {
-          setReviewingTask(updated);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to update status:", err);
-    }
-  };
-
-  const handleApplyTempEditsAndOpen = async (taskId) => {
-    try {
-      // 1. Submit current tempEdits state to the task edits endpoint
-      const res = await apiFetch(`${BASE_URL}/autofill/tasks/${taskId}/edits`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ edits: tempEdits }),
-      });
-
-      if (res.ok) {
-        const updated = await res.json();
-        setAutofillTasks((prev) => prev.map((t) => (t._id === taskId ? updated : t)));
-        setReviewingTask(updated);
-
-        // 2. Advance task status to 'opened'
-        await handleUpdateTaskStatus(taskId, "opened");
-
-        // 3. Open prefilled URL in a new window/tab
-        window.open(updated.prefillUrl, "_blank", "noopener,noreferrer");
-      }
-    } catch (err) {
-      console.error("Failed to save overrides and pre-fill form:", err);
-    }
-  };
-
-  const handleEnableAutofill = async () => {
-    try {
-      const res = await apiFetch(`${BASE_URL}/autofill/enable`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        setAutofillEnabled(data.enabled);
-        setAutofillSetupComplete(data.setupComplete);
-        if (!data.setupComplete) {
-          setAutofillSubView("profile");
-        }
-      }
-    } catch (err) {
-      console.error("Enable error:", err);
-    }
-  };
-
-  const handlePauseAutofill = async () => {
-    try {
-      const res = await apiFetch(`${BASE_URL}/autofill/pause`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        setAutofillEnabled(data.enabled);
-      }
-    } catch (err) {
-      console.error("Pause error:", err);
-    }
-  };
-
-  const handleDisableAutofill = async () => {
-    try {
-      const res = await apiFetch(`${BASE_URL}/autofill/disable`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        setAutofillEnabled(data.enabled);
-        setAutofillSetupComplete(data.setupComplete);
-        setAutofillProfile(null);
-        setAutofillTasks([]);
-        setAutofillSubView("queue");
-      }
-    } catch (err) {
-      console.error("Disable error:", err);
-    }
-  };
 
   useEffect(() => {
     if (userEmail) {
@@ -2851,7 +2655,7 @@ export default function JobTrackerDashboard() {
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div
-              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' && activeFilter !== 'autofill' ? 'active' : ''}`}
+              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' ? 'active' : ''}`}
               onClick={() => { setActiveFilter('all'); setIsSidebarOpen(false); }}
             >
               <div className="nav-icon-wrapper">
@@ -2868,16 +2672,6 @@ export default function JobTrackerDashboard() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
               </div>
               <span className="nav-text">Calendar</span>
-            </div>
-
-            <div
-              className={`nav-item ${activeFilter === 'autofill' ? 'active' : ''}`}
-              onClick={() => { setActiveFilter('autofill'); setAutofillSubView('queue'); setIsSidebarOpen(false); }}
-            >
-              <div className="nav-icon-wrapper">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><polyline points="9 14 11 16 15 12"></polyline></svg>
-              </div>
-              <span className="nav-text">Autofill</span>
             </div>
 
             <div
