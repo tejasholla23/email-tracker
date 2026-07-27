@@ -7,8 +7,6 @@
 [![Google Cloud](https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=googlecloud)](https://cloud.google.com/)
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel)](https://email-tracker-seven-rho.vercel.app/)
 
-> An AI-powered full-stack application that automatically ingests, parses, categorizes, and tracks placement department emails, syncing deadlines directly to Google Calendar and delivering real-time Web Push notifications across devices.
-
 ---
 
 ## Project Description
