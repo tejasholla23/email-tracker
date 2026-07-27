@@ -895,9 +895,10 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
               exists.events[evIndex].summary = parsed.timelineSummary || parsed.summary || "";
               exists.events[evIndex].link = parsed.link || exists.events[evIndex].link || "";
             } else {
+              const retryDate = email.data?.internalDate ? new Date(parseInt(email.data.internalDate)) : exists.date;
               exists.events.push({
                 messageId: id,
-                date: exists.date,
+                date: retryDate,
                 classification: parsed.classification || "",
                 title: parsed.timelineTitle || parsed.title || "",
                 subject: subject || "",
@@ -906,6 +907,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
                 summary: parsed.timelineSummary || parsed.summary || ""
               });
               exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+              if (!ov.includes("date") && retryDate && new Date(retryDate) > new Date(exists.date || 0)) {
+                updatePayload.date = retryDate;
+              }
             }
             exists.markModified('events');
             eventAdded = true; // Force eventAdded so updatePayload.events is saved!
@@ -1190,9 +1194,10 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         // Status is now strictly time/action-based. We do not advance status based on classification anymore.
       }
 
+      const emailDate = new Date(parseInt(email.data.internalDate));
       const eventAdded = appendApplicationEvent(contentExists, parsed, {
         messageId: id,
-        date: new Date(parseInt(email.data.internalDate)),
+        date: emailDate,
         subject: subject
       });
       
@@ -1200,9 +1205,16 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         updatePayload.events = contentExists.events;
       }
 
+      if (!ov.includes("date")) {
+        const currentDate = contentExists.date ? new Date(contentExists.date) : new Date(0);
+        if (!isNaN(emailDate.getTime()) && emailDate > currentDate) {
+          updatePayload.date = emailDate;
+        }
+      }
+
       if (Object.keys(updatePayload).length > 0) {
         await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
-        console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data and/or event history`);
+        console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data, date update, and/or event history`);
       }
 
       console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
