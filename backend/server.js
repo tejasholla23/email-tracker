@@ -1,4 +1,5 @@
 require("dotenv").config();
+const config = require("./config/appConfig");
 const cron = require("node-cron");
 
 const express = require("express");
@@ -14,8 +15,20 @@ const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmail
 const { getCompanyInfo } = require("./utils/companyInfoService");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
+const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
+const authenticate = require("./middleware/authenticate");
+const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
+const { processCalendarSyncQueue } = require("./utils/calendarService");
+const {
+  authLimiter,
+  syncLimiter,
+  calendarSyncLimiter,
+  writeLimiter,
+  readLimiter
+} = require("./middleware/rateLimiters");
 
-const ALLOWED_SENDERS = ["placement@msrit.edu", "dean.tap@msrit.edu"];
+const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
+const CURRENT_PARSER_VERSION = "v4";
 
 function getNextRetryDate(retryCount) {
   const now = new Date();
@@ -98,6 +111,7 @@ function getFullBodyText(payload) {
 }
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 
 const MONGO_URI =
@@ -105,8 +119,21 @@ const MONGO_URI =
 
 // OAuth Validation
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
-  console.error("CRITICAL: Google OAuth environment variables are missing!");
-  console.log("Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI");
+  console.error("CRITICAL ERROR: Google OAuth environment variables are missing!");
+  console.error("Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI");
+  process.exit(1);
+}
+
+// JWT and Cron Key Validation
+if (!process.env.JWT_SECRET) {
+  console.error("CRITICAL ERROR: JWT_SECRET environment variable is missing!");
+  console.error("The application cannot start without a valid JWT_SECRET.");
+  process.exit(1);
+}
+
+if (!process.env.CRON_API_KEY) {
+  console.warn("WARNING: CRON_API_KEY environment variable is missing!");
+  console.warn("Requests to /run-cron will be rejected.");
 }
 
 const oauth2Client = new google.auth.OAuth2(
@@ -115,7 +142,23 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-app.use(cors());
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:3000",
+  "http://localhost:3001",
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow server-to-server requests (no origin) and known origins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: Origin '${origin}' not allowed`));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use("/applications", applicationRoutes);
 
@@ -155,9 +198,9 @@ app.get("/", (req, res) => {
 // ==========================
 
 // GET /clear-applications — legacy convenience endpoint (browser-accessible)
-app.get("/clear-applications", async (req, res) => {
+app.get("/clear-applications", writeLimiter, authenticate, async (req, res) => {
   try {
-    await Application.deleteMany({});
+    await Application.deleteMany({ userId: req.userId });
     res.send("All applications deleted");
   } catch (err) {
     res.status(500).send(err.message);
@@ -166,22 +209,22 @@ app.get("/clear-applications", async (req, res) => {
 
 // DELETE /clear-all-applications — used by the frontend "Clear All" button.
 // Sets a flag that aborts any in-progress sync, waits briefly, then wipes the DB.
-app.delete("/clear-all-applications", async (req, res) => {
-  const email = req.headers["x-user-email"];
-  if (email !== "1ms23ci126@msrit.edu") {
+app.delete("/clear-all-applications", writeLimiter, authenticate, async (req, res) => {
+  if (!config.isAllowedEmail(req.userEmail)) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  console.log("[CLEAR_ALL] Requested — setting clearRequested flag");
-  clearRequested = true;
+  const userIdStr = req.userId.toString();
+  console.log(`[CLEAR_ALL] Requested for user ${userIdStr} — setting activeClearRequests`);
+  activeClearRequests.add(userIdStr);
 
   // Give the sync loop up to 3 s to notice the flag and break out of the current email
-  if (isProcessing) {
-    console.log("[CLEAR_ALL] Sync in progress — waiting up to 3 s for it to abort...");
+  if (activeSyncs.has(userIdStr)) {
+    console.log("[CLEAR_ALL] Sync in progress for this user — waiting up to 3 s for it to abort...");
     await new Promise((resolve) => {
       const deadline = Date.now() + 3000;
       const poll = setInterval(() => {
-        if (!isProcessing || Date.now() >= deadline) {
+        if (!activeSyncs.has(userIdStr) || Date.now() >= deadline) {
           clearInterval(poll);
           resolve();
         }
@@ -190,13 +233,13 @@ app.delete("/clear-all-applications", async (req, res) => {
   }
 
   try {
-    const result = await Application.deleteMany({});
+    const result = await Application.deleteMany({ userId: req.userId });
     console.log(`[CLEAR_ALL] Deleted ${result.deletedCount} application(s)`);
-    clearRequested = false;
-    isProcessing = false; // Reset in case sync was stuck
+    activeClearRequests.delete(userIdStr);
+    activeSyncs.delete(userIdStr); // Reset lock in case sync was stuck
     res.json({ message: "All applications permanently cleared", deletedCount: result.deletedCount });
   } catch (err) {
-    clearRequested = false;
+    activeClearRequests.delete(userIdStr);
     res.status(500).json({ message: "Failed to clear applications: " + err.message });
   }
 });
@@ -204,65 +247,400 @@ app.delete("/clear-all-applications", async (req, res) => {
 // ==========================
 // 🔐 GOOGLE AUTH
 // ==========================
-app.get("/auth/google", (req, res) => {
+app.get("/auth/google", authLimiter, (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: [
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/userinfo.email",
     ],
+    include_granted_scopes: true,
     prompt: "consent",
   });
 
   res.redirect(url);
 });
 
-app.get("/auth/google/callback", async (req, res) => {
+// Incremental OAuth flow for calendar scopes specifically
+app.get("/auth/google/calendar", authLimiter, (req, res) => {
+  const url = oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/calendar.events"
+    ],
+    include_granted_scopes: true,
+    prompt: "consent",
+  });
+
+  res.redirect(url);
+});
+
+app.get("/auth/google/callback", authLimiter, async (req, res) => {
   const { code } = req.query;
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
   try {
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
+    // Fix 6: Use per-request OAuth client to prevent race conditions on shared global instance
+    const localCallbackClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+
+    const { tokens } = await localCallbackClient.getToken(code);
+    localCallbackClient.setCredentials(tokens);
 
     const oauth2 = google.oauth2({
-      auth: oauth2Client,
+      auth: localCallbackClient,
       version: "v2",
     });
 
     const userInfo = await oauth2.userinfo.get();
-    const email = userInfo.data.email;
+    const email = userInfo?.data?.email;
 
-    await Account.findOneAndUpdate(
-      { email },
-      { 
-        tokens,
-        syncStatus: "idle",
-        syncError: ""
-      },
-      { upsert: true }
-    );
+    // Fix 2: Log the user scopes returned from Google
+    console.log(`[AUTH_CALLBACK] User ${email || "unknown"} completed OAuth. Scopes granted: ${tokens.scope || "NONE"}`);
 
-    const allowedEmail = "1ms23ci126@msrit.edu";
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-
-    if (email !== allowedEmail) {
-      console.warn(`[AUTH] Denied login attempt from: ${email}`);
+    // Fix 4: Check allowlist BEFORE upserting the account in MongoDB
+    if (!email || !config.isAllowedEmail(email)) {
+      console.warn(`[AUTH] Denied login attempt from unauthorized email: ${email}`);
       return res.redirect(`${frontendUrl}?error=unauthorized`);
     }
 
-    res.redirect(`${frontendUrl}?auth_success=true&email=${encodeURIComponent(email)}`);
+    // Fix 1: Validate required scopes are granted (specifically gmail.readonly)
+    if (!tokens.scope || !tokens.scope.includes("https://www.googleapis.com/auth/gmail.readonly")) {
+      console.warn(`[AUTH] Denied login for ${email} due to missing gmail.readonly scope. Scopes returned: ${tokens.scope}`);
+      return res.redirect(`${frontendUrl}?error=insufficient_scopes`);
+    }
+
+    // Find existing account first to preserve long-lived credentials/scopes
+    const existingAccount = await Account.findOne({ email });
+    let mergedTokens = { ...tokens };
+    let wasCalendarEnabled = false;
+
+    if (existingAccount && existingAccount.tokens) {
+      // 1. Preserve the refresh_token if the new callback didn't return one
+      if (!mergedTokens.refresh_token && existingAccount.tokens.refresh_token) {
+        mergedTokens.refresh_token = existingAccount.tokens.refresh_token;
+      }
+
+      // 2. Preserve calendar scope if the user previously had it authorized
+      const hadCalendarScope = existingAccount.tokens.scope && existingAccount.tokens.scope.includes("auth/calendar.events");
+      const hasCalendarScopeNow = mergedTokens.scope && mergedTokens.scope.includes("auth/calendar.events");
+
+      if (hadCalendarScope && !hasCalendarScopeNow) {
+        const oldScopes = existingAccount.tokens.scope.split(" ");
+        const newScopes = (mergedTokens.scope || "").split(" ");
+        const mergedScopes = Array.from(new Set([...oldScopes, ...newScopes])).join(" ");
+        mergedTokens.scope = mergedScopes;
+        console.log(`[AUTH_CALLBACK] Merged existing calendar scope for ${email}. Combined scope: ${mergedTokens.scope}`);
+      }
+
+      if (existingAccount.calendarSyncEnabled) {
+        wasCalendarEnabled = true;
+      }
+    }
+
+    const updatePayload = {
+      tokens: mergedTokens,
+      syncStatus: "idle",
+      syncError: ""
+    };
+
+    // Auto-detect calendar permission consent in scope string
+    if (mergedTokens.scope && mergedTokens.scope.includes("auth/calendar.events")) {
+      updatePayload.calendarSyncEnabled = existingAccount ? wasCalendarEnabled : true;
+    }
+
+    await Account.findOneAndUpdate(
+      { email },
+      { $set: updatePayload },
+      { upsert: true }
+    );
+
+    // Generate short-lived auth code and redirect frontend
+    const authCode = generateAuthCode(email);
+    res.redirect(`${frontendUrl}?auth_code=${authCode}`);
   } catch (err) {
     console.error("Google Auth Callback Error:", err.message);
     res.status(500).send(`Auth failed: ${err.message}`);
   }
 });
 
+// POST /auth/token - exchange temporary auth code for access and refresh tokens
+app.post("/auth/token", authLimiter, async (req, res) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ message: "Authorization code is required" });
+  }
+
+  const email = consumeAuthCode(code);
+  if (!email) {
+    return res.status(400).json({ message: "Invalid or expired authorization code" });
+  }
+
+  try {
+    const account = await Account.findOne({ email });
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    const accessToken = generateAccessToken(account);
+    const rawRefreshToken = generateRefreshToken();
+    const hashedToken = hashRefreshToken(rawRefreshToken);
+
+    // Save hashed refresh token and expiry (90 days)
+    account.refreshTokenHash = hashedToken;
+    account.refreshTokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    await account.save();
+
+    res.json({
+      accessToken,
+      refreshToken: rawRefreshToken,
+      email: account.email
+    });
+  } catch (error) {
+    console.error("Token Exchange Error:", error.message);
+    res.status(500).json({ message: "Failed to exchange authorization code" });
+  }
+});
+
+// POST /auth/refresh - rotate refresh token and issue new access token
+app.post("/auth/refresh", authLimiter, async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(400).json({ message: "Refresh token is required" });
+  }
+
+  const hashedToken = hashRefreshToken(refreshToken);
+
+  try {
+    const account = await Account.findOne({
+      refreshTokenHash: hashedToken,
+      refreshTokenExpiresAt: { $gt: new Date() }
+    });
+
+    if (!account) {
+      return res.status(401).json({ message: "Invalid or expired refresh token" });
+    }
+
+    const newAccessToken = generateAccessToken(account);
+    const newRawRefreshToken = generateRefreshToken();
+    const newHashedToken = hashRefreshToken(newRawRefreshToken);
+
+    // Rotate refresh token
+    account.refreshTokenHash = newHashedToken;
+    account.refreshTokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    await account.save();
+
+    res.json({
+      accessToken: newAccessToken,
+      refreshToken: newRawRefreshToken
+    });
+  } catch (error) {
+    console.error("Token Refresh Error:", error.message);
+    res.status(500).json({ message: "Failed to refresh token" });
+  }
+});
+
+// GET /auth/me - get current user context from JWT
+app.get("/auth/me", readLimiter, authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    res.json({
+      _id: req.userId,
+      email: req.userEmail,
+      pushSubscriptionsCount: account ? (account.pushSubscriptions?.length || 0) : 0
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /auth/calendar/status - check calendar integration status
+app.get("/auth/calendar/status", readLimiter, authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    // Check if the OAuth token has the required calendar scope
+    const hasCalendarScope = account.tokens && account.tokens.scope && account.tokens.scope.includes("auth/calendar.events");
+
+    res.json({
+      calendarSyncEnabled: account.calendarSyncEnabled || false,
+      hasCalendarScope: !!hasCalendarScope
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /auth/calendar/toggle - toggle calendar integration enabled state
+app.post("/auth/calendar/toggle", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    const hasCalendarScope = account.tokens && account.tokens.scope && account.tokens.scope.includes("auth/calendar.events");
+    if (!account.calendarSyncEnabled && !hasCalendarScope) {
+      return res.status(400).json({ message: "Insufficient permissions. Please connect Google Calendar first to grant access." });
+    }
+
+    account.calendarSyncEnabled = !account.calendarSyncEnabled;
+    
+    // If enabling, queue all existing non-deleted applications for sync sweep
+    if (account.calendarSyncEnabled) {
+      await Application.updateMany(
+        { userId: req.userId, isDeleted: { $ne: true } },
+        { $set: { needsCalendarSync: true } }
+      );
+    }
+
+    await account.save();
+    res.json({ calendarSyncEnabled: account.calendarSyncEnabled });
+
+    // Trigger sync in background
+    if (account.calendarSyncEnabled) {
+      processCalendarSyncQueue(account).catch(err => console.error("Async calendar sync error:", err.message));
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /auth/calendar/sync - manually trigger calendar re-sync
+app.post("/auth/calendar/sync", calendarSyncLimiter, authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    if (!account.calendarSyncEnabled) {
+      return res.status(400).json({ message: "Calendar integration is disabled" });
+    }
+
+    // Flag all active applications for sync
+    await Application.updateMany(
+      { userId: req.userId, isDeleted: { $ne: true } },
+      { $set: { needsCalendarSync: true } }
+    );
+
+    res.json({ success: true, message: "Sync queued in background" });
+
+    processCalendarSyncQueue(account).catch(err => console.error("Async calendar sync error:", err.message));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+// ==========================
+// 🔔 PUSH NOTIFICATIONS
+// ==========================
+
+// GET /push/vapid-key - Get the VAPID public key
+app.get("/push/vapid-key", readLimiter, (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+// POST /push/subscribe - Subscribe a device to push notifications
+app.post("/push/subscribe", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
+      return res.status(400).json({ message: "Invalid subscription format." });
+    }
+
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found." });
+
+    if (!account.pushSubscriptions) {
+      account.pushSubscriptions = [];
+    }
+
+    // Check if subscription endpoint is already registered
+    const existingIndex = account.pushSubscriptions.findIndex(
+      (sub) => sub.endpoint === subscription.endpoint
+    );
+
+    const userAgent = req.headers["user-agent"] || "";
+
+    if (existingIndex !== -1) {
+      // Update existing subscription metadata
+      account.pushSubscriptions[existingIndex].createdAt = new Date();
+      account.pushSubscriptions[existingIndex].userAgent = userAgent;
+    } else {
+      // Add new device subscription
+      account.pushSubscriptions.push({
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: subscription.keys.p256dh,
+          auth: subscription.keys.auth,
+        },
+        userAgent,
+        createdAt: new Date(),
+      });
+    }
+
+    // Enforce cap of 10 subscriptions per account (remove oldest)
+    if (account.pushSubscriptions.length > 10) {
+      account.pushSubscriptions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      account.pushSubscriptions.shift();
+    }
+
+    await account.save();
+    res.json({ success: true, message: "Subscribed successfully." });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /push/unsubscribe - Unsubscribe a device from push notifications
+app.post("/push/unsubscribe", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) {
+      return res.status(400).json({ message: "Endpoint is required." });
+    }
+
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found." });
+
+    if (account.pushSubscriptions && account.pushSubscriptions.length > 0) {
+      account.pushSubscriptions = account.pushSubscriptions.filter(
+        (sub) => sub.endpoint !== endpoint
+      );
+      await account.save();
+    }
+
+    res.json({ success: true, message: "Unsubscribed successfully." });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ==========================
 // 🚪 LOGOUT
 // ==========================
-app.get("/logout", async (req, res) => {
+app.post("/logout", writeLimiter, authenticate, async (req, res) => {
   try {
-    await Account.deleteMany({});
+    const { pushEndpoint } = req.body || {};
+    const account = await Account.findById(req.userId);
+    
+    if (account) {
+      // Remove only this device's push subscription from the DB
+      if (pushEndpoint && account.pushSubscriptions?.length > 0) {
+        account.pushSubscriptions = account.pushSubscriptions.filter(
+          (sub) => sub.endpoint !== pushEndpoint
+        );
+      }
+      
+      account.refreshTokenHash = null;
+      account.refreshTokenExpiresAt = null;
+      await account.save();
+    }
+
     res.send("Logged out successfully");
   } catch (err) {
     console.error(err);
@@ -270,8 +648,49 @@ app.get("/logout", async (req, res) => {
   }
 });
 
-let isProcessing = false;
-let clearRequested = false; // Set to true to abort an in-progress sync during Clear All
+// ==========================
+// ❌ DELETE ACCOUNT
+// ==========================
+app.delete("/auth/account", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const userId = req.userId;
+    console.log(`[ACCOUNT_DELETION] Initiating deletion for userId: ${userId}`);
+
+    // 1. Delete all applications belonging to this user
+    const appsDeleteResult = await Application.deleteMany({ userId });
+    console.log(`[ACCOUNT_DELETION] Deleted ${appsDeleteResult.deletedCount} applications for userId: ${userId}`);
+
+    // 2. Delete the account document
+    const accountDeleteResult = await Account.findByIdAndDelete(userId);
+    if (!accountDeleteResult) {
+      console.warn(`[ACCOUNT_DELETION] Account not found for userId: ${userId}`);
+      return res.status(404).json({ success: false, message: "Account not found." });
+    }
+
+    console.log(`[ACCOUNT_DELETION] Successfully deleted account for userId: ${userId}`);
+
+    res.json({
+      success: true,
+      message: "Account deleted successfully."
+    });
+  } catch (error) {
+    console.error(`[ACCOUNT_DELETION] Failed to delete account for userId: ${req.userId}:`, error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete account. Please try again."
+    });
+  }
+});
+
+const activeSyncs = new Set();
+const activeClearRequests = new Set();
+let isCronProcessing = false;
+
+// Per-user manual sync cooldown (45 seconds).
+// Complements the activeSyncs concurrency guard as a second layer.
+const manualSyncCooldowns = new Map();
+const MANUAL_SYNC_COOLDOWN_MS = 45 * 1000;
+let isMigrationV4Processing = false;
 
 function appendApplicationEvent(application, parsed, emailMetadata) {
   const { messageId, date, subject } = emailMetadata;
@@ -290,7 +709,8 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
     title: parsed.title || "",
     subject: subject || "",
     status: parsed.status || "new",
-    link: parsed.link || ""
+    link: parsed.link || "",
+    summary: parsed.summary || ""
   });
   
   application.events.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -309,13 +729,13 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
   let usedGemini = false;
 
   try {
-    // ── FAST PATH: already fully parsed (v2) ──
+    // ── FAST PATH: already fully parsed ──
     if (existingFast) {
-      if (existingFast.parserVersion === "v2") {
+      if (existingFast.parserVersion === CURRENT_PARSER_VERSION) {
         if (existingFast.isDeleted) {
           console.log(`[SKIP_FAST] ${id} | Reason: Message already deleted by user`);
         } else {
-          console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (v2)`);
+          console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (${CURRENT_PARSER_VERSION})`);
         }
         return { action: 'skipped', usedGemini: false };
       } else {
@@ -354,6 +774,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     const headers = email.data.payload.headers;
     const fromHeader = headers.find((h) => h.name === "From")?.value || "";
     const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    const internetMessageId = headers.find((h) => h.name.toLowerCase() === "message-id")?.value || "";
 
     const isAllowedSender = ALLOWED_SENDERS.some(sender => 
       fromHeader.toLowerCase().includes(sender.toLowerCase())
@@ -372,7 +793,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
 
     // ── EXISTING RECORD: enrich or skip ──
-    const exists = existingFast ? await Application.findOne({ messageId: id }) : null;
+    const exists = existingFast ? await Application.findOne({ userId: acc._id, messageId: id }) : null;
     if (exists) {
       // Skip if this messageId was already marked as deleted (and is a normal application)
       if (exists.isDeleted) {
@@ -397,19 +818,101 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         eventAdded = true;
       }
 
-      const missingDetails = exists.parserVersion !== "v2";
+      const missingDetails = exists.parserVersion !== CURRENT_PARSER_VERSION;
       if (missingDetails) {
-        console.log(`[REPARSE] ${id} | Existing message needs enrichment`);
-        const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-        // Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
-        await new Promise(r => setTimeout(r, 6500));
-        usedGemini = true;
+        console.log(`[REPARSE] ${id} | Existing message needs enrichment to ${CURRENT_PARSER_VERSION}`);
+        let parsed = null;
+        if (internetMessageId) {
+          const cachedApp = await Application.findOne({
+            "parseMeta.internetMessageId": internetMessageId,
+            company: { $nin: ["PENDING_PARSE", "IGNORED"] },
+            parserVersion: CURRENT_PARSER_VERSION
+          });
+          if (cachedApp) {
+            console.log(`[REPARSE_CACHE_HIT] Reusing parsed data from existing application for Message-ID: ${internetMessageId}`);
+            parsed = {
+              emailType: cachedApp.emailType,
+              opportunityType: cachedApp.opportunityType,
+              isRelevant: cachedApp.emailType !== "nonRecruitment",
+              classification: cachedApp.classification,
+              type: cachedApp.type,
+              status: cachedApp.status,
+              confidenceScore: cachedApp.confidenceScore,
+              timelineTitle: cachedApp.title,
+              timelineSummary: cachedApp.parseMeta?.trace?.gemini?.timelineSummary || "",
+              company: cachedApp.company,
+              domain: cachedApp.domain,
+              subtitle: cachedApp.subtitle,
+              role: cachedApp.role,
+              title: cachedApp.title,
+              processId: cachedApp.processId,
+              processName: cachedApp.processName,
+              displayFields: cachedApp.displayFields,
+              skills: cachedApp.skills,
+              fieldsToDisplay: cachedApp.fieldsToDisplay,
+              programRoles: cachedApp.programRoles,
+              programStipend: cachedApp.programStipend,
+              programDuration: cachedApp.programDuration,
+              deadlineText: cachedApp.deadlineText,
+              deadline: cachedApp.deadline,
+              deadlineISO: cachedApp.deadlineISO,
+              venue: cachedApp.venue,
+              durationText: cachedApp.durationText,
+              salaryText: cachedApp.salaryText,
+              link: cachedApp.link,
+              links: cachedApp.links,
+              isFormLink: cachedApp.isFormLink,
+              parseMeta: {
+                ...cachedApp.parseMeta,
+                cacheHit: true,
+                originalUserId: cachedApp.userId
+              }
+            };
+          }
+        }
+
+        if (!parsed) {
+          parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+          // Sleep to safely respect Gemini RPM free tier limit
+          await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
+          usedGemini = true;
+          if (parsed && parsed.parseMeta) {
+            parsed.parseMeta.internetMessageId = internetMessageId;
+          }
+        }
         
         if (parsed) {
           const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
           if (!shouldRetry) {
             const updatePayload = {};
-            updatePayload.parserVersion = "v2"; // Safely lock version now
+            updatePayload.parserVersion = CURRENT_PARSER_VERSION; // Safely lock version now
+
+            // Update matching event in exists.events with the new LLM parsed data
+            const evIndex = exists.events.findIndex(e => e.messageId === id);
+            if (evIndex > -1) {
+              exists.events[evIndex].classification = parsed.classification || "";
+              exists.events[evIndex].title = parsed.timelineTitle || parsed.title || exists.events[evIndex].title || "";
+              exists.events[evIndex].summary = parsed.timelineSummary || parsed.summary || "";
+              exists.events[evIndex].link = parsed.link || exists.events[evIndex].link || "";
+            } else {
+              const retryDate = email.data?.internalDate ? new Date(parseInt(email.data.internalDate)) : exists.date;
+              exists.events.push({
+                messageId: id,
+                date: retryDate,
+                classification: parsed.classification || "",
+                title: parsed.timelineTitle || parsed.title || "",
+                subject: subject || "",
+                status: exists.status || "new",
+                link: parsed.link || "",
+                summary: parsed.timelineSummary || parsed.summary || ""
+              });
+              exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+              if (!ov.includes("date") && retryDate && new Date(retryDate) > new Date(exists.date || 0)) {
+                updatePayload.date = retryDate;
+              }
+            }
+            exists.markModified('events');
+            eventAdded = true; // Force eventAdded so updatePayload.events is saved!
 
             if (!parsed.isRelevant || !parsed.company) {
               if (exists.company === "PENDING_PARSE") {
@@ -458,7 +961,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             if (eventAdded) updatePayload.events = exists.events;
 
             await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-            console.log(`[UPDATED] ${id} | Existing application enriched & locked (v2)`);
+            console.log(`[UPDATED] ${id} | Existing application enriched & locked (${CURRENT_PARSER_VERSION})`);
           } else {
             const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
             const nextRetry = getNextRetryDate(currentAttempts);
@@ -480,7 +983,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           }
         } else {
           // Fatal parsing error (parseEmailWithLLM returned null)
-          const updatePayload = { parserVersion: "v2" };
+          const updatePayload = { parserVersion: CURRENT_PARSER_VERSION };
           if (eventAdded) updatePayload.events = exists.events;
           
           if (exists.company === "PENDING_PARSE") {
@@ -490,7 +993,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           }
           
           await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
-          console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to v2`);
+          console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to ${CURRENT_PARSER_VERSION}`);
         }
       } else if (eventAdded) {
         await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
@@ -501,12 +1004,67 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     }
 
     // ── NEW EMAIL: parse and save ──
-    console.log(`[PARSE_START] ${id}`);
-    const parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-    // Sleep for 6.5s to safely respect Gemini 15 RPM free tier limit
-    await new Promise(r => setTimeout(r, 6500));
-    usedGemini = true;
-    console.log(`[PARSE_RESULT] ${id}`, parsed);
+    let parsed = null;
+    if (internetMessageId) {
+      const cachedApp = await Application.findOne({
+        "parseMeta.internetMessageId": internetMessageId,
+        company: { $nin: ["PENDING_PARSE", "IGNORED"] },
+        parserVersion: CURRENT_PARSER_VERSION
+      });
+      if (cachedApp) {
+        console.log(`[PARSE_CACHE_HIT] Reusing parsed data from existing application for Message-ID: ${internetMessageId}`);
+        parsed = {
+          emailType: cachedApp.emailType,
+          opportunityType: cachedApp.opportunityType,
+          isRelevant: cachedApp.emailType !== "nonRecruitment",
+          classification: cachedApp.classification,
+          type: cachedApp.type,
+          status: cachedApp.status,
+          confidenceScore: cachedApp.confidenceScore,
+          timelineTitle: cachedApp.title,
+          timelineSummary: cachedApp.parseMeta?.trace?.gemini?.timelineSummary || "",
+          company: cachedApp.company,
+          domain: cachedApp.domain,
+          subtitle: cachedApp.subtitle,
+          role: cachedApp.role,
+          title: cachedApp.title,
+          processId: cachedApp.processId,
+          processName: cachedApp.processName,
+          displayFields: cachedApp.displayFields,
+          skills: cachedApp.skills,
+          fieldsToDisplay: cachedApp.fieldsToDisplay,
+          programRoles: cachedApp.programRoles,
+          programStipend: cachedApp.programStipend,
+          programDuration: cachedApp.programDuration,
+          deadlineText: cachedApp.deadlineText,
+          deadline: cachedApp.deadline,
+          deadlineISO: cachedApp.deadlineISO,
+          venue: cachedApp.venue,
+          durationText: cachedApp.durationText,
+          salaryText: cachedApp.salaryText,
+          link: cachedApp.link,
+          links: cachedApp.links,
+          isFormLink: cachedApp.isFormLink,
+          parseMeta: {
+            ...cachedApp.parseMeta,
+            cacheHit: true,
+            originalUserId: cachedApp.userId
+          }
+        };
+      }
+    }
+
+    if (!parsed) {
+      console.log(`[PARSE_START] ${id}`);
+      parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+      // Sleep to safely respect Gemini RPM free tier limit
+      await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
+      usedGemini = true;
+      if (parsed && parsed.parseMeta) {
+        parsed.parseMeta.internetMessageId = internetMessageId;
+      }
+      console.log(`[PARSE_RESULT] ${id}`, parsed);
+    }
     
     if (!parsed || !parsed.isRelevant || !parsed.company) {
       const reason = !parsed ? "Parsing failed" : (!parsed.isRelevant ? "Marked not relevant" : "Missing company");
@@ -517,6 +1075,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         console.log(`[PARSE_DEFERRED] ${id} | Reason: ${reason} (Transient error). Saving as pending (deferred until ${nextRetry.toISOString()}).`);
         try {
           const pendingApp = new Application({
+            userId: acc._id,
             company: "PENDING_PARSE",
             role: "PENDING_PARSE",
             messageId: id,
@@ -544,11 +1103,12 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         return { action: 'skipped', usedGemini };
       }
       
-      const parserVer = "v2";
+      const parserVer = CURRENT_PARSER_VERSION;
       console.log(`[SKIP] ${id} | Reason: ${reason}. Saving as ignored (parserVersion=${parserVer}) to prevent re-parsing.`);
       
       try {
         const ignoredApp = new Application({
+          userId: acc._id,
           company: "IGNORED",
           role: "IGNORED",
           messageId: id,
@@ -574,7 +1134,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     
     // Fetch Company Info (with caching inside)
     console.log(`[COMPANY_INFO_CALL] ${parsed.company}`);
-    const companyInfo = await getCompanyInfo(parsed.company);
+    const companyInfo = await getCompanyInfo(parsed.company, parsed.domain);
     if (!companyInfo) {
       console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
     }
@@ -582,6 +1142,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     let contentExists = null;
     if (isValid) {
       contentExists = await Application.findOne({
+        userId: acc._id,
         companyKey,
         isDeleted: { $ne: true }
       });
@@ -627,14 +1188,16 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       if (!ov.includes("subtitle") && !contentExists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
       if (!ov.includes("displayFields") && (!contentExists.displayFields || contentExists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
       if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+      if (!ov.includes("skills") && (!contentExists.skills || contentExists.skills.length === 0) && parsed.skills?.length) updatePayload.skills = parsed.skills;
 
       if (!ov.includes("status")) {
         // Status is now strictly time/action-based. We do not advance status based on classification anymore.
       }
 
+      const emailDate = new Date(parseInt(email.data.internalDate));
       const eventAdded = appendApplicationEvent(contentExists, parsed, {
         messageId: id,
-        date: new Date(parseInt(email.data.internalDate)),
+        date: emailDate,
         subject: subject
       });
       
@@ -642,9 +1205,16 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         updatePayload.events = contentExists.events;
       }
 
+      if (!ov.includes("date")) {
+        const currentDate = contentExists.date ? new Date(contentExists.date) : new Date(0);
+        if (!isNaN(emailDate.getTime()) && emailDate > currentDate) {
+          updatePayload.date = emailDate;
+        }
+      }
+
       if (Object.keys(updatePayload).length > 0) {
         await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
-        console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data and/or event history`);
+        console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data, date update, and/or event history`);
       }
 
       console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
@@ -654,15 +1224,17 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     // Enforce all new emails to start strictly as "new"
     const normalizedStatus = "new";
     const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
-    const parserVer = shouldRetry ? "v1" : "v2";
+    const parserVer = shouldRetry ? "v1" : CURRENT_PARSER_VERSION;
 
     const newApp = new Application({
+      userId: acc._id,
       company: parsed.company,
       companyKey,
       emailType: parsed.emailType || "job",
       subtitle: parsed.subtitle || "",
       displayFields: parsed.displayFields || [],
       fieldsToDisplay: parsed.fieldsToDisplay || [],
+      skills: parsed.skills || [],
       role: finalRole,
       type: parsed.type || "",
       status: normalizedStatus,
@@ -692,10 +1264,11 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         messageId: id,
         date: new Date(parseInt(email.data.internalDate)),
         classification: parsed.classification || "",
-        title: parsed.title || "",
+        title: parsed.timelineTitle || parsed.title || "",
         subject: subject || "",
         status: normalizedStatus,
-        link: parsed.link || ""
+        link: parsed.link || "",
+        summary: parsed.timelineSummary || parsed.summary || ""
       }],
       rawText,
       messageId: id,
@@ -707,6 +1280,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
     await newApp.save();
     console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
+
+    // Send push notification for new email (fire-and-forget)
+    try {
+      const { sendNewEmailNotification } = require("./utils/pushService");
+      await sendNewEmailNotification(acc, newApp);
+    } catch (pushErr) {
+      console.error(`[PUSH_ERROR] ${id}:`, pushErr.message);
+    }
+
     return { action: 'inserted', usedGemini };
   } catch (error) {
     if (error.code === 11000) {
@@ -720,12 +1302,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
 // --- Batch DB lookup helper ---
 // Returns a Map of messageId -> { parserVersion, isDeleted, parseMeta } for all known IDs
-async function batchLookupMessageIds(messageIds) {
+async function batchLookupMessageIds(messageIds, userId) {
   const results = await Application.find(
-    { $or: [
-      { messageId: { $in: messageIds } },
-      { "events.messageId": { $in: messageIds } }
-    ]},
+    {
+      userId,
+      $or: [
+        { messageId: { $in: messageIds } },
+        { "events.messageId": { $in: messageIds } }
+      ]
+    },
     { messageId: 1, parserVersion: 1, isDeleted: 1, "parseMeta.nextRetryAt": 1, "events.messageId": 1 }
   );
   
@@ -748,19 +1333,52 @@ async function batchLookupMessageIds(messageIds) {
 }
 
 // --- Main sync orchestrator ---
-async function fetchAndProcessEmails() {
-  if (isProcessing) {
-    console.log("Cron already running, skipping...");
-    return;
+async function fetchAndProcessEmails(targetUserId = null) {
+  if (targetUserId) {
+    const userIdStr = targetUserId.toString();
+    if (activeSyncs.has(userIdStr)) {
+      console.log(`[SYNC] Blocked - sync already in progress for user: ${userIdStr}`);
+      return;
+    }
+    activeSyncs.add(userIdStr);
+  } else {
+    if (isCronProcessing) {
+      console.log("Cron already running, skipping...");
+      return;
+    }
+    isCronProcessing = true;
   }
 
-  isProcessing = true;
+  const formatDuration = (ms) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  };
+
+  const cronStartTime = Date.now();
+  let accountsProcessed = 0;
+  let accountsSkipped = 0;
+  let accountsFailed = 0;
+
   let insertedCount = 0;
   let skippedCount = 0;
   let fetchedCount = 0;
 
   try {
-    const accounts = await Account.find();
+    const query = targetUserId ? { _id: targetUserId } : {};
+    const accounts = await Account.find(query);
+
+    if (!targetUserId) {
+      console.log("==================================================");
+      console.log("[CRON START]");
+      console.log(`Time: ${new Date().toISOString()}`);
+      console.log(`Accounts Found: ${accounts.length}`);
+      console.log("==================================================");
+    }
 
     if (!accounts.length) {
       console.log("No accounts connected");
@@ -768,8 +1386,29 @@ async function fetchAndProcessEmails() {
     }
 
     for (let acc of accounts) {
-      if (acc.email !== "1ms23ci126@msrit.edu") continue;
+      if (!acc.email || !config.isAllowedEmail(acc.email)) {
+        console.log(`[SYNC] Skipping unauthorized or invalid email: ${acc.email || "Unknown"}`);
+        accountsSkipped++;
+        continue;
+      }
 
+      if (config.ALLOWED_SENDERS.includes(acc.email.toLowerCase())) {
+        console.log(`[SYNC] Skipping institutional sender account: ${acc.email}`);
+        accountsSkipped++;
+        continue;
+      }
+
+      const accIdStr = acc._id.toString();
+      if (!targetUserId) {
+        if (activeSyncs.has(accIdStr)) {
+          console.log(`[CRON] Skipping account ${acc.email} - sync already in progress`);
+          accountsSkipped++;
+          continue;
+        }
+        activeSyncs.add(accIdStr);
+      }
+
+      const accountStartTime = Date.now();
       console.log(`Processing account: ${acc.email}`);
       try {
         await Account.findOneAndUpdate({ email: acc.email }, { syncStatus: "pending" });
@@ -780,6 +1419,7 @@ async function fetchAndProcessEmails() {
           process.env.GOOGLE_REDIRECT_URI
         );
         localOauth2Client.setCredentials(acc.tokens);
+        console.log(`[SYNC_TOKENS] ${acc.email} | scope: ${acc.tokens?.scope || 'NONE'} | has_refresh: ${!!acc.tokens?.refresh_token}`);
 
         localOauth2Client.on("tokens", async (newTokens) => {
           console.log(`[TOKEN_REFRESH] Received refreshed Google tokens for: ${acc.email}`);
@@ -848,6 +1488,11 @@ async function fetchAndProcessEmails() {
             newHistoryId = latestHistoryId;
 
             if (allAddedMessageIds.length === 0) {
+              console.log(`[ACCOUNT START]\nEmail: ${acc.email}\nMode: Incremental\nHistoryId: ${acc.lastHistoryId}`);
+              const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
+              console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: 0\nInserted: 0\nSkipped: 0\nMode: Incremental`);
+              accountsProcessed++;
+
               console.log(`[INCREMENTAL] No new messages since last sync.`);
               console.log(`[INCREMENTAL_SUMMARY] History events: 0 | New messages: 0 | historyId: ${acc.lastHistoryId} → ${newHistoryId}`);
               // Update historyId even when nothing changed
@@ -918,6 +1563,8 @@ async function fetchAndProcessEmails() {
           console.log(`[FULL_SYNC] Messages listed: ${messageIdsToProcess.length} | historyId: ${newHistoryId || 'unavailable'}`);
         }
 
+        console.log(`[ACCOUNT START]\nEmail: ${acc.email}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}${syncPath === "incremental" ? `\nHistoryId: ${acc.lastHistoryId}` : ""}`);
+
         // ══════════════════════════════════════════════
         // COMMON: Process the collected message IDs
         // ══════════════════════════════════════════════
@@ -925,29 +1572,36 @@ async function fetchAndProcessEmails() {
         console.log(`\n--- STARTING SYNC FOR ${acc.email} (${syncPath}) ---`);
 
         // BATCH DB LOOKUP: Replace N individual findOne() calls with one $in query
-        const knownDocs = await batchLookupMessageIds(messageIdsToProcess);
+        const knownDocs = await batchLookupMessageIds(messageIdsToProcess, acc._id);
         const newCount = messageIdsToProcess.length - knownDocs.size;
         console.log(`[BATCH_LOOKUP] Already known: ${knownDocs.size} | New: ${newCount} | Total: ${messageIdsToProcess.length}`);
 
+        let accInserted = 0;
+        let accSkipped = 0;
         let geminiParsedCount = 0;
 
         for (const msgId of messageIdsToProcess) {
-          // Abort the loop immediately if a Clear All was requested while sync was running
-          if (clearRequested) {
-            console.log("[SYNC_ABORTED] Clear All requested — aborting sync loop");
+          // Abort the loop immediately if a Clear All was requested for this account while sync was running
+          if (activeClearRequests.has(acc._id.toString())) {
+            console.log(`[SYNC_ABORTED] Clear All requested for user ${acc.email} — aborting sync loop`);
             break;
           }
 
           const existingFast = knownDocs.get(msgId) || null;
           const result = await processMessage(gmail, acc, msgId, null, existingFast, geminiParsedCount);
 
-          if (result.action === 'inserted') insertedCount++;
-          else skippedCount++;
+          if (result.action === 'inserted') {
+            accInserted++;
+            insertedCount++;
+          } else {
+            accSkipped++;
+            skippedCount++;
+          }
 
           if (result.usedGemini) geminiParsedCount++;
 
-          if (geminiParsedCount >= 6) {
-            console.log("[SYNC_PROGRESSIVE] Reached limit of 6 Gemini parses. Stopping sync to preserve quota.");
+          if (geminiParsedCount >= config.MAX_EMAILS_PER_SYNC) {
+            console.log(`[SYNC_PROGRESSIVE] Reached limit of ${config.MAX_EMAILS_PER_SYNC} Gemini parses. Stopping sync to preserve quota.`);
             break;
           }
         }
@@ -965,12 +1619,25 @@ async function fetchAndProcessEmails() {
           accountUpdate.syncMode = "incremental";
           console.log(`[SYNC_CHECKPOINT] historyId saved: ${newHistoryId}`);
         }
-        await Account.findOneAndUpdate({ email: acc.email }, accountUpdate);
+        const syncedAccount = await Account.findOneAndUpdate({ email: acc.email }, accountUpdate, { returnDocument: 'after' });
+        if (syncedAccount) {
+          await processCalendarSyncQueue(syncedAccount);
+        }
+
+        const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
+        console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: ${messageIdsToProcess.length}\nInserted: ${accInserted}\nSkipped: ${accSkipped}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}`);
+        accountsProcessed++;
 
       } catch (err) {
+        const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
+        console.log(`[ACCOUNT FAILURE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nError: ${err.message}`);
+        accountsFailed++;
+
         console.error(`Fetch error for account ${acc.email}:`, err.message);
         let errorMsg = err.message || "Unknown sync error";
-        if (
+        if (err.message?.includes("insufficient authentication scopes")) {
+          errorMsg = "Gmail permissions were not fully granted. Please log out and sign in again, ensuring all permissions are accepted on the Google consent screen.";
+        } else if (
           err.message?.includes("invalid_grant") ||
           err.message?.includes("token") ||
           err.message?.includes("auth") ||
@@ -983,6 +1650,10 @@ async function fetchAndProcessEmails() {
           { email: acc.email },
           { syncStatus: "failed", syncError: errorMsg }
         );
+      } finally {
+        if (!targetUserId) {
+          activeSyncs.delete(accIdStr);
+        }
       }
     }
     console.log(`\n[SYNC_COMPLETE] Fetched: ${fetchedCount} | Inserted: ${insertedCount} | Skipped: ${skippedCount}`);
@@ -990,31 +1661,81 @@ async function fetchAndProcessEmails() {
     console.error("Fetch error:", err.message);
     // Removed 'throw err' to prevent unhandled rejections in background execution
   } finally {
-    isProcessing = false;
+    if (targetUserId) {
+      activeSyncs.delete(targetUserId.toString());
+    } else {
+      isCronProcessing = false;
+      const totalDuration = Date.now() - cronStartTime;
+      console.log("==================================================");
+      console.log("[CRON COMPLETE]");
+      console.log(`Duration: ${formatDuration(totalDuration)}`);
+      console.log(`Accounts Succeeded: ${accountsProcessed}`);
+      console.log(`Accounts Skipped: ${accountsSkipped}`);
+      console.log(`Accounts Failed: ${accountsFailed}`);
+      console.log(`Emails Fetched: ${fetchedCount}`);
+      console.log(`Inserted: ${insertedCount}`);
+      console.log(`Skipped: ${skippedCount}`);
+      console.log("==================================================");
+    }
   }
 }
 
 // ==========================
 // 🔘 MANUAL TRIGGER (SYNC BUTTON)
 // ==========================
-app.get("/sync", (req, res) => {
-  if (isProcessing) {
-    console.log(`[MANUAL_SYNC] Blocked — sync already in progress`);
+// Middleware to validate static CRON_API_KEY
+const requireCronKey = (req, res, next) => {
+  const cronKey = req.headers["x-cron-key"] || req.query.cron_key;
+  if (!cronKey || cronKey !== process.env.CRON_API_KEY) {
+    return res.status(401).json({ message: "Unauthorized. Invalid cron key." });
+  }
+  next();
+};
+
+// ==========================
+// 🔘 MANUAL TRIGGER (SYNC BUTTON)
+// ==========================
+app.get("/sync", syncLimiter, authenticate, (req, res) => {
+  const userIdStr = req.userId.toString();
+
+  // Layer 1 — concurrency guard (existing, unchanged)
+  if (activeSyncs.has(userIdStr)) {
+    console.log(`[MANUAL_SYNC] Blocked for user ${userIdStr} — sync already in progress`);
     return res.status(200).json({ success: true, message: "Sync already in progress. Please wait for it to finish." });
   }
 
-  fetchAndProcessEmails()
+  // Layer 2 — per-user cooldown (45-second window)
+  const lastSync = manualSyncCooldowns.get(userIdStr);
+  if (lastSync) {
+    const elapsed = Date.now() - lastSync;
+    if (elapsed < MANUAL_SYNC_COOLDOWN_MS) {
+      const remaining = Math.ceil((MANUAL_SYNC_COOLDOWN_MS - elapsed) / 1000);
+      console.log(`[MANUAL_SYNC] Cooldown active for user ${userIdStr} — ${remaining}s remaining`);
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${remaining} second${remaining !== 1 ? "s" : ""} before syncing again.`,
+        retryAfterSeconds: remaining
+      });
+    }
+  }
+
+  // Record the timestamp of this sync attempt
+  manualSyncCooldowns.set(userIdStr, Date.now());
+
+  fetchAndProcessEmails(req.userId)
     .then(() => console.log("Manual sync completed"))
     .catch((err) => console.error("Manual sync failed:", err.message));
 
   res.send("Sync triggered in background");
 });
 
+
+
 // ==========================
 // 🧪 MANUAL CRON TRIGGER
 // ==========================
-app.get("/run-cron", (req, res) => {
-  if (isProcessing) {
+app.get("/run-cron", requireCronKey, (req, res) => {
+  if (isCronProcessing) {
     return res.status(200).json({ success: true, message: "Sync already in progress" });
   }
 
@@ -1048,6 +1769,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  app,
   mergeAlternativeTexts,
   fetchAndProcessEmails
 };

@@ -1,5 +1,6 @@
 "use client";
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+let activeRefreshPromise = null;
 
 import React, { useEffect, useState } from "react";
 
@@ -47,19 +48,55 @@ export default function JobTrackerDashboard() {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
 
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeFilter]);
+  const [settingsSubView, setSettingsSubView] = useState("main");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
+  const [clearError, setClearError] = useState("");
+  const [accountDeletedJustNow, setAccountDeletedJustNow] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isClickedToKeepOpen, setIsClickedToKeepOpen] = useState(false);
+  const collapseTimeoutRef = React.useRef(null);
+  const [timeTick, setTimeTick] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showThemeSubmenu, setShowThemeSubmenu] = useState(false);
 
   const [userEmail, setUserEmail] = useState(null);
 
+  // Google Calendar Integration State
+  const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
+  const [hasCalendarScope, setHasCalendarScope] = useState(false);
+  const [loadingCalendarStatus, setLoadingCalendarStatus] = useState(true);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
+  const [calendarSuccessMsg, setCalendarSuccessMsg] = useState("");
+  const [calendarErrorMsg, setCalendarErrorMsg] = useState("");
+
+
+
+  // Push Notifications State
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState("default");
+  const [pushSubscriptionsCount, setPushSubscriptionsCount] = useState(0);
+  const [showPushBanner, setShowPushBanner] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
   const containerRef = React.useRef(null);
   const cardRef = React.useRef(null);
   const canvasRef = React.useRef(null);
   const glowRef = React.useRef(null);
+  const exchangeInProgress = React.useRef(false);
 
   useEffect(() => {
     if (userEmail) return;
@@ -119,14 +156,14 @@ export default function JobTrackerDashboard() {
         this.speedY = -(Math.random() * 0.2 + 0.08);
         this.speedX = (Math.random() - 0.5) * 0.15;
         this.opacity = Math.random() * 0.12 + 0.04;
-        
+
         const colors = [
           "rgba(34, 211, 238,",
           "rgba(59, 130, 246,",
           "rgba(139, 92, 246,"
         ];
         this.colorPrefix = colors[Math.floor(Math.random() * colors.length)];
-        
+
         this.offsetX = 0;
         this.offsetY = 0;
       }
@@ -207,26 +244,303 @@ export default function JobTrackerDashboard() {
       cancelAnimationFrame(rafId);
     };
   }, [userEmail]);
-  useEffect(() => {
-    // Check URL for auth params
-    const params = new URLSearchParams(window.location.search);
-    const emailFromUrl = params.get("email");
-    const authSuccess = params.get("auth_success");
-    const error = params.get("error");
 
-    if (error === "unauthorized") {
-      alert("Access Denied: Your account is not authorized to view this dashboard.");
-      window.history.replaceState({}, document.title, "/");
-    } else if (authSuccess && emailFromUrl) {
-      localStorage.setItem("userEmail", emailFromUrl);
-      setUserEmail(emailFromUrl);
-      window.history.replaceState({}, document.title, "/");
-    } else {
-      const savedEmail = localStorage.getItem("userEmail");
-      if (savedEmail) {
-        setUserEmail(savedEmail);
+  // Push Notifications Setup
+  useEffect(() => {
+    const initPushState = async () => {
+      const { isPushSupported, getPushPermissionState, hasActiveSubscription } = await import("./utils/pushManager");
+      const supported = isPushSupported();
+      setPushSupported(supported);
+      if (supported) {
+        setPushPermission(getPushPermissionState());
+        const active = await hasActiveSubscription();
+        setIsSubscribed(active);
+      }
+    };
+    initPushState();
+  }, [userEmail]);
+
+  // Deferred push notification permission banner logic
+  useEffect(() => {
+    if (!userEmail) return;
+
+    let isMounted = true;
+    let timer;
+
+    const checkDeferredBanner = async () => {
+      const { isPushSupported, getPushPermissionState, hasActiveSubscription, registerAndSubscribe } = await import("./utils/pushManager");
+      if (!isPushSupported()) return;
+
+      const perm = getPushPermissionState();
+      if (!isMounted) return;
+      setPushPermission(perm);
+
+      const active = await hasActiveSubscription();
+      if (!isMounted) return;
+      setIsSubscribed(active);
+
+      if (perm === "granted") {
+        if (!active) {
+          // If permission is granted but no active browser subscription exists, try to register
+          try {
+            await registerAndSubscribe(apiFetch);
+            if (isMounted) setIsSubscribed(true);
+          } catch (e) {
+            console.warn("[PushManager] Silent subscription registration failed:", e.message);
+            if (isMounted) setIsSubscribed(false);
+          }
+        }
+
+        // Refresh registered device count
+        try {
+          const res = await apiFetch(`${BASE_URL}/auth/me`);
+          if (res.ok && isMounted) {
+            const data = await res.json();
+            setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+          }
+        } catch (e) {
+          console.warn("[PushManager] Failed to fetch device count:", e.message);
+        }
+        return;
+      }
+
+      if (perm === "denied") return;
+
+      const dismissedAt = localStorage.getItem("pushBannerDismissedAt");
+      if (dismissedAt) {
+        const elapsed = Date.now() - parseInt(dismissedAt, 10);
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (elapsed < sevenDays) {
+          return;
+        }
+      }
+
+      timer = setTimeout(() => {
+        if (isMounted) {
+          setShowPushBanner(true);
+        }
+      }, 3000);
+    };
+
+    checkDeferredBanner();
+
+    return () => {
+      isMounted = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [userEmail]);
+
+  const handleRequestPushPermission = async () => {
+    try {
+      const { registerAndSubscribe, getPushPermissionState, hasActiveSubscription } = await import("./utils/pushManager");
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      setShowPushBanner(false);
+
+      if (permission === "granted") {
+        console.log("[Push] Permission granted, subscribing...");
+        await registerAndSubscribe(apiFetch);
+        const active = await hasActiveSubscription();
+        setIsSubscribed(active);
+
+        const res = await apiFetch(`${BASE_URL}/auth/me`);
+        if (res.ok) {
+          const data = await res.json();
+          setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+        }
+        alert("Push notifications enabled successfully!");
+      } else {
+        setIsSubscribed(false);
+        alert("Notifications permission was denied or dismissed.");
+      }
+    } catch (err) {
+      setIsSubscribed(false);
+      console.error("[Push] Error enabling notifications:", err.message);
+      let errMsg = err.message || "";
+      if (errMsg.toLowerCase().includes("push service error")) {
+        errMsg += "\n\nFor Brave Browser: Go to Brave Settings -> 'Privacy and security' and toggle ON 'Use Google services for push messaging', then restart Brave.";
+      }
+      alert("Failed to enable push notifications: " + errMsg);
+    }
+  };
+
+  const handleEnablePushSubscription = async () => {
+    try {
+      const { registerAndSubscribe, hasActiveSubscription } = await import("./utils/pushManager");
+      await registerAndSubscribe(apiFetch);
+      const active = await hasActiveSubscription();
+      setIsSubscribed(active);
+
+      const res = await apiFetch(`${BASE_URL}/auth/me`);
+      if (res.ok) {
+        const data = await res.json();
+        setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+      }
+      alert("Push notifications enabled on this device successfully!");
+    } catch (err) {
+      setIsSubscribed(false);
+      console.error("[Push] Error enabling subscription:", err.message);
+      let errMsg = err.message || "";
+      if (errMsg.toLowerCase().includes("push service error")) {
+        errMsg += "\n\nFor Brave Browser: Go to Brave Settings -> 'Privacy and security' and toggle ON 'Use Google services for push messaging', then restart Brave.";
+      }
+      alert("Failed to enable push notifications: " + errMsg);
+    }
+  };
+
+  const handleDisablePushNotifications = async () => {
+    if (!confirm("Are you sure you want to disable push notifications on this device?")) {
+      return;
+    }
+
+    try {
+      const { unsubscribePush, getPushPermissionState, hasActiveSubscription } = await import("./utils/pushManager");
+      await unsubscribePush(apiFetch);
+      setPushPermission(getPushPermissionState());
+      const active = await hasActiveSubscription();
+      setIsSubscribed(active);
+
+      const res = await apiFetch(`${BASE_URL}/auth/me`);
+      if (res.ok) {
+        const data = await res.json();
+        setPushSubscriptionsCount(data.pushSubscriptionsCount || 0);
+      }
+      alert("Disabled push notifications on this device successfully.");
+    } catch (err) {
+      console.error("[Push] Error disabling notifications:", err.message);
+      alert("Failed to disable notifications: " + err.message);
+    }
+  };
+
+  const handleDismissPushBanner = () => {
+    setShowPushBanner(false);
+    localStorage.setItem("pushBannerDismissedAt", Date.now().toString());
+  };
+
+  const handleLocalLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    setUserEmail(null);
+    setApplications([]);
+  };
+
+  const apiFetch = async (url, options = {}) => {
+    if (!options.headers) {
+      options.headers = {};
+    }
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      options.headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    let response = await fetch(url, options);
+
+    if (response.status === 401) {
+      console.warn("Access token expired, attempting refresh...");
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (!refreshToken) {
+        handleLocalLogout();
+        return response;
+      }
+
+      try {
+        if (!activeRefreshPromise) {
+          activeRefreshPromise = fetch(`${BASE_URL}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken })
+          }).then(async (refreshRes) => {
+            if (!refreshRes.ok) {
+              throw new Error("Refresh failed");
+            }
+            const data = await refreshRes.json();
+            localStorage.setItem("accessToken", data.accessToken);
+            localStorage.setItem("refreshToken", data.refreshToken);
+            return data.accessToken;
+          }).finally(() => {
+            activeRefreshPromise = null;
+          });
+        }
+
+        const newAccessToken = await activeRefreshPromise;
+
+        // Retry the original request once
+        options.headers["Authorization"] = `Bearer ${newAccessToken}`;
+        response = await fetch(url, options);
+      } catch (err) {
+        console.error("Refresh failed, logging out:", err);
+        handleLocalLogout();
       }
     }
+
+    return response;
+  };
+
+  useEffect(() => {
+    const initializeSession = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const authCode = params.get("auth_code");
+      const error = params.get("error");
+
+      if (error === "unauthorized") {
+        alert("Access Denied: Your account is not authorized to view this dashboard.");
+        window.history.replaceState({}, document.title, "/");
+        return;
+      }
+
+      if (error === "insufficient_scopes") {
+        alert("Access Denied: Gmail access permission was not granted. Please sign in again and check the checkbox to allow access to your email messages.");
+        window.history.replaceState({}, document.title, "/");
+        return;
+      }
+
+      if (authCode) {
+        if (exchangeInProgress.current) return;
+        exchangeInProgress.current = true;
+        try {
+          const res = await fetch(`${BASE_URL}/auth/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: authCode })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem("accessToken", data.accessToken);
+            localStorage.setItem("refreshToken", data.refreshToken);
+            setUserEmail(data.email);
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            console.error("Token exchange failed:", res.status, errorData.message || errorData);
+          }
+        } catch (err) {
+          console.error("Error exchanging token:", err);
+        }
+        window.history.replaceState({}, document.title, "/");
+        return;
+      }
+
+      // Check existing session
+      const savedAccessToken = localStorage.getItem("accessToken");
+      if (savedAccessToken) {
+        try {
+          const res = await apiFetch(`${BASE_URL}/auth/me`);
+          if (res.ok) {
+            const data = await res.json();
+            setUserEmail(data.email);
+            if (typeof data.pushSubscriptionsCount === "number") {
+              setPushSubscriptionsCount(data.pushSubscriptionsCount);
+            }
+          } else {
+            handleLocalLogout();
+          }
+        } catch (err) {
+          console.error("Session verification failed:", err);
+          handleLocalLogout();
+        }
+      }
+    };
+
+    initializeSession();
 
     // Check local storage for dark mode preference
     const savedMode = localStorage.getItem("darkMode");
@@ -237,12 +551,83 @@ export default function JobTrackerDashboard() {
     }
   }, []);
 
+  const fetchCalendarStatus = async () => {
+    try {
+      setLoadingCalendarStatus(true);
+      const res = await apiFetch(`${BASE_URL}/auth/calendar/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarSyncEnabled(data.calendarSyncEnabled);
+        setHasCalendarScope(data.hasCalendarScope);
+      }
+    } catch (err) {
+      console.error("Failed to fetch calendar status:", err);
+    } finally {
+      setLoadingCalendarStatus(false);
+    }
+  };
+
+
+
+  useEffect(() => {
+    if (userEmail) {
+      fetchCalendarStatus();
+    }
+  }, [userEmail]);
+
+  const handleToggleCalendarSync = async () => {
+    try {
+      setSyncingCalendar(true);
+      setCalendarSuccessMsg("");
+      setCalendarErrorMsg("");
+
+      const res = await apiFetch(`${BASE_URL}/auth/calendar/toggle`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarSyncEnabled(data.calendarSyncEnabled);
+        setCalendarSuccessMsg(data.calendarSyncEnabled ? "Calendar integration enabled! Syncing active deadlines..." : "Calendar integration disabled.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setCalendarErrorMsg(err.message || "Failed to update calendar integration settings.");
+      }
+    } catch (err) {
+      console.error("Toggle calendar error:", err);
+      setCalendarErrorMsg("Failed to connect to backend server.");
+    } finally {
+      setSyncingCalendar(false);
+    }
+  };
+
+  const handleManualCalendarSync = async () => {
+    try {
+      setSyncingCalendar(true);
+      setCalendarSuccessMsg("");
+      setCalendarErrorMsg("");
+
+      const res = await apiFetch(`${BASE_URL}/auth/calendar/sync`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarSuccessMsg("Calendar re-sync successfully queued in the background!");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setCalendarErrorMsg(err.message || "Failed to trigger calendar re-sync.");
+      }
+    } catch (err) {
+      console.error("Manual calendar sync error:", err);
+      setCalendarErrorMsg("Failed to connect to backend server.");
+    } finally {
+      setSyncingCalendar(false);
+    }
+  };
+
   const fetchSyncStatus = async () => {
     if (!userEmail) return;
     try {
-      const response = await fetch(`${BASE_URL}/applications/sync-status`, {
-        headers: { "x-user-email": userEmail }
-      });
+      const response = await apiFetch(`${BASE_URL}/applications/sync-status`);
       if (response.ok) {
         const data = await response.json();
         setSyncStatus(data.syncStatus);
@@ -252,6 +637,58 @@ export default function JobTrackerDashboard() {
     } catch (error) {
       console.error("Failed to fetch sync status:", error);
     }
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeTick(t => t + 1);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatRelativeTime = (dateString) => {
+    if (!dateString) return "Never synced";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return "Last Synced: Just now";
+    if (diffMins === 1) return "Last Synced: 1 min ago";
+    if (diffMins < 60) return `Last Synced: ${diffMins} mins ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours === 1) return "Last Synced: 1 hour ago";
+    if (diffHours < 24) return `Last Synced: ${diffHours} hours ago`;
+
+    return `Last Synced: ${date.toLocaleDateString()}`;
+  };
+
+  const getCompactRelativeTime = (dateString) => {
+    const formatted = formatRelativeTime(dateString);
+    return formatted.replace("Last Synced: ", "");
+  };
+
+  const handleSidebarMouseEnter = () => {
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+      collapseTimeoutRef.current = null;
+    }
+    setIsSidebarCollapsed(false);
+  };
+
+  const handleSidebarMouseLeave = () => {
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+    }
+    collapseTimeoutRef.current = setTimeout(() => {
+      setIsSidebarCollapsed(true);
+      setIsClickedToKeepOpen(false);
+    }, 250);
+  };
+
+  const handleSidebarClick = () => {
+    setIsClickedToKeepOpen(true);
   };
 
   useEffect(() => {
@@ -273,6 +710,21 @@ export default function JobTrackerDashboard() {
     return () => clearInterval(intervalId);
   }, [syncStatus, userEmail]);
 
+  useEffect(() => {
+    const isAnyModalOpen = showInfoModal || showAddModal || showEditModal || showDeleteModal || showClearModal;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [showInfoModal, showAddModal, showEditModal, showDeleteModal, showClearModal]);
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
     localStorage.setItem("darkMode", !isDarkMode);
@@ -282,9 +734,7 @@ export default function JobTrackerDashboard() {
     if (!userEmail) return;
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/applications`, {
-        headers: { "x-user-email": userEmail }
-      });
+      const response = await apiFetch(`${BASE_URL}/applications`);
       if (response.status === 401) {
         handleLogout();
         return;
@@ -307,9 +757,7 @@ export default function JobTrackerDashboard() {
   const fetchApplicationsSilent = async () => {
     if (!userEmail) return;
     try {
-      const response = await fetch(`${BASE_URL}/applications`, {
-        headers: { "x-user-email": userEmail }
-      });
+      const response = await apiFetch(`${BASE_URL}/applications`);
       if (response.status === 401) {
         handleLogout();
         return;
@@ -324,9 +772,7 @@ export default function JobTrackerDashboard() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await fetch(`${BASE_URL}/sync`, {
-        headers: { "x-user-email": userEmail }
-      });
+      await apiFetch(`${BASE_URL}/sync`);
       await fetchSyncStatus();
       await fetchApplications();
     } catch (error) {
@@ -336,25 +782,29 @@ export default function JobTrackerDashboard() {
     }
   };
 
-  const handleClearAll = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete all applications? This cannot be undone."
-    );
-    if (!confirmed) return;
+  const handleClearSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (clearConfirmText !== "CLEAR") {
+      setClearError("Please type CLEAR to confirm clearing workspace.");
+      return;
+    }
 
     setClearing(true);
+    setClearError("");
+
     try {
-      const response = await fetch(`${BASE_URL}/clear-all-applications`, {
-        method: "DELETE",
-        headers: { "x-user-email": userEmail }
+      const response = await apiFetch(`${BASE_URL}/clear-all-applications`, {
+        method: "DELETE"
       });
       if (!response.ok) throw new Error("Clear failed");
       const data = await response.json();
-      alert(`All applications cleared. (${data.deletedCount ?? "?"} records removed)`);
       await fetchApplications();
+      setShowClearModal(false);
+      setClearConfirmText("");
+      alert(`All applications cleared. (${data.deletedCount ?? "?"} records removed)`);
     } catch (error) {
       console.error("Clear all failed:", error);
-      alert("Failed to clear applications. Please try again.");
+      setClearError("Failed to clear applications. Please try again.");
     } finally {
       setClearing(false);
     }
@@ -362,11 +812,10 @@ export default function JobTrackerDashboard() {
 
   const handleMarkDone = async (id) => {
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ status: "done" }),
       });
@@ -380,13 +829,31 @@ export default function JobTrackerDashboard() {
     }
   };
 
-  const handleApply = async (id) => {
+  const handleUnmarkDone = async (id) => {
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status: "new" }),
+      });
+      if (!response.ok) throw new Error("Failed to unmark as done");
+      setApplications((prev) =>
+        prev.map((app) => app._id === id ? { ...app, status: "new" } : app)
+      );
+    } catch (error) {
+      console.error("Unmark done failed:", error);
+      alert("Could not unmark as done. Please try again.");
+    }
+  };
+
+  const handleApply = async (id) => {
+    try {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ status: "applied" }),
       });
@@ -404,9 +871,8 @@ export default function JobTrackerDashboard() {
     setApplications((prev) => prev.filter((app) => app._id !== id));
 
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
-        method: "DELETE",
-        headers: { "x-user-email": userEmail }
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
+        method: "DELETE"
       });
       if (!response.ok) throw new Error("Failed to delete");
     } catch (error) {
@@ -424,11 +890,10 @@ export default function JobTrackerDashboard() {
 
   const handleSaveNote = async (id, note) => {
     try {
-      const response = await fetch(`${BASE_URL}/applications/${id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ note }),
       });
@@ -438,14 +903,65 @@ export default function JobTrackerDashboard() {
       alert("Could not save note. Please try again.");
     }
   };
+
   const handleLogout = async () => {
-    localStorage.removeItem("userEmail");
-    setUserEmail(null);
+    if (!confirm("Are you sure you want to log out?")) {
+      return;
+    }
+    let pushEndpoint = "";
     try {
-      await fetch(`${BASE_URL}/logout`);
-      setApplications([]);
+      const { getCurrentPushEndpoint } = await import("./utils/pushManager");
+      pushEndpoint = await getCurrentPushEndpoint();
+    } catch (e) {
+      console.warn("[Push] Error getting endpoint for logout:", e.message);
+    }
+
+    try {
+      await apiFetch(`${BASE_URL}/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pushEndpoint })
+      });
     } catch (error) {
       console.error("Logout failed:", error);
+    } finally {
+      handleLocalLogout();
+    }
+  };
+
+  const handleDeleteSubmit = async (e) => {
+    e.preventDefault();
+    if (deleteConfirmText !== "DELETE") {
+      setDeleteError("Please type DELETE to confirm account deletion.");
+      return;
+    }
+
+    setDeletingAccount(true);
+    setDeleteError("");
+
+    try {
+      const response = await apiFetch(`${BASE_URL}/auth/account`, {
+        method: "DELETE"
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to delete account");
+      }
+
+      // Successful Deletion: sign out user completely
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      setUserEmail(null);
+      setApplications([]);
+      setShowDeleteModal(false);
+      setDeleteConfirmText("");
+      setAccountDeletedJustNow(true);
+    } catch (error) {
+      console.error("Account deletion failed:", error);
+      setDeleteError(error.message || "Failed to delete account. Please try again.");
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -493,11 +1009,10 @@ export default function JobTrackerDashboard() {
         status: "new"
       };
 
-      const response = await fetch(`${BASE_URL}/applications`, {
+      const response = await apiFetch(`${BASE_URL}/applications`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
       });
@@ -573,11 +1088,10 @@ export default function JobTrackerDashboard() {
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/applications/${editingApp._id}`, {
+      const response = await apiFetch(`${BASE_URL}/applications/${editingApp._id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-email": userEmail
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ manualEdits })
       });
@@ -613,12 +1127,20 @@ export default function JobTrackerDashboard() {
   const urgentDeadlines = applications.filter(a => {
     if (!a.deadlineISO) return false;
     const d = new Date(a.deadlineISO);
-    return d.toDateString() === now.toDateString() && (a.status || "").toLowerCase() !== "done";
+    const statusLower = (a.status || "").toLowerCase();
+    return d.toDateString() === now.toDateString() && statusLower !== "done" && statusLower !== "applied";
   }).length;
 
-  const unmarkedCount = applications.filter(
-    (a) => (a.status || "").toLowerCase() === "new"
-  ).length;
+  const unmarkedCount = applications.filter(a => {
+    let derivedStatus = (a.status || "new").toLowerCase();
+    if (derivedStatus === "new") {
+      const ageInMs = Date.now() - new Date(a.date || a.createdAt || 0).getTime();
+      if (ageInMs > 24 * 60 * 60 * 1000) {
+        derivedStatus = "unmarked";
+      }
+    }
+    return derivedStatus === "unmarked";
+  }).length;
 
 
 
@@ -646,7 +1168,7 @@ export default function JobTrackerDashboard() {
               min-height: 100vh;
               padding: 0 24px;
               text-align: center;
-              background: radial-gradient(circle at 50% 50%, #081229 0%, #030610 100%);
+              background: radial-gradient(circle at 50% 50%, #090d16 0%, #02040a 100%);
               font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
               color: #f8fafc;
               position: relative;
@@ -659,7 +1181,7 @@ export default function JobTrackerDashboard() {
               width: 600px;
               height: 600px;
               border-radius: 50%;
-              background: radial-gradient(circle, rgba(34, 211, 238, 0.12) 0%, rgba(34, 211, 238, 0) 70%);
+              background: radial-gradient(circle, rgba(45, 212, 191, 0.06) 0%, rgba(45, 212, 191, 0) 70%);
               filter: blur(80px);
               pointer-events: none;
               z-index: 2;
@@ -674,7 +1196,7 @@ export default function JobTrackerDashboard() {
               width: 850px;
               height: 850px;
               border-radius: 50%;
-              background: radial-gradient(circle, rgba(59, 130, 246, 0.04) 0%, rgba(59, 130, 246, 0) 70%);
+              background: radial-gradient(circle, rgba(45, 212, 191, 0.02) 0%, rgba(45, 212, 191, 0) 70%);
               filter: blur(100px);
               pointer-events: none;
               z-index: 1;
@@ -694,10 +1216,10 @@ export default function JobTrackerDashboard() {
             }
 
             .login-card {
-              background: rgba(10, 18, 40, 0.65);
+              background: rgba(17, 24, 39, 0.7);
               backdrop-filter: blur(16px);
               -webkit-backdrop-filter: blur(16px);
-              border: 1px solid rgba(34, 211, 238, 0.15);
+              border: 1px solid #1f2937;
               border-top: none;
               box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
               border-bottom-left-radius: 20px;
@@ -719,13 +1241,13 @@ export default function JobTrackerDashboard() {
               width: 64px;
               height: 64px;
               border-radius: 16px;
-              background: rgba(34, 211, 238, 0.08);
-              border: 1px solid rgba(34, 211, 238, 0.25);
+              background: rgba(45, 212, 191, 0.08);
+              border: 1px solid rgba(45, 212, 191, 0.25);
               display: flex;
               align-items: center;
               justify-content: center;
               margin-bottom: 28px;
-              box-shadow: 0 0 20px rgba(34, 211, 238, 0.1);
+              box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
             }
 
             .login-title {
@@ -750,20 +1272,20 @@ export default function JobTrackerDashboard() {
               justify-content: center;
               width: 100%;
               padding: 14px 24px;
-              background: #3df6d3;
-              color: #040814;
+              background: #14b8a6;
+              color: #ffffff;
               border-radius: 12px;
               text-decoration: none;
               font-weight: 600;
               font-size: 15px;
               transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-              box-shadow: 0 4px 15px rgba(61, 246, 211, 0.15);
+              box-shadow: 0 4px 15px rgba(20, 184, 166, 0.15);
             }
 
             .login-btn:hover {
-              background: #2ce0be;
+              background: #0d9488;
               transform: translateY(-2px);
-              box-shadow: 0 8px 25px rgba(61, 246, 211, 0.35);
+              box-shadow: 0 8px 25px rgba(20, 184, 166, 0.35);
             }
 
             .login-btn:active {
@@ -778,14 +1300,14 @@ export default function JobTrackerDashboard() {
             }
 
             .login-domain-highlight {
-              color: #3df6d3;
+              color: #2dd4bf;
               font-weight: 600;
             }
 
             .login-divider {
               width: 100%;
               height: 1px;
-              background: rgba(30, 41, 73, 0.5);
+              background: rgba(31, 41, 55, 0.5);
               margin: 32px 0 20px 0;
             }
 
@@ -812,35 +1334,53 @@ export default function JobTrackerDashboard() {
         <div className="glow-secondary"></div>
         <canvas className="particle-canvas" ref={canvasRef}></canvas>
 
-        <div className="login-card" ref={cardRef}>
-          <div className="logo-box">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3df6d3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-              <polyline points="22,6 12,13 2,6" />
-              <rect x="9" y="11" width="6" height="5" rx="1" fill="#0a1228" stroke="#3df6d3" strokeWidth="1.5" />
-              <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#3df6d3" strokeWidth="1.5" />
-            </svg>
+        {accountDeletedJustNow ? (
+          <div className="login-card" ref={cardRef}>
+            <div className="logo-box" style={{ borderColor: '#ef4444', background: 'rgba(239, 68, 68, 0.08)' }}>
+              <span style={{ fontSize: '28px' }}>👋</span>
+            </div>
+
+            <h1 className="login-title">Account Deleted</h1>
+            <p className="login-subtitle" style={{ marginBottom: '28px', maxWidth: '340px' }}>
+              Your account has been deleted.
+              <br />
+              Thank you for using Email Tracker.
+            </p>
+
+            <button
+              onClick={() => setAccountDeletedJustNow(false)}
+              className="login-btn"
+              style={{ cursor: 'pointer', border: 'none' }}
+            >
+              Sign in again
+            </button>
           </div>
+        ) : (
+          <div className="login-card" ref={cardRef}>
+            <div className="logo-box" style={{ background: 'transparent', border: 'none', boxShadow: 'none' }}>
+              <img src="/logo.png" alt="Email Tracker Logo" style={{ width: '64px', height: '64px', borderRadius: '16px', objectFit: 'contain' }} />
+            </div>
 
-          <h1 className="login-title">Email Tracker</h1>
-          <p className="login-subtitle">Track placement related emails from your college Gmail account.</p>
+            <h1 className="login-title">Email Tracker</h1>
+            <p className="login-subtitle">Track placement related emails from your college Gmail account.</p>
 
-          <a href={`${BASE_URL}/auth/google`} className="login-btn">
-            Continue with Google
-          </a>
+            <a href={`${BASE_URL}/auth/google`} className="login-btn">
+              Continue with Google
+            </a>
 
-          <p className="login-domain-tip">
-            Sign in using your <span className="login-domain-highlight">@msrit.edu</span> account
-          </p>
+            <p className="login-domain-tip">
+              Sign in using your <span className="login-domain-highlight">@msrit.edu</span> account
+            </p>
 
-          <div className="login-divider"></div>
+            <div className="login-divider"></div>
 
-          <div className="login-footer-links">
-            <a href="/privacy" className="login-footer-link">Privacy Policy</a>
-            <span>·</span>
-            <a href="/terms" className="login-footer-link">Terms of Service</a>
+            <div className="login-footer-links">
+              <a href="/privacy" className="login-footer-link">Privacy Policy</a>
+              <span>·</span>
+              <a href="/terms" className="login-footer-link">Terms of Service</a>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -853,15 +1393,15 @@ export default function JobTrackerDashboard() {
         
         :root {
           /* Light Mode Tokens */
-          --bg-color: #f5f7fa;
+          --bg-color: #f8fafc;
           --surface-color: #ffffff;
-          --text-primary: #475569;
+          --text-primary: #334155;
           --text-heading: #0f172a;
           --text-secondary: #64748b;
-          --border-color: #e2e8f0;
+          --border-color: #cbd5e1;
           --brand-primary: #2563eb;
           --brand-primary-hover: #1d4ed8;
-          --sidebar-bg: #f9fafb;
+          --sidebar-bg: #ffffff;
           --font-geist: 'IBM Plex Sans', -apple-system, sans-serif;
           --radius-card: 16px;
           --radius-btn: 8px;
@@ -870,31 +1410,371 @@ export default function JobTrackerDashboard() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: var(--font-geist); background-color: var(--bg-color); color: var(--text-primary); transition: background-color 0.25s ease-out, color 0.25s ease-out; }
         
-        .layout { display: flex; min-height: 100vh; }
+        .layout {
+          display: flex;
+          min-height: 100vh;
+          --sidebar-width: 64px;
+        }
+        
+        .layout.sidebar-expanded {
+          --sidebar-width: 280px;
+        }
         
         /* Sidebar */
-        .sidebar { width: 280px; background-color: #f3f4f6a6; border-right: 1px solid #e5e7eb; padding: 24px 16px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 50; }
-        .sidebar-header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; padding: 0 8px; }
-        .logo-box { width: 40px; height: 40px; background: #ccfbf1; color: #0d9488; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 700; font-size: 16px; }
-        .logo-text { font-family: 'IBM Plex Sans', sans-serif; font-size: 20px; font-weight: 700; color: #0d9488; line-height: 1.2; }
-        .logo-sub { font-size: 12px; color: #6b7280; }
+        .sidebar {
+          width: var(--sidebar-width);
+          background-color: var(--sidebar-bg);
+          border-right: 1px solid var(--border-color);
+          padding: 24px 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: fixed;
+          height: 100vh;
+          z-index: 50;
+          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          overflow: hidden;
+        }
+
+        .layout.sidebar-expanded .sidebar {
+          padding: 24px 16px;
+          align-items: stretch;
+        }
         
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: #475569; text-decoration: none; font-weight: 500; margin-bottom: 8px; cursor: pointer; transition: background-color 0.15s ease-out, color 0.15s ease-out; font-size: 15px; }
-        .nav-item:hover { background: #e5e7eb; color: #0f172a; }
-        .nav-item.active { background: #ecfdf5; border-left: 4px solid #14b8a6; color: #0f766e; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .sidebar-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          margin-bottom: 32px;
+          height: 48px;
+          flex-shrink: 0;
+          width: 100%;
+          transition: justify-content 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .layout.sidebar-expanded .sidebar-header {
+          justify-content: flex-start;
+          padding: 0 4px;
+        }
         
-        .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 24px; }
-        .sync-btn { width: 100%; padding: 12px; background: var(--brand-primary); color: white; border: none; border-radius: var(--radius-btn); font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: background-color 0.2s ease-out, transform 0.15s ease-out, filter 0.2s ease-out; font-size: 14px; }
+        .sidebar-logo-box {
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        
+        .logo-img {
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          object-fit: contain;
+          flex-shrink: 0;
+          transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .logo-text-wrapper {
+          display: flex;
+          flex-direction: column;
+          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+          max-width: 200px;
+          overflow: hidden;
+        }
+        
+        .logo-title-text {
+          font-family: 'IBM Plex Sans', sans-serif;
+          font-size: 19px;
+          font-weight: 700;
+          color: #0d9488;
+          line-height: 1.2;
+          white-space: nowrap;
+          transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.05s, opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.05s;
+        }
+        
+        .logo-subtitle-text {
+          font-size: 11px;
+          color: #6b7280;
+          white-space: nowrap;
+          transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.12s, opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.12s;
+        }
+        
+        .layout:not(.sidebar-expanded) .logo-text-wrapper {
+          opacity: 0;
+          max-width: 0;
+          pointer-events: none;
+        }
+        .layout:not(.sidebar-expanded) .logo-title-text {
+          transform: translateX(-15px);
+          opacity: 0;
+        }
+        .layout:not(.sidebar-expanded) .logo-subtitle-text {
+          transform: translateX(-20px);
+          opacity: 0;
+        }
+        
+        .nav-item {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          border-radius: 12px;
+          color: #475569;
+          text-decoration: none;
+          font-weight: 500;
+          margin-bottom: 12px;
+          cursor: pointer;
+          transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+          font-size: 15px;
+          position: relative;
+          height: 40px;
+          width: 40px;
+          gap: 12px;
+          flex-shrink: 0;
+        }
+
+        .layout.sidebar-expanded .nav-item {
+          width: 100%;
+          height: 48px;
+          padding: 4px;
+          justify-content: flex-start;
+        }
+        
+        .nav-item:hover {
+          background: #f1f5f9;
+          color: var(--text-heading);
+        }
+        
+        .nav-icon-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+          flex-shrink: 0;
+        }
+        
+        .nav-text {
+          opacity: 1;
+          max-width: 150px;
+          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.1s, max-width 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.1s, transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) 0.1s;
+          white-space: nowrap;
+        }
+        
+        .layout:not(.sidebar-expanded) .nav-text {
+          opacity: 0;
+          max-width: 0;
+          overflow: hidden;
+          transform: translateX(-10px);
+        }
+
+        .nav-item.active {
+          color: #0f766e;
+          font-weight: 600;
+        }
+        
+        .nav-item.active .nav-icon-wrapper {
+          background: rgba(20, 184, 166, 0.12);
+          border: 1px solid rgba(20, 184, 166, 0.35);
+          box-shadow: 0 0 10px rgba(20, 184, 166, 0.25);
+          color: #0d9488;
+        }
+
+        .sidebar-divider {
+          height: 1px;
+          background: #e2e8f0;
+          margin: 20px 0;
+          opacity: 0.5;
+          flex-shrink: 0;
+          width: 24px;
+          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .layout.sidebar-expanded .sidebar-divider {
+          width: 100%;
+        }
+        
+        /* Dashboard Filters Row */
+        .dashboard-filters-row {
+          display: flex;
+          width: 100%;
+          border-bottom: 1px solid var(--border-color);
+          margin-top: 32px;
+          margin-bottom: 24px;
+          gap: 16px;
+        }
+        
+        .filter-tab {
+          flex: 1;
+          font-family: var(--font-geist);
+          font-size: 14.5px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          background: none;
+          border: none;
+          padding: 14px 0;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          outline: none;
+          transition: color 0.25s ease;
+          position: relative;
+        }
+
+        .filter-tab:hover {
+          color: var(--text-primary);
+        }
+
+        .filter-tab.active {
+          color: #0f766e;
+          font-weight: 600;
+        }
+
+        .filter-tab-text {
+          position: relative;
+          display: inline-block;
+        }
+
+        .filter-tab::after {
+          content: "";
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, rgba(20, 184, 166, 0) 0%, rgba(20, 184, 166, 1) 40%, rgba(20, 184, 166, 1) 60%, rgba(20, 184, 166, 0) 100%);
+          transform: scaleX(0);
+          transform-origin: bottom center;
+          opacity: 0;
+          transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease-out;
+          border-radius: 99px;
+          box-shadow: 0 1px 12px rgba(20, 184, 166, 0.4), 0 3px 20px rgba(20, 184, 166, 0.15);
+        }
+
+        .filter-tab.active::after {
+          transform: scaleX(1);
+          opacity: 1;
+        }
+
+        .dark .filter-tab.active {
+          color: #2dd4bf;
+        }
+
+        .dark .filter-tab::after {
+          background: linear-gradient(90deg, rgba(45, 212, 191, 0) 0%, rgba(45, 212, 191, 1) 40%, rgba(45, 212, 191, 1) 60%, rgba(45, 212, 191, 0) 100%);
+          box-shadow: 0 0 16px rgba(45, 212, 191, 0.95), 0 6px 28px rgba(45, 212, 191, 0.65), 0 12px 50px rgba(45, 212, 191, 0.4), 0 20px 80px rgba(45, 212, 191, 0.2);
+        }
+        
+        .sidebar-bottom {
+          margin-top: auto;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+          padding-bottom: 8px;
+          flex-shrink: 0;
+          width: 100%;
+        }
+        .layout.sidebar-expanded .sidebar-bottom {
+          align-items: stretch;
+        }
+        .sync-btn {
+          width: 100%;
+          height: 40px;
+          padding: 0 12px;
+          background: var(--brand-primary);
+          color: white;
+          border: none;
+          border-radius: var(--radius-btn);
+          font-weight: 600;
+          cursor: pointer;
+          transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), border-radius 0.4s ease, background-color 0.2s ease-out, transform 0.15s ease-out, filter 0.2s ease-out;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          overflow: hidden;
+          flex-shrink: 0;
+        }
         .sync-btn:hover:not(:disabled) { filter: brightness(1.05); }
         .sync-btn:active:not(:disabled) { transform: scale(0.98); }
         .sync-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
-        /* Main Area */
-        .main-wrapper { margin-left: 280px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .layout:not(.sidebar-expanded) .sync-btn {
+          width: 40px;
+          height: 40px;
+          padding: 0;
+          border-radius: 10px;
+          margin: 0 auto;
+          gap: 0;
+        }
         
-        .topbar { height: 64px; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; position: sticky; top: 0; z-index: 40; }
-        .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--surface-color) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 320px; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
-        .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: var(--surface-color); }
+        .sync-btn-icon-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        
+        .sync-btn-text {
+          white-space: nowrap;
+          transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .layout:not(.sidebar-expanded) .sync-btn-text {
+          opacity: 0;
+          width: 0;
+          pointer-events: none;
+        }
+        
+        .sync-time-text {
+          font-size: 11px;
+          color: var(--text-secondary);
+          text-align: center;
+          transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          white-space: nowrap;
+          opacity: 0.85;
+        }
+        
+        .layout:not(.sidebar-expanded) .sync-time-text {
+          font-size: 10px;
+          margin-top: 4px;
+        }
+        
+        /* Main Area */
+        .main-wrapper {
+          margin-left: var(--sidebar-width);
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          transition: margin-left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .topbar {
+          height: 64px;
+          background: rgba(255, 255, 255, 0.85);
+          backdrop-filter: blur(12px);
+          border-bottom: 1px solid var(--border-color);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          position: sticky;
+          top: 0;
+          z-index: 40;
+          transition: padding-left 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding-right 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          padding-left: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+          padding-right: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+        }
+        .search-container { flex: 1; width: 100%; position: relative; }
+        .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: #f1f5f9 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 100%; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
+        .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: #ffffff; }
         .search-container input::placeholder { color: var(--text-secondary); }
         .topbar-actions { display: flex; align-items: center; gap: 16px; }
         .user-dropdown-container { position: relative; }
@@ -912,18 +1792,74 @@ export default function JobTrackerDashboard() {
         .dark .floating-add-btn:hover { box-shadow: 0 0 25px rgba(255, 255, 255, 0.35), 0 0 50px rgba(255, 255, 255, 0.15); }
         .outline-btn { padding: 8px 16px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease; }
         .outline-btn:hover { background: var(--bg-color); border-color: #cbd5e1; }
-        .btn-outline-primary { padding: 8px 16px; border: 1px solid #cbd5e1; background: #ffffff; color: var(--brand-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease-out; }
-        .btn-outline-primary:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; filter: none; }
+        .btn-outline-primary { padding: 8px 16px; border: 1px solid #cbd5e1; background: #ffffff; color: var(--text-primary); border-radius: var(--radius-btn); font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s ease-out; }
+        .btn-outline-primary:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; color: var(--text-heading); filter: none; }
         .btn-outline-primary:active:not(:disabled) { transform: scale(0.98); }
         .btn-outline-primary:disabled { opacity: 0.6; cursor: not-allowed; }
         .dark .btn-outline-primary { background: transparent; border-color: rgba(59, 130, 246, 0.4); color: #60a5fa; }
         .dark .btn-outline-primary:hover:not(:disabled) { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; filter: none; }
         
         /* Content */
-        .content { padding: 32px; max-width: 1400px; margin: 0 auto; width: 100%; }
+        .content {
+          max-width: calc(1400px + (280px - var(--sidebar-width)));
+          margin: 0 auto;
+          width: 100%;
+          transition: padding-left 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding-right 0.4s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+          padding-top: 32px;
+          padding-bottom: 32px;
+          padding-left: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+          padding-right: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+        }
         .page-header { margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end; }
         .page-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 4px; }
         .page-subtitle { color: #64748b; font-size: 15px; }
+
+        /* Settings Page */
+        .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 100%; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+        .settings-header { margin-bottom: 8px; }
+        .settings-main-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px; }
+        .settings-main-subtitle { color: var(--text-secondary); font-size: 15px; }
+        .settings-grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+        .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 28px; box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02); }
+        .settings-title { font-size: 20px; font-weight: 700; color: var(--text-heading); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+        .settings-title-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(13, 148, 136, 0.1); color: #0d9488; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .dark .settings-title-icon { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
+        
+        .settings-list { display: flex; flex-direction: column; gap: 12px; }
+        .settings-item { display: flex; align-items: center; padding: 14px 18px; border-radius: 12px; background: var(--bg-color); cursor: pointer; transition: all 0.2s ease; border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 500; font-size: 14.5px; text-align: left; width: 100%; gap: 12px; }
+        .settings-item:hover { background: rgba(0, 0, 0, 0.03); color: var(--text-heading); transform: translateY(-1px); }
+        .dark .settings-item:hover { background: rgba(255, 255, 255, 0.05); }
+        .settings-item-label { flex: 1; }
+        .settings-item-icon { color: var(--text-secondary); display: flex; align-items: center; font-size: 16px; width: 24px; justify-content: center; }
+        .settings-item-arrow { color: var(--text-secondary); font-size: 12px; margin-left: auto; }
+        
+        /* Settings About Section (Clean style) */
+        .settings-about-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 32px; box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02); }
+        .about-info-box { display: flex; flex-direction: column; gap: 12px; }
+        .about-info-box h3 { font-size: 20px; font-weight: 700; color: var(--text-heading); margin: 0; }
+        .about-version-badge { display: inline-block; font-size: 11px; font-weight: 700; color: #0d9488; background: rgba(13, 148, 136, 0.1); padding: 4px 10px; border-radius: 999px; width: fit-content; letter-spacing: 0.05em; margin-top: -4px; }
+        .dark .about-version-badge { color: #2dd4bf; background: rgba(45, 212, 191, 0.15); }
+        .about-desc { font-size: 14.5px; line-height: 1.6; color: var(--text-primary); margin: 0; text-align: justify; }
+        .about-tech-container { margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 16px; }
+        .about-tech-label { font-weight: 600; color: var(--text-heading); font-size: 14px; display: block; margin-bottom: 8px; }
+        .about-tech-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+        .about-tech-tag { font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--bg-color); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 6px; }
+        
+        .calendar-card-panel { background: #f8fafc; border: 1px solid var(--border-color); padding: 24px; border-radius: 12px; }
+        .dark .calendar-card-panel { background: rgba(255, 255, 255, 0.03); }
+        .calendar-status-box { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-radius: 12px; background: #f8fafc; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 16px; }
+        .dark .calendar-status-box { background: rgba(255, 255, 255, 0.02); }
+        .feature-panel { padding: 16px; border-radius: 8px; background: #f8fafc; border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: flex-start; }
+        .dark .feature-panel { background: rgba(255, 255, 255, 0.02); }
+        
+        .legal-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); }
+        .legal-content h2 { font-size: 17px; font-weight: 700; color: var(--text-heading); margin-top: 28px; margin-bottom: 10px; }
+        .legal-content h2:first-of-type { margin-top: 8px; }
+        .legal-content p { margin-bottom: 12px; }
+        .legal-content ul { margin: 8px 0 16px 20px; list-style-type: disc; }
+        .legal-content ul li { margin-bottom: 4px; }
+        .legal-content strong { color: var(--text-heading); }
+        .legal-last-updated { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; font-style: italic; }
         
         /* Stats Section */
         .stats-grid { 
@@ -1014,6 +1950,13 @@ export default function JobTrackerDashboard() {
         .filter-btn.active { background: var(--text-primary); color: var(--surface-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-weight: 600; }
         .filter-btn:hover:not(.active) { background: var(--bg-color); color: var(--text-primary); border-color: var(--border-color); }
         
+        /* Pagination */
+        .pagination-container { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 40px; margin-bottom: 24px; }
+        .pagination-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #e5e7eb; background: transparent; color: #4b5563; cursor: pointer; transition: all 180ms ease; }
+        .pagination-btn:hover:not(:disabled) { background: rgba(71, 85, 105, 0.08); border-color: #cbd5e1; color: #1f2937; }
+        .pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: rgba(148, 163, 184, 0.18) !important; color: rgba(148, 163, 184, 0.45) !important; }
+        .pagination-info { font-size: 14px; font-weight: 500; color: #4b5563; }
+        
         /* App Grid */
         .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
         .app-card {
@@ -1026,11 +1969,11 @@ export default function JobTrackerDashboard() {
           display: flex;
           flex-direction: column;
           gap: 12px;
-          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+          box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02);
         }
         .app-card:hover {
-          border-color: #cbd5e1;
-          box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+          border-color: #94a3b8;
+          box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 8px -1px rgba(15, 23, 42, 0.04);
         }
         .app-header {
           display: flex;
@@ -1101,14 +2044,10 @@ export default function JobTrackerDashboard() {
           letter-spacing: 0.03em;
           border: 1px solid transparent;
         }
-        .status-new { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
-        .status-unmarked { background: #fef3c7; color: #92400e; border-color: #fde68a; }
-        .status-applied { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
-        .status-done { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
-        .app-card.status-outline-new { border-color: #a7f3d0; }
-        .app-card.status-outline-unmarked { border-color: #fde68a; }
-        .app-card.status-outline-applied { border-color: #c7d2fe; }
-        .app-card.status-outline-done { border-color: #e5e7eb; }
+        .status-new { background: #eff6ff; border-color: rgba(59, 130, 246, 0.25); color: #1d4ed8; }
+        .status-unmarked { background: #fffbeb; border-color: rgba(245, 158, 11, 0.25); color: #b45309; }
+        .status-applied { background: #f0fdfa; border-color: rgba(20, 184, 166, 0.25); color: #0f766e; }
+        .status-done { background: #f0fdf4; border-color: rgba(34, 197, 94, 0.25); color: #15803d; }
         .app-card.is-urgent { border-color: #dc2626; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18); }
         
         .app-footer { border-top: 1px solid #eaefed; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #6d7a77; }
@@ -1126,12 +2065,12 @@ export default function JobTrackerDashboard() {
         .modal-close:hover { background: var(--bg-color); color: var(--text-primary); }
         .form-group { margin-bottom: 16px; }
         .form-label { display: block; font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
-        .form-input, .form-select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-btn); font-family: inherit; font-size: 14px; color: var(--text-primary); outline: none; transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out; background: var(--surface-color); }
-        .form-input:focus, .form-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .form-input, .form-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: var(--radius-btn); font-family: inherit; font-size: 14px; color: var(--text-primary); outline: none; transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out; background: #f8fafc; }
+        .form-input:focus, .form-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: #ffffff; }
         .form-error { color: #b91c1c; font-size: 13px; margin-bottom: 16px; background: #fef2f2; padding: 10px 12px; border-radius: 8px; border: 1px solid #fecaca; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 32px; }
-        .btn-cancel { padding: 9px 18px; background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; border-radius: var(--radius-btn); font-weight: 500; cursor: pointer; transition: background 0.2s; font-size: 13.5px; }
-        .btn-cancel:hover { background: #e5e7eb; color: #111827; }
+        .btn-cancel { padding: 9px 18px; background: #f8fafc; color: #334155; border: 1px solid #cbd5e1; border-radius: var(--radius-btn); font-weight: 500; cursor: pointer; transition: background 0.2s; font-size: 13.5px; }
+        .btn-cancel:hover { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
         .btn-submit { padding: 9px 18px; background: var(--brand-primary); color: #fff; border: none; border-radius: var(--radius-btn); font-weight: 500; cursor: pointer; transition: background-color 0.2s ease-out, transform 0.15s ease-out, filter 0.2s ease-out; font-size: 13.5px; }
         .btn-submit:hover:not(:disabled) { filter: brightness(1.05); }
         .btn-submit:active:not(:disabled) { transform: scale(0.98); }
@@ -1145,8 +2084,8 @@ export default function JobTrackerDashboard() {
         .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
         .new-tag { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; background: #dbeafe; color: #1e40af; margin-left: 8px; vertical-align: middle; }
         
-        .note-container { margin-top: 4px; display: flex; flex-direction: column; gap: 8px; }
-        .note-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 13px; color: var(--text-primary); outline: none; transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out; background: #f8fafc; resize: none; min-height: 60px; }
+        .note-container { margin-top: 8px; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+        .note-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 13px; color: var(--text-primary); outline: none; transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out; background: #f8fafc; resize: none; min-height: 60px; flex-grow: 1; }
         .note-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); background: #ffffff; }
         .note-save-hint { font-size: 11px; color: #9ca3af; text-align: right; margin-top: -4px; }
         
@@ -1172,17 +2111,23 @@ export default function JobTrackerDashboard() {
         
         /* Card action buttons */
         .card-actions { display: flex; gap: 8px; padding-top: 14px; border-top: 1px solid var(--border-color); }
-        .card-btn { flex: 1; padding: 7px 0; border-radius: 6px; border: 1px solid transparent; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: all 0.15s ease-out; text-align: center; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
-        .card-btn-apply { background: var(--brand-primary); color: #ffffff; }
-        .card-btn-apply:hover:not(:disabled) { filter: brightness(1.05); }
-        .card-btn-apply:active:not(:disabled) { transform: scale(0.98); }
-        .card-btn-done { background: #f3f4f6; color: #111827; border-color: #e5e7eb; }
-        .card-btn-done:hover:not(:disabled) { background: #e5e7eb; }
-        .card-btn-done:disabled { opacity: 0.5; cursor: default; }
-        .card-btn-remove { background: #fff; color: #dc2626; border-color: #fca5a5; }
-        .card-btn-remove:hover { background: #fef2f2; border-color: #ef4444; }
-        .card-btn-edit { background: #fff; color: #4b5563; border-color: #e5e7eb; }
-        .card-btn-edit:hover { background: #f9fafb; border-color: #cbd5e1; color: #111827; }
+        .card-btn { flex: 1; padding: 7px 0; border-radius: 6px; border: 1px solid transparent; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: all 180ms ease; text-align: center; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; background: transparent; }
+        .card-btn-edit { background: transparent; border-color: rgba(148, 163, 184, 0.3); color: #64748B; }
+        .card-btn-edit:hover:not(:disabled) { background: rgba(148, 163, 184, 0.05); border-color: #64748B; color: #334155; }
+        .card-btn-edit:active:not(:disabled) { background: rgba(148, 163, 184, 0.12); }
+        .card-btn-apply { background: transparent; border-color: rgba(20, 184, 166, 0.45); color: #0D9488; }
+        .card-btn-apply:hover:not(:disabled) { background: rgba(20, 184, 166, 0.05); border-color: #0D9488; color: #0F766E; }
+        .card-btn-apply:active:not(:disabled) { background: rgba(20, 184, 166, 0.12); }
+        .card-btn-done { background: transparent; border-color: rgba(34, 197, 94, 0.3); color: #16A34A; }
+        .card-btn-done:hover:not(:disabled) { background: rgba(34, 197, 94, 0.05); border-color: #16A34A; color: #15803D; }
+        .card-btn-done:active:not(:disabled) { background: rgba(34, 197, 94, 0.12); }
+        .card-btn-done.active { background: transparent; border-color: rgba(245, 158, 11, 0.3); color: #D97706; }
+        .card-btn-done.active:hover:not(:disabled) { background: rgba(245, 158, 11, 0.05); border-color: #D97706; color: #B45309; }
+        .card-btn-done.active:active:not(:disabled) { background: rgba(245, 158, 11, 0.12); }
+        .card-btn-remove { background: transparent; border-color: rgba(239, 68, 68, 0.3); color: #DC2626; }
+        .card-btn-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.05); border-color: #DC2626; color: #B91C1C; }
+        .card-btn-remove:active:not(:disabled) { background: rgba(239, 68, 68, 0.12); }
+        .card-btn:disabled { background: transparent !important; border-color: rgba(148, 163, 184, 0.18) !important; color: rgba(148, 163, 184, 0.45) !important; cursor: not-allowed !important; opacity: 0.7 !important; }
         /* Done card blurring and dimming */
         .app-card.is-done { 
           opacity: 0.45; 
@@ -1199,20 +2144,125 @@ export default function JobTrackerDashboard() {
         .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #0d9488; }
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 45; backdrop-filter: blur(2px); }
 
+        .filters::-webkit-scrollbar { display: none; }
+        .filters { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .modal-grid-2col {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
         @media (max-width: 768px) {
-          .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
-          .sidebar.open { transform: translateX(0); }
-          .sidebar-overlay.show { display: block; }
-          .main-wrapper { margin-left: 0; }
-          .hamburger { display: block; }
-          .topbar { padding: 0 16px; }
-          .search-container input { width: 180px; }
-          .topbar-actions { gap: 8px; }
-          .content { padding: 20px 16px; }
-          .page-title { font-size: 24px; }
-          .stats-grid { grid-template-columns: 1fr; }
-          .app-grid { grid-template-columns: 1fr; }
-          .modal-content { padding: 20px; width: 95%; margin: 0 10px; }
+          .sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            width: 280px !important;
+            padding: 24px 16px !important;
+            align-items: stretch !important;
+          }
+          .sidebar.open {
+            transform: translateX(0);
+          }
+          .sidebar-overlay.show {
+            display: block;
+          }
+          .sidebar-header {
+            justify-content: flex-start !important;
+            padding: 0 4px !important;
+          }
+          .logo-text-wrapper {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+          }
+          .logo-title-text {
+            transform: none !important;
+            opacity: 1 !important;
+          }
+          .logo-subtitle-text {
+            transform: none !important;
+            opacity: 1 !important;
+          }
+          .sidebar-divider {
+            width: 100% !important;
+          }
+          .nav-item {
+            width: 100% !important;
+            height: 48px !important;
+            padding: 4px !important;
+            justify-content: flex-start !important;
+            margin-bottom: 8px !important;
+          }
+          .nav-text {
+            opacity: 1 !important;
+            max-width: 150px !important;
+            transform: none !important;
+            overflow: visible !important;
+          }
+          .sidebar-bottom {
+            align-items: stretch !important;
+          }
+          .sync-btn {
+            width: 100% !important;
+            height: 40px !important;
+            border-radius: var(--radius-btn) !important;
+            padding: 0 12px !important;
+            gap: 8px !important;
+            margin: 0 !important;
+          }
+          .sync-btn-text {
+            opacity: 1 !important;
+            width: auto !important;
+            pointer-events: auto !important;
+          }
+          .sync-time-text {
+            font-size: 11px !important;
+            margin-top: 0 !important;
+          }
+          .main-wrapper {
+            margin-left: 0 !important;
+          }
+          .hamburger {
+            display: block;
+          }
+          .topbar {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          .search-container {
+            flex: 1;
+            max-width: none;
+          }
+          .search-container input {
+            width: 100%;
+          }
+          .topbar-actions {
+            gap: 8px;
+          }
+          .content {
+            padding: 20px 16px !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          .page-title {
+            font-size: 24px;
+          }
+          .stats-grid {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          }
+          .app-grid {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          }
+          .modal-content {
+            padding: 20px;
+            width: calc(100% - 24px);
+            margin: 0 auto;
+            max-width: 500px;
+          }
+          .modal-grid-2col {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
         }
 
         @media (max-width: 480px) {
@@ -1221,6 +2271,25 @@ export default function JobTrackerDashboard() {
           .search-container input { width: 100%; }
           .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
           .topbar-actions > button { flex: 1; min-width: 100px; text-align: center; justify-content: center; display: flex; align-items: center; }
+          
+          .stats-grid { grid-template-columns: 1fr; gap: 14px; }
+          .stat-card { padding: 16px; }
+          
+          .card-actions {
+            flex-wrap: wrap;
+            gap: 6px;
+          }
+          .card-btn {
+            flex: 1 1 calc(50% - 4px);
+            min-width: 100px;
+          }
+          
+          .floating-add-btn {
+            bottom: 20px;
+            right: 20px;
+            width: 54px;
+            height: 54px;
+          }
         }
 
         /* Dark Mode */
@@ -1238,13 +2307,35 @@ export default function JobTrackerDashboard() {
           color: var(--text-primary); 
           min-height: 100vh; 
         }
-        .dark .sidebar { background-color: #111827; border-color: #1f2937; }
-        .dark .logo-box { background: #0f766e; color: #ccfbf1; }
-        .dark .logo-text { color: #2dd4bf; }
-        .dark .nav-item { color: #9ca3af; }
-        .dark .nav-item:hover { background: #1f2937; color: #f9fafb; }
-        .dark .nav-item.active { background: #374151; border-color: #2dd4bf; color: #2dd4bf; }
-        .dark .sidebar-bottom { border-color: #1f2937; }
+        .dark .sidebar {
+          background-color: rgba(17, 24, 39, 0.7);
+          border-color: #1f2937;
+        }
+        .dark .logo-title-text {
+          color: #2dd4bf;
+        }
+        .dark .logo-subtitle-text {
+          color: #9ca3af;
+        }
+        .dark .nav-item {
+          color: #9ca3af;
+        }
+        .dark .nav-item:hover {
+          background: rgba(31, 41, 55, 0.4);
+          color: #f9fafb;
+        }
+        .dark .nav-item.active {
+          color: #2dd4bf;
+        }
+        .dark .nav-item.active .nav-icon-wrapper {
+          background: rgba(45, 212, 191, 0.15);
+          border: 1px solid rgba(45, 212, 191, 0.4);
+          box-shadow: 0 0 12px rgba(45, 212, 191, 0.25);
+          color: #2dd4bf;
+        }
+        .dark .sidebar-divider {
+          background: #374151;
+        }
         
         .dark .topbar { background: rgba(3, 7, 18, 0.8); border-color: var(--border-color); }
         .dark .search-container input { background-color: #111827; border-color: var(--border-color); color: var(--text-primary); }
@@ -1281,10 +2372,6 @@ export default function JobTrackerDashboard() {
           background: #0d1321;
           border-color: #1f2937;
         }
-        .dark .app-card.status-outline-new { border-color: rgba(52, 211, 153, 0.4); }
-        .dark .app-card.status-outline-unmarked { border-color: rgba(251, 191, 36, 0.4); }
-        .dark .app-card.status-outline-applied { border-color: rgba(129, 140, 248, 0.45); }
-        .dark .app-card.status-outline-done { border-color: rgba(156, 163, 175, 0.25); }
         .dark .app-card.is-urgent { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15); }
         
         .dark .app-card:hover {
@@ -1304,12 +2391,10 @@ export default function JobTrackerDashboard() {
         .dark .company-name {
           color: #94a3b8;
         }
-        .dark .status-new { background: rgba(75, 85, 99, 0.2); color: #9ca3af; border-color: rgba(107, 114, 128, 0.3); }
-        .dark .status-applied { background: rgba(55, 48, 163, 0.2); color: #a5b4fc; border-color: rgba(79, 70, 229, 0.3); }
-        .dark .status-interview { background: rgba(22, 101, 52, 0.2); color: #86efac; border-color: rgba(34, 197, 94, 0.3); }
-        .dark .status-offer { background: rgba(30, 64, 175, 0.2); color: #93c5fd; border-color: rgba(59, 130, 246, 0.3); }
-        .dark .status-rejected { background: rgba(153, 27, 27, 0.2); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
-        .dark .status-done { background: rgba(75, 85, 99, 0.2); color: #9ca3af; border-color: rgba(107, 114, 128, 0.3); }
+        .dark .status-new { background: rgba(37, 99, 235, 0.08); color: #3b82f6; border-color: #1d4ed8; }
+        .dark .status-unmarked { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: #d97706; }
+        .dark .status-applied { background: rgba(20, 184, 166, 0.08); color: #14b8a6; border-color: #0d9488; }
+        .dark .status-done { background: rgba(34, 197, 94, 0.08); color: #22c55e; border-color: #16a34a; }
         .dark .app-footer { border-color: #334155; color: #94a3b8; }
         
         .dark .modal-content { background: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); }
@@ -1319,21 +2404,34 @@ export default function JobTrackerDashboard() {
         .dark .form-input:focus, .dark .form-select:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .dark .btn-cancel { background: transparent; border-color: var(--border-color); color: var(--text-primary); }
         .dark .btn-cancel:hover { background: #27272a; border-color: #3f3f46; color: #fff; }
+        .dark .btn-danger { background: transparent; border-color: #ef4444; color: #fca5a5; }
+        .dark .btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; }
         .dark .note-input { background: #0d1321; border-color: #1f2937; color: var(--text-primary); }
         .dark .note-input:focus { background: #0d1321; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         
         .dark .card-actions { border-color: #1f2937; }
-        .dark .card-btn-done { background: #27272a; border-color: transparent; color: #fafafa; }
-        .dark .card-btn-done:hover:not(:disabled) { background: #3f3f46; border-color: #52525b; }
-        .dark .card-btn-remove { background: transparent; border-color: #7f1d1d; color: #fca5a5; }
-        .dark .card-btn-remove:hover { background: rgba(153, 27, 27, 0.2); border-color: #991b1b; }
-        .dark .card-btn-apply { background: var(--brand-primary); border-color: transparent; color: #ffffff; }
-        .dark .card-btn-apply:hover { background: var(--brand-primary-hover); }
-        .dark .card-btn-edit { background: transparent; border-color: #1f2937; color: var(--text-secondary); }
-        .dark .card-btn-edit:hover { background: #1f2937; border-color: #374151; color: var(--text-primary); }
+        .dark .card-btn-edit { background: transparent; border-color: rgba(148, 163, 184, 0.15); color: #475569; }
+        .dark .card-btn-edit:hover:not(:disabled) { background: rgba(148, 163, 184, 0.05); border-color: #475569; color: #94A3B8; }
+        .dark .card-btn-edit:active:not(:disabled) { background: rgba(148, 163, 184, 0.12); }
+        .dark .card-btn-apply { background: transparent; border-color: rgba(20, 184, 166, 0.25); color: #0D9488; }
+        .dark .card-btn-apply:hover:not(:disabled) { background: rgba(20, 184, 166, 0.05); border-color: #0D9488; color: #14B8A6; }
+        .dark .card-btn-apply:active:not(:disabled) { background: rgba(20, 184, 166, 0.12); }
+        .dark .card-btn-done { background: transparent; border-color: rgba(34, 197, 94, 0.15); color: #15803D; }
+        .dark .card-btn-done:hover:not(:disabled) { background: rgba(34, 197, 94, 0.05); border-color: #16A34A; color: #22C55E; }
+        .dark .card-btn-done:active:not(:disabled) { background: rgba(34, 197, 94, 0.12); }
+        .dark .card-btn-done.active { background: transparent; border-color: rgba(245, 158, 11, 0.15); color: #B45309; }
+        .dark .card-btn-done.active:hover:not(:disabled) { background: rgba(245, 158, 11, 0.05); border-color: #D97706; color: #F59E0B; }
+        .dark .card-btn-done.active:active:not(:disabled) { background: rgba(245, 158, 11, 0.12); }
+        .dark .card-btn-remove { background: transparent; border-color: rgba(239, 68, 68, 0.15); color: #B91C1C; }
+        .dark .card-btn-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.05); border-color: #DC2626; color: #EF4444; }
+        .dark .card-btn-remove:active:not(:disabled) { background: rgba(239, 68, 68, 0.12); }
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
         .dark .app-card.is-done:hover { opacity: 0.6; filter: blur(0.5px); }
+        .dark .pagination-btn { border-color: #334155; color: #94a3b8; }
+        .dark .pagination-btn:hover:not(:disabled) { background: rgba(148, 163, 184, 0.08); border-color: #475569; color: #cbd5e1; }
+        .dark .pagination-btn:disabled { border-color: rgba(148, 163, 184, 0.18) !important; color: rgba(148, 163, 184, 0.45) !important; }
+        .dark .pagination-info { color: #94a3b8; }
         
         .dark .deadline-badge {
           background: #1e293b;
@@ -1359,11 +2457,12 @@ export default function JobTrackerDashboard() {
           margin-bottom: 6px;
           display: flex;
           align-items: baseline;
+          gap: 12px;
         }
         .program-detail-label {
           font-weight: 600;
           color: #64748b;
-          width: 70px;
+          width: 95px;
           flex-shrink: 0;
         }
         .program-detail-value {
@@ -1405,10 +2504,77 @@ export default function JobTrackerDashboard() {
         }
 
         .info-modal-content {
-          max-width: 550px;
+          max-width: 620px;
+          max-height: 85vh;
+          display: flex;
+          flex-direction: column;
+          padding: 0 !important;
+          overflow: hidden;
         }
+        .info-modal-header {
+          padding: 24px 28px 16px;
+          border-bottom: 1px solid var(--border-color, #e2e8f0);
+          flex-shrink: 0;
+        }
+        .info-modal-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .info-modal-company-row { display: flex; align-items: center; gap: 14px; }
+        .info-modal-logo { width: 44px; height: 44px; border-radius: 10px; object-fit: contain; background: #f1f5f9; padding: 4px; }
+        .info-modal-company-name { font-family: 'Manrope', sans-serif; font-size: 22px; font-weight: 700; color: var(--text-heading, #0f172a); margin: 0; }
+        .info-modal-subtitle { font-size: 13px; color: #64748b; margin: 2px 0 0; }
+        .info-modal-meta-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .meta-chip { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color, #e2e8f0); color: var(--text-secondary, #64748b); background: var(--bg-color, #f8fafc); }
+        .meta-chip.urgent { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+        .meta-chip.status-new { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+        .meta-chip.status-applied { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .meta-chip.status-interview { background: #fefce8; border-color: #fde68a; color: #92400e; }
+        .meta-chip.status-offer { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+        .meta-chip.status-done { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+
+        .info-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1; min-height: 0; max-height: calc(85vh - 210px); padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
+        .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: hidden; }
+        .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); }
+        .info-modal-section-body { padding: 16px 18px; }
+
+        .info-detail-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color, #f1f5f9); }
+        .info-detail-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .info-detail-label { font-size: 13px; font-weight: 600; color: var(--text-secondary, #64748b); min-width: 90px; flex-shrink: 0; }
+        .info-detail-value { font-size: 13.5px; color: var(--text-primary, #1e293b); line-height: 1.5; }
+
+        .company-description { font-size: 13.5px; color: var(--text-primary, #1e293b); line-height: 1.65; margin: 0 0 12px; }
+        .known-for-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+        .known-for-list li { font-size: 13px; color: var(--text-secondary, #64748b); display: flex; align-items: flex-start; gap: 8px; }
+        .known-for-list li::before { content: "•"; color: #3b82f6; font-weight: 700; flex-shrink: 0; }
+
+        .skills-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .skill-chip { font-size: 12.5px; font-weight: 500; padding: 5px 12px; border-radius: 20px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; display: flex; align-items: center; gap: 6px; }
+        .skill-chip::before { content: "✓"; font-weight: 700; }
+
+        .company-skeleton { display: flex; flex-direction: column; gap: 10px; }
+        .skeleton-line { height: 14px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .info-modal-footer { padding: 16px 28px; border-top: 1px solid var(--border-color, #e2e8f0); display: flex; justify-content: flex-end; flex-shrink: 0; background: var(--surface-color, #fff); }
+
+        .dark .info-modal-section { background: var(--surface-color); border-color: var(--border-color); }
+        .dark .info-modal-section-header { background: rgba(255,255,255,0.04); }
+        .dark .info-modal-section-body { background: var(--surface-color); }
+        .dark .info-detail-row { border-color: var(--border-color); }
+        .dark .meta-chip { background: rgba(255,255,255,0.06); border-color: var(--border-color); }
+        .dark .skill-chip { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); }
+        .dark .skeleton-line { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; }
 
         
+        @keyframes slideDownFade {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
         /* Sync Warning Banner */
         .sync-warning-banner {
           background-color: #fef2f2;
@@ -1421,6 +2587,7 @@ export default function JobTrackerDashboard() {
           justify-content: space-between;
           gap: 16px;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          animation: slideDownFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         .sync-warning-content {
           display: flex;
@@ -1465,42 +2632,75 @@ export default function JobTrackerDashboard() {
           background-color: #dc2626;
         }
       `}} />
-
-      <div className={`layout ${isDarkMode ? 'dark' : ''}`}>
+      <div className={`layout ${isDarkMode ? 'dark' : ''} ${!isSidebarCollapsed ? 'sidebar-expanded' : ''}`}>
         <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
 
-        <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <aside
+          className={`sidebar ${isSidebarOpen ? 'open' : ''}`}
+          onMouseEnter={handleSidebarMouseEnter}
+          onMouseLeave={handleSidebarMouseLeave}
+          onClick={handleSidebarClick}
+        >
           <div className="sidebar-header">
-            <div className="logo-box">📧</div>
-            <div>
-              <div className="logo-text">Email Tracker</div>
-              <div className="logo-sub">Placement Department Mails</div>
+            <div className="sidebar-logo-box">
+              <img src="/logo.png" alt="Email Tracker Logo" className="logo-img" />
+            </div>
+            <div className="logo-text-wrapper">
+              <div className="logo-title-text">Email Tracker</div>
+              <div className="logo-subtitle-text">Placement Department Mails</div>
             </div>
           </div>
 
-          <nav>
-            {[
-              { label: "Dashboard", value: "all" },
-              { label: "New", value: "new" },
-              { label: "Deadline today", value: "deadlines" },
-              { label: "Applied", value: "applied" },
-              { label: "Done", value: "done" },
-              { label: "Unmarked", value: "unmarked" },
-            ].map(({ label, value }) => (
-              <div
-                key={value}
-                className={`nav-item ${activeFilter === value ? 'active' : ''}`}
-                onClick={() => setActiveFilter(value)}
-              >
-                {label}
+          <div className="sidebar-divider" />
+
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div
+              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('all'); setIsSidebarOpen(false); }}
+            >
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
               </div>
-            ))}
+              <span className="nav-text">Dashboard</span>
+            </div>
+
+            <div
+              className={`nav-item ${activeFilter === 'calendar' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('calendar'); setIsSidebarOpen(false); }}
+            >
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              </div>
+              <span className="nav-text">Calendar</span>
+            </div>
+
+            <div
+              className={`nav-item ${activeFilter === 'settings' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setIsSidebarOpen(false); }}
+            >
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              </div>
+              <span className="nav-text">Settings</span>
+            </div>
           </nav>
 
+          <div className="sidebar-divider" />
+
           <div className="sidebar-bottom">
-            <div className="nav-item" style={{ marginTop: 0 }}>
-              <span>Support ⚙️</span>
-            </div>
+            <button className="sync-btn" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
+              <span className="sync-btn-icon-wrapper">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={syncing || syncStatus === "pending" ? "spin" : ""}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              </span>
+              <span className="sync-btn-text">
+                {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
+              </span>
+            </button>
+            {lastSyncTime && (
+              <div className="sync-time-text">
+                {isSidebarCollapsed ? getCompactRelativeTime(lastSyncTime) : formatRelativeTime(lastSyncTime)}
+              </div>
+            )}
           </div>
         </aside>
 
@@ -1510,24 +2710,41 @@ export default function JobTrackerDashboard() {
               <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
-              <div className="search-container" style={{ flex: 1 }}>
+              <div className="search-container">
                 <input
                   type="text"
                   placeholder="Search applications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ width: '100%' }}
+                  style={{ paddingRight: searchQuery ? '36px' : '16px' }}
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: 1
+                    }}
+                  >
+                    &times;
+                  </button>
+                )}
               </div>
             </div>
             <div className="topbar-actions">
-              <button className="btn-outline-primary" onClick={handleSync} disabled={syncing || syncStatus === "pending"}>
-                {(syncing || syncStatus === "pending") ? "Syncing" : "Sync Emails"}
-              </button>
-              <button className="btn-danger" onClick={handleClearAll} disabled={clearing}>
-                {clearing ? "Clearing..." : "Clear All"}
-              </button>
-
               <div className="user-dropdown-container">
                 <button
                   className="user-avatar-btn"
@@ -1543,9 +2760,13 @@ export default function JobTrackerDashboard() {
 
                     {!showThemeSubmenu ? (
                       <>
+                        <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setShowUserDropdown(false); }}>
+                          Settings
+                        </button>
                         <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
                           Theme ❯
                         </button>
+                        <div style={{ borderBottom: '1px solid var(--border-color)', margin: '4px 0' }} />
                         <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>
                           Logout
                         </button>
@@ -1584,350 +2805,951 @@ export default function JobTrackerDashboard() {
               </div>
             )}
 
-            <div className="page-header">
-              <div>
-                <h2 className="page-title">Applications Overview</h2>
-                <p className="page-subtitle">Track and manage emails from placement@msrit.edu</p>
-              </div>
-            </div>
-
-            <div className="stats-grid">
-              <div className="stat-card total">
-                <div className="stat-icon">📊</div>
-                <div className="stat-content">
-                  <span className="stat-label">Total Applications</span>
-                  <div className="stat-main">
-                    <span className="stat-value">{total}</span>
-                    {newThisWeek > 0 && <span className="stat-trend">+{newThisWeek} this week</span>}
-                  </div>
+            {showPushBanner && (
+              <div className="sync-warning-banner" style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#3b82f6', marginBottom: '16px' }}>
+                <div className="sync-warning-content" style={{ color: 'var(--text-primary)' }}>
+                  <span className="sync-warning-icon" style={{ fontSize: '18px' }}>🔔</span>
+                  <span>
+                    Get instant push notifications when new placement opportunities, OAs, or deadlines arrive.
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    onClick={handleRequestPushPermission}
+                    className="btn-primary"
+                    style={{ padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: '600' }}
+                  >
+                    Enable
+                  </button>
+                  <button
+                    onClick={handleDismissPushBanner}
+                    className="btn-outline"
+                    style={{ padding: '6px 14px', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer' }}
+                  >
+                    Maybe Later
+                  </button>
                 </div>
               </div>
+            )}
 
-              <div className="stat-card urgent">
-                <div className="stat-icon">🔔</div>
-                <div className="stat-content">
-                  <span className="stat-label">Deadlines Today</span>
-                  <div className="stat-main">
-                    <span className="stat-value">{urgentDeadlines}</span>
-                    <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
-                  </div>
+            {activeFilter === "calendar" ? (
+              <div className="settings-container">
+                <div className="settings-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                  <h1 className="settings-main-title" style={{ margin: 0 }}>Google Calendar Integration</h1>
+                  <a
+                    href={userEmail ? `https://calendar.google.com/calendar/r?authuser=${encodeURIComponent(userEmail)}` : "https://calendar.google.com"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textDecoration: 'none',
+                      padding: '10px 24px',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      minWidth: '180px'
+                    }}
+                  >
+                    Open Google Calendar
+                  </a>
                 </div>
-              </div>
 
-              <div className="stat-card unmarked">
-                <div className="stat-icon">📝</div>
-                <div className="stat-content">
-                  <span className="stat-label">Unmarked</span>
-                  <div className="stat-main">
-                    <span className="stat-value">{unmarkedCount}</span>
-                    <span className="stat-subtext">Needs review</span>
+                <div className="settings-card" style={{ padding: '32px' }}>
+                  <div style={{ marginBottom: '24px' }}>
+                    <h3 className="settings-title" style={{ margin: 0 }}>Sync Deadlines & Events</h3>
+                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                      Automatically add form deadlines, interviews, online assessments, etc directly to primary Google Calendar (@msrit.edu account).
+                    </p>
                   </div>
-                </div>
-              </div>
-            </div>
 
+                  {calendarSuccessMsg && (
+                    <div className="success-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(46, 213, 115, 0.1)', border: '1px solid rgba(46, 213, 115, 0.3)', color: '#2ed573', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>✅</span>
+                      <span>{calendarSuccessMsg}</span>
+                    </div>
+                  )}
 
+                  {calendarErrorMsg && (
+                    <div className="error-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(255, 71, 87, 0.1)', border: '1px solid rgba(255, 71, 87, 0.3)', color: '#ff4757', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>⚠️</span>
+                      <span>{calendarErrorMsg}</span>
+                    </div>
+                  )}
 
-            {loading && applications.length === 0 ? (
-              <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
-            ) : (
-              <div className="app-grid">
-                {applications
-                  .map(app => {
-                    let derivedStatus = (app.status || "new").toLowerCase();
-                    if (derivedStatus === "new") {
-                      const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
-                      if (ageInMs > 24 * 60 * 60 * 1000) {
-                        derivedStatus = "unmarked";
-                      }
-                    }
-                    return { ...app, derivedStatus };
-                  })
-                  .filter((app) => {
-                    const query = searchQuery.toLowerCase();
-                    const matchesSearch =
-                      (app.company || "").toLowerCase().includes(query) ||
-                      (app.role || "").toLowerCase().includes(query);
-
-                    const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
-                    const matchesFilter =
-                      activeFilter === "all" ||
-                      (activeFilter === "deadlines" && isDeadlineToday) ||
-                      activeFilter === app.derivedStatus;
-
-                    return matchesSearch && matchesFilter;
-                  })
-                  .sort((a, b) => {
-                    const dateA = new Date(a.date || a.createdAt || 0);
-                    const dateB = new Date(b.date || b.createdAt || 0);
-                    return dateB - dateA;
-                  })
-                  .map((app) => {
-                    const dateToShow = app.deadlineISO || app.date || app.testDate || app.createdAt;
-                    const formattedDate = dateToShow
-                      ? new Date(dateToShow).toLocaleString(undefined, app.deadlineISO ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' })
-                      : "N/A";
-                    const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                    const statusKey = app.derivedStatus;
-                    const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done";
-                    const isDone = statusKey === "done";
-
-                    const getDeterministicColor = (str) => {
-                      let hash = 0;
-                      for (let i = 0; i < str.length; i++) {
-                        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                      }
-                      const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-                      return "00000".substring(0, 6 - c.length) + c;
-                    };
-                    const fallbackColor = getDeterministicColor(app.company || "Unknown");
-                    const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
-
-                    return (
-                      <div
-                        key={app._id}
-                        className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
-                        style={{ cursor: "pointer" }}
-                        onClick={(e) => {
-                          if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
-                          setSelectedApp(app);
-                          setShowInfoModal(true);
-                        }}
+                  {loadingCalendarStatus ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                      <span className="spinner">Loading status...</span>
+                    </div>
+                  ) : !hasCalendarScope ? (
+                    <div className="about-info-box calendar-card-panel">
+                      <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)' }}>Authorization Required</h4>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                        To create and update calendar events, Email Tracker needs permission to access your Google Calendar events. We request the <b>least-privilege</b> scope (<code>calendar.events</code>) to read, create, and modify events strictly on your primary college calendar. We will never view or edit unrelated personal events.
+                      </p>
+                      <a
+                        href={`${BASE_URL}/auth/google/calendar`}
+                        className="btn-primary"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', fontWeight: '500', padding: '12px 24px', borderRadius: '8px' }}
                       >
-                        <div className="app-header">
-                          <div className="app-info">
-                            <div className="company-logo-container">
-                              {app.companyInfo?.logo || app.companyInfo?.domain ? (
-                                <img
-                                  src={app.companyInfo?.logo || uiAvatarUrl}
-                                  alt={app.company}
-                                  className="company-logo-img"
-                                  onError={(e) => {
-                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
-                                    const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-                                    if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
-                                      e.target.src = googleFallback;
-                                    } else if (!e.target.src.includes('ui-avatars.com')) {
-                                      e.target.src = uiAvatarUrl;
-                                    } else {
-                                      e.target.onerror = null;
-                                      e.target.style.display = 'none';
-                                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                    }
-                                  }}
-                                />
-                              ) : null}
-                              <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
-                                {companyInitials}
-                              </div>
-                            </div>
-                            <div className="role-company">
-                              <div className="role-title">{app.company || "Unknown Company"}</div>
-                              {/* Show subtitle (new records) or fall back to role (legacy records) */}
-                              {(() => {
-                                const sub = app.subtitle
-                                  || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
-                                return sub ? <div className="company-name">{sub}</div> : null;
-                              })()}
-                            </div>
-                          </div>
-                          <div className="status-badge-container">
-                            <span className={`status-badge status-${app.derivedStatus}`}>
-                              {app.derivedStatus}
+                        Authorize & Connect Google Calendar
+                      </a>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                      <div className="calendar-status-box">
+                        <div style={{ flex: '1', minWidth: '250px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>Integration Status:</span>
+                            <span style={{
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              background: calendarSyncEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                              color: calendarSyncEnabled ? '#2ed573' : 'var(--text-secondary)'
+                            }}>
+                              {calendarSyncEnabled ? "ACTIVE" : "PAUSED"}
                             </span>
                           </div>
+                          <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            {calendarSyncEnabled
+                              ? "Deadlines and placement events are synced automatically in the background."
+                              : "Background calendar synchronization is currently paused."}
+                          </p>
                         </div>
+                        <button
+                          className={calendarSyncEnabled ? "btn-danger" : "btn-primary"}
+                          onClick={handleToggleCalendarSync}
+                          disabled={syncingCalendar}
+                          style={{ minWidth: '130px' }}
+                        >
+                          {syncingCalendar ? "Updating..." : calendarSyncEnabled ? "Pause Sync" : "Enable Sync"}
+                        </button>
+                      </div>
 
-
-
-                        {/* ── Display fields ─────────────────────────────────────────────────────
-                             NEW records: app.displayFields = [{label, value}] — rendered directly.
-                             LEGACY records: app.fieldsToDisplay = ["role","stipend",...] — rendered
-                             using FIELD_CONFIG lookup from individual programRoles/programStipend etc.
-                        ── */}
-                        {(() => {
-                          // NEW flexible format — [{label, value}]
-                          // DEV DEBUG: Log display fields
-                          console.log("CARD_DISPLAY_FIELDS", app.displayFields);
-
-                          const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
-                            ? app.displayFields.filter(f => f && f.label && f.value)
-                            : null;
-
-                          if (flexFields && flexFields.length > 0) {
-                            return (
-                              <div className="program-details">
-                                {flexFields.map(({ label, value }) => (
-                                  <div key={label} className="program-detail">
-                                    <span className="program-detail-label">{label}</span>
-                                    <span className="program-detail-value">{value}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          }
-
-                          // LEGACY format — string array + fixed FIELD_CONFIG lookup
-                          let legacyFields = app.fieldsToDisplay;
-                          if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
-                            legacyFields = [];
-                            if (app.programRoles) legacyFields.push("role");
-                            if (app.programStipend) legacyFields.push("stipend");
-                            if (app.deadlineText) legacyFields.push("deadline");
-                            if (app.programDuration) legacyFields.push("duration");
-                            if (app.venue) legacyFields.push("venue");
-                          }
-                          if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
-
-                          const FIELD_CONFIG = {
-                            role: { label: "Roles", value: app.programRoles },
-                            stipend: { label: "Stipend", value: app.programStipend },
-                            deadline: { label: "Deadline", value: app.deadlineText },
-                            duration: { label: "Duration", value: app.programDuration },
-                            venue: { label: "Venue", value: app.venue },
-                            eventName: { label: "Event", value: app.subtitle },
-                          };
-                          const rows = legacyFields
-                            .map(f => FIELD_CONFIG[f])
-                            .filter(r => r && r.value && r.value.trim().length > 0);
-                          if (rows.length === 0) return null;
-                          return (
-                            <div className="program-details">
-                              {rows.map(({ label, value }) => (
-                                <div key={label} className="program-detail">
-                                  <span className="program-detail-label">{label}</span>
-                                  <span className="program-detail-value">{value}</span>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-
-                        {/* Deadline badge — legacy fallback for records that predate fieldsToDisplay */}
-                        {app.deadline && !app.deadlineText && (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) && (
-                          <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
-                            ? 'urgent' : ''
-                            }`}>
-                            Deadline: {app.deadline}
-                          </div>
-                        )}
-
-                        <div className="app-footer">
-                          <div className="email-info">
-                            <span style={{ fontSize: 16 }}>✉️</span>
-                            <span>{app.email || "user@gmail.com"}</span>
-                          </div>
-                          <span>{formattedDate}</span>
-                        </div>
-
-                        <div className="note-container">
-                          <textarea
-                            className="note-input"
-                            placeholder="Add a personal note..."
-                            value={app.note || ""}
-                            onChange={(e) => handleUpdateNote(app._id, e.target.value)}
-                            onBlur={(e) => handleSaveNote(app._id, e.target.value)}
-                          />
-                          <div className="note-save-hint">Auto-saves on blur</div>
-                        </div>
-
-                        <div className="card-actions">
+                      {calendarSyncEnabled && (
+                        <div className="about-info-box calendar-card-panel">
+                          <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px', color: 'var(--text-primary)' }}>Sync Diagnostics & Controls</h4>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                            Email Tracker is the single source of truth. If any calendar events are out of sync or if you want to push all active deadlines to your Google Calendar immediately, click "Re-sync All" below. This runs a delta sync using payload verification to ensure zero duplicate events are created.
+                          </p>
                           <button
-                            className="card-btn card-btn-edit"
-                            onClick={() => {
-                              setEditingApp(app);
-
-                              const getField = (label, dbField) => {
-                                if (app.displayFields && app.displayFields.length > 0) {
-                                  const f = app.displayFields.find(df => df.label === label);
-                                  if (f) return f.value;
-                                }
-                                return dbField || "";
-                              };
-
-                              const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
-                              const dynamicFields = [];
-                              if (app.displayFields && app.displayFields.length > 0) {
-                                app.displayFields.forEach(df => {
-                                  if (!standardLabels.includes(df.label)) {
-                                    dynamicFields.push({ label: df.label, value: df.value });
-                                  }
-                                });
-                              }
-
-                              setEditFormData({
-                                company: app.company || "",
-                                subtitle: app.subtitle || "",
-                                role: getField("Role", app.role),
-                                stipend: getField("Stipend", app.programStipend),
-                                ctc: getField("CTC", app.salaryText),
-                                duration: getField("Duration", app.programDuration),
-                                location: getField("Location", app.venue),
-                                joining: getField("Joining", ""),
-                                deadline: getField("Deadline", app.deadlineText),
-                                date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
-                                link: app.link || "",
-                                dynamicFields: dynamicFields
-                              });
-                              setShowEditModal(true);
-                            }}
+                            className="btn-outline-primary"
+                            onClick={handleManualCalendarSync}
+                            disabled={syncingCalendar}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px' }}
                           >
-                            Edit
+                            🔄 {syncingCalendar ? "Syncing..." : "Re-sync All Calendar Events"}
                           </button>
-                          {app.link && !isDone && (
-                            <a
-                              className="card-btn card-btn-apply"
-                              href={app.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => {
-                                console.log("[DEBUG_LINK] Clicked app ID:", app._id);
-                                console.log("[DEBUG_LINK] Original app.link value:", app.link);
-                                console.log("[DEBUG_LINK] Rendered href on click:", e.currentTarget.href);
-                                if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
-                                  handleApply(app._id);
-                                }
-                              }}
-                            >
-                              {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
-                            </a>
-                          )}
-                          <button
-                            className="card-btn card-btn-done"
-                            onClick={() => handleMarkDone(app._id)}
-                            disabled={isDone}
-                          >
-                            {isDone ? "Done" : "Mark Done"}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="settings-card" style={{ padding: '28px' }}>
+                  <h3 className="settings-title">Features</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                    <div className="feature-panel">
+                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      </span>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Event Types</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                        Deadlines sync as <b>All-Day Events</b>. Timed entries like online tests and interviews use customized slots (tests: 2h, interviews: 45m).
+                      </p>
+                    </div>
+
+                    <div className="feature-panel">
+                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                      </span>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Application Deadlines Reminders</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                        Deadline reminders are set automatically to alert you <b>1 day before</b> and <b>2 hours before</b> they expire to prevent missing forms.
+                      </p>
+                    </div>
+
+                    <div className="feature-panel">
+                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                      </span>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Contextual Deep Links</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                        Every calendar event includes quick links to jump directly to the application card in Email Tracker or the company's registration portal.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : activeFilter === "settings" ? (
+              <div className="settings-container">
+                {settingsSubView === "main" && (
+                  <>
+                    <div className="settings-header">
+                      <h1 className="settings-main-title">Settings & Help</h1>
+                    </div>
+
+                    <div className="settings-about-card" style={{ marginBottom: '24px' }}>
+                      <div className="about-info-box">
+                        <h3>About Email Tracker</h3>
+                        <span className="about-version-badge">VERSION 2.0.0 STABLE</span>
+                        <p className="about-desc">
+                          Email Tracker automatically tracks and organizes emails from the placement department. It extracts important information such as company details, deadlines, eligibility criteria, and application form links, presenting everything in a centralized dashboard and synchronizing key deadlines directly into your Google Calendar for quick access and easy tracking.
+                        </p>
+                        <div className="about-tech-container">
+                          <span className="about-tech-label">Built with:</span>
+                          <div className="about-tech-tags">
+                            <span className="about-tech-tag">React</span>
+                            <span className="about-tech-tag">Node.js</span>
+                            <span className="about-tech-tag">MongoDB</span>
+                            <span className="about-tech-tag">Llama 3.1 70B</span>
+                            <span className="about-tech-tag">Google Calendar API</span>
+                            <span className="about-tech-tag">Google OAuth</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="settings-grid-row">
+                      <div className="settings-card">
+                        <h3 className="settings-title">
+                          <span className="settings-title-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><circle cx="12" cy="11" r="3" /></svg>
+                          </span>
+                          <span>Legal & Support</span>
+                        </h3>
+                        <div className="settings-list">
+                          <button className="settings-item" onClick={() => setSettingsSubView("privacy")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                            </span>
+                            <span className="settings-item-label">Privacy Policy</span>
+                            <span className="settings-item-arrow">❯</span>
                           </button>
-                          <button
-                            className="card-btn card-btn-remove"
-                            onClick={() => handleDeleteOne(app._id)}
-                          >
-                            Remove
+                          <button className="settings-item" onClick={() => setSettingsSubView("terms")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                            </span>
+                            <span className="settings-item-label">Terms of Service</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                          <button className="settings-item" onClick={() => alert("Report an Issue functionality coming soon!")}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                            </span>
+                            <span className="settings-item-label">Report an Issue</span>
+                            <span className="settings-item-arrow">❯</span>
                           </button>
                         </div>
                       </div>
+
+                      <div className="settings-card">
+                        <h3 className="settings-title">
+                          <span className="settings-title-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                          </span>
+                          <span>Notifications</span>
+                        </h3>
+                        <div className="settings-list">
+                          {pushSupported ? (
+                            <>
+                              <div className="settings-item" style={{ cursor: 'default', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', padding: '16px 20px' }}>
+                                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Permission Status:</span>
+                                  <span style={{
+                                    padding: '4px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '11px',
+                                    fontWeight: '600',
+                                    background: pushPermission === 'granted' ? 'rgba(46, 213, 115, 0.15)' : pushPermission === 'denied' ? 'rgba(255, 71, 87, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                    color: pushPermission === 'granted' ? '#2ed573' : pushPermission === 'denied' ? '#ff4757' : 'var(--text-secondary)'
+                                  }}>
+                                    {pushPermission.toUpperCase()}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Device Notifications:</span>
+                                  <span style={{
+                                    padding: '4px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '11px',
+                                    fontWeight: '600',
+                                    background: isSubscribed ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                    color: isSubscribed ? '#2ed573' : 'var(--text-secondary)'
+                                  }}>
+                                    {isSubscribed ? "ENABLED" : "DISABLED"}
+                                  </span>
+                                </div>
+                                {isSubscribed && pushSubscriptionsCount > 0 && (
+                                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    Active registered devices: <b>{pushSubscriptionsCount}</b>
+                                  </div>
+                                )}
+                              </div>
+
+                              {pushPermission === "denied" ? (
+                                <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'rgba(255, 71, 87, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 71, 87, 0.1)', margin: '8px 20px' }}>
+                                  Notifications are blocked. Please enable them in browser site settings to receive updates.
+                                </div>
+                              ) : isSubscribed ? (
+                                <button className="settings-item" onClick={handleDisablePushNotifications}>
+                                  <span className="settings-item-label text-danger">Disable on this device</span>
+                                  <span className="settings-item-arrow">❯</span>
+                                </button>
+                              ) : pushPermission === "default" ? (
+                                <button className="settings-item" onClick={handleRequestPushPermission}>
+                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>Enable Notifications</span>
+                                  <span className="settings-item-arrow">❯</span>
+                                </button>
+                              ) : (
+                                <button className="settings-item" onClick={handleEnablePushSubscription}>
+                                  <span className="settings-item-label" style={{ color: '#3b82f6', fontWeight: '600' }}>Enable on this device</span>
+                                  <span className="settings-item-arrow">❯</span>
+                                </button>
+                              )}
+
+
+                            </>
+                          ) : (
+                            <div style={{ padding: '16px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              Push notifications are not supported in this browser.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="settings-card" style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+                        <h3 className="settings-title" style={{ color: '#ef4444' }}>
+                          <span className="settings-title-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                          </span>
+                          <span>Delete</span>
+                        </h3>
+                        <div className="settings-list">
+                          <button className="settings-item" onClick={() => { setShowClearModal(true); setClearConfirmText(""); setClearError(""); }}>
+                            <span className="settings-item-icon" style={{ color: '#ef4444' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                            </span>
+                            <span className="settings-item-label">Clear Workspace</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                          <button className="settings-item" onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(""); setDeleteError(""); }}>
+                            <span className="settings-item-icon" style={{ color: '#ef4444' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>
+                            </span>
+                            <span className="settings-item-label" style={{ color: '#ef4444' }}>Delete Account</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {settingsSubView === "privacy" && (
+                  <div className="settings-card">
+                    <button className="btn-outline-primary" style={{ marginBottom: '16px' }} onClick={() => setSettingsSubView("main")}>
+                      ❮ Back to Settings
+                    </button>
+                    <h3 className="settings-title">Privacy Policy</h3>
+                    <p className="legal-last-updated">Last updated: June 2026</p>
+                    <div className="legal-content">
+                      <h2>1. What is Email Tracker?</h2>
+                      <p>
+                        Email Tracker is an AI-powered tool that helps students track placement-related emails.
+                        It connects to your Gmail account, identifies emails from your college placement department,
+                        and organizes them into an actionable dashboard — so you never miss a deadline or opportunity.
+                      </p>
+
+                      <h2>2. What information do we collect?</h2>
+                      <p>When you use Email Tracker, we collect and store the following:</p>
+                      <ul>
+                        <li><strong>Your Google account email address</strong> — used to identify your account.</li>
+                        <li><strong>Google OAuth credentials</strong> — securely stored tokens that let us access your Gmail and Google Calendar (if enabled) on your behalf. We never see or store your Google password.</li>
+                        <li><strong>Placement-related Gmail messages</strong> — we read emails matching specific criteria (e.g., from your placement department) to extract application details.</li>
+                        <li><strong>Google Calendar events metadata</strong> — if you enable Google Calendar integration, we store event identifiers and hashes to sync and update placement deadlines directly on your calendar.</li>
+                        <li><strong>Parsed application data</strong> — company names, roles, deadlines, stipends, and other structured information extracted from your emails.</li>
+                        <li><strong>Personal notes</strong> — any notes you add to applications within the dashboard.</li>
+                        <li><strong>Synchronization metadata</strong> — timestamps and history IDs that help us sync efficiently without re-processing old emails.</li>
+                      </ul>
+
+                      <h2>3. How do we use your information?</h2>
+                      <p>Everything we collect serves one purpose: making your placement tracking easier. Specifically, we use your data to:</p>
+                      <ul>
+                        <li>Synchronize placement emails from your Gmail inbox.</li>
+                        <li>Extract and organize application details using AI.</li>
+                        <li>Display your applications on a personal dashboard.</li>
+                        <li>Synchronize placement deadlines and events with your primary Google Calendar (if enabled).</li>
+                        <li>Show summary statistics (total applications, upcoming deadlines, etc.).</li>
+                        <li>Let you add notes, mark applications as done, and manage your workflow.</li>
+                      </ul>
+                      <p>We do not use your emails for advertising, profiling, or any purpose unrelated to placement tracking.</p>
+
+                      <h2>4. AI processing</h2>
+                      <p>
+                        When we sync your emails, relevant message content is sent to <strong>NVIDIA's NIM API (running Meta's Llama 3.1 70B model)</strong> for processing.
+                        The AI extracts structured placement information — company name, role, deadline, application link, and so on.
+                      </p>
+                      <p>
+                        This processing happens solely to turn unstructured email text into organized application cards.
+                        We do not use your email content for training AI models, advertising, or any other purpose.
+                      </p>
+
+                      <h2>5. Where is your data stored?</h2>
+                      <p>
+                        Your account and application data is stored in <strong>MongoDB Atlas</strong>, a cloud-hosted database service.
+                        Authentication is handled using <strong>JWT (JSON Web Tokens)</strong> — your session is verified on every request.
+                      </p>
+                      <p>
+                        Each user's application data is fully isolated. One user cannot access another user's applications, notes, or sync history.
+                      </p>
+                      <p>
+                        We do maintain a shared cache of company metadata (logos, domains) to improve loading performance.
+                        This cache contains no user-specific information.
+                      </p>
+
+                      <h2>6. Do we share your data?</h2>
+                      <p><strong>No.</strong> We do not sell your data. We do not share it with third parties for their own purposes.</p>
+                      <p>The only external services that interact with your data are:</p>
+                      <ul>
+                        <li><strong>Google OAuth, Gmail & Calendar APIs</strong> — to authenticate you, read your emails, and sync events (if enabled).</li>
+                        <li><strong>NVIDIA NIM API (Meta Llama 3.1 70B)</strong> — to parse email content into structured data.</li>
+                        <li><strong>MongoDB Atlas</strong> — to store your data.</li>
+                      </ul>
+                      <p>These services are necessary for Email Tracker to function. We do not send your data anywhere else.</p>
+
+                      <h2>7. Deleting your account</h2>
+                      <p>
+                        You can delete your account at any time. When you do, we permanently remove:
+                      </p>
+                      <ul>
+                        <li>Your account information and OAuth credentials.</li>
+                        <li>All synchronized applications.</li>
+                        <li>All personal notes.</li>
+                        <li>All synchronization history and metadata.</li>
+                      </ul>
+                      <p>
+                        Globally cached company metadata (logos, domains) is retained because it contains no user-specific information and is shared across the platform.
+                      </p>
+
+                      <h2>8. Security</h2>
+                      <p>We take reasonable steps to protect your data:</p>
+                      <ul>
+                        <li>Authentication uses <strong>JWT tokens</strong> with short-lived access tokens and secure refresh rotation.</li>
+                        <li>Google OAuth follows the standard secure authorization code flow — we never handle your Google password.</li>
+                        <li>All API endpoints verify your identity before returning data.</li>
+                        <li>User data is isolated at the database level — queries are scoped to your account.</li>
+                      </ul>
+                      <p>
+                        That said, no system is perfectly secure. We do our best, but we cannot guarantee absolute security.
+                        If you discover a vulnerability, please let us know.
+                      </p>
+
+                      <h2>9. Contact</h2>
+                      <p>
+                        If you have questions about this Privacy Policy or how your data is handled, reach out to us at{" "}
+                        <strong>tejasholla23@gmail.com</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {settingsSubView === "terms" && (
+                  <div className="settings-card">
+                    <button className="btn-outline-primary" style={{ marginBottom: '16px' }} onClick={() => setSettingsSubView("main")}>
+                      ❮ Back to Settings
+                    </button>
+                    <h3 className="settings-title">Terms of Service</h3>
+                    <p className="legal-last-updated">Last updated: July 2, 2026</p>
+                    <div className="legal-content">
+                      <h2>1. Acceptance of These Terms</h2>
+                      <p>
+                        By creating an account or using Email Tracker, you agree to these Terms. If you do not agree, please do not use the application.
+                      </p>
+
+                      <h2>2. Eligibility and Account Access</h2>
+                      <p>
+                        Access to Email Tracker may be restricted to users from approved educational institutions. We reserve the right to accept or reject registrations based on supported email domains.
+                      </p>
+
+                      <h2>3. Acceptable Use</h2>
+                      <p>You are responsible for:</p>
+                      <ul>
+                        <li>Maintaining the security of your Google account</li>
+                        <li>Ensuring information you provide is accurate</li>
+                        <li>Complying with applicable laws and institutional policies while using Email Tracker</li>
+                      </ul>
+                      <p>
+                        You agree not to misuse the service or interfere with the operation or security of the service.
+                      </p>
+
+                      <h2>4. Google Account Authorization</h2>
+                      <p>
+                        Your use of Email Tracker is also governed by our Privacy Policy, which explains how we collect, use, and protect your information. Email Tracker accesses Gmail only with your explicit authorization through Google's OAuth authentication system.
+                      </p>
+
+                      <h2>5. Service Availability</h2>
+                      <p>
+                        Email Tracker is provided on an "as is" and "as available" basis. We may modify, suspend, or discontinue parts of the service at any time without prior notice.
+                      </p>
+
+                      <h2>6. Intellectual Property</h2>
+                      <p>
+                        Email Tracker — including its design, branding, code, and user interface — belongs to its developer. You may not copy, redistribute, or create derivative works from the application without permission. Your data remains yours.
+                      </p>
+
+                      <h2>7. Disclaimer of Warranties</h2>
+                      <p>While we strive for accuracy and reliability, we do not guarantee that:</p>
+                      <ul>
+                        <li>Email synchronization will always succeed</li>
+                        <li>Extracted information will always be complete or accurate</li>
+                        <li>The service will be available without interruption</li>
+                      </ul>
+                      <p>
+                        Users should always verify important deadlines and application details using official communications from employers or their institution.
+                      </p>
+
+                      <h2>8. Limitation of Liability</h2>
+                      <p>
+                        To the maximum extent permitted by law, Email Tracker shall not be responsible for any loss arising from reliance on information displayed by the application, including missed deadlines, inaccurate parsing results, or service interruptions.
+                      </p>
+
+                      <h2>9. Termination</h2>
+                      <p>
+                        We reserve the right to suspend or terminate access to Email Tracker if these Terms are violated or if continued access would compromise the security or operation of the service.
+                      </p>
+
+                      <h2>10. Changes to These Terms</h2>
+                      <p>
+                        We may update these Terms from time to time to reflect changes to the service, legal requirements, or operational practices. Continued use of Email Tracker after updated Terms become effective constitutes acceptance of the revised Terms.
+                      </p>
+
+                      <h2>11. Contact Information</h2>
+                      <p>
+                        If you have any questions about these Terms, please contact us at:
+                        <br />
+                        <strong>tejasholla23@gmail.com</strong>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="page-header">
+                  <div>
+                    <h2 className="page-title">Applications Overview</h2>
+                    <p className="page-subtitle">Track and manage emails from placement@msrit.edu</p>
+                  </div>
+                </div>
+
+                <div className="stats-grid">
+                  <div className="stat-card total">
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                      </svg>
+                    </div>
+                    <div className="stat-content">
+                      <span className="stat-label">Total Applications</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{total}</span>
+                        {newThisWeek > 0 && <span className="stat-trend">+{newThisWeek} this week</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="stat-card urgent">
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                      </svg>
+                    </div>
+                    <div className="stat-content">
+                      <span className="stat-label">Deadlines Today</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{urgentDeadlines}</span>
+                        <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="stat-card unmarked">
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path>
+                      </svg>
+                    </div>
+                    <div className="stat-content">
+                      <span className="stat-label">Unmarked</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{unmarkedCount}</span>
+                        <span className="stat-subtext">Needs review</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="dashboard-filters-row">
+                  {[
+                    { label: "New Emails", value: "new" },
+                    { label: "Deadline today", value: "deadlines" },
+                    { label: "Applied", value: "applied" },
+                    { label: "Marked Done", value: "done" },
+                    { label: "Unmarked", value: "unmarked" }
+                  ].map(({ label, value }) => {
+                    const isActive = activeFilter === value;
+                    return (
+                      <button
+                        key={value}
+                        className={`filter-tab ${isActive ? "active" : ""}`}
+                        onClick={() => {
+                          if (isActive) {
+                            setActiveFilter("all");
+                          } else {
+                            setActiveFilter(value);
+                          }
+                        }}
+                      >
+                        <span className="filter-tab-text">{label}</span>
+                      </button>
                     );
                   })}
-              </div>
-            )}
+                </div>
 
-            {!loading && applications.length === 0 && (
-              <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
-                {syncStatus === "pending"
-                  ? "Emails are being synced in the background. Please wait..."
-                  : "No applications found. Try syncing emails."}
-              </p>
+
+
+                {loading && applications.length === 0 ? (
+                  <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
+                ) : (() => {
+                  const filteredApps = applications
+                    .map(app => {
+                      let derivedStatus = (app.status || "new").toLowerCase();
+                      if (derivedStatus === "new") {
+                        const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
+                        if (ageInMs > 24 * 60 * 60 * 1000) {
+                          derivedStatus = "unmarked";
+                        }
+                      }
+                      return { ...app, derivedStatus };
+                    })
+                    .filter((app) => {
+                      const query = searchQuery.toLowerCase();
+                      const matchesSearch =
+                        (app.company || "").toLowerCase().includes(query) ||
+                        (app.role || "").toLowerCase().includes(query) ||
+                        (app.displayFields || []).some(f =>
+                          (f.value || "").toLowerCase().includes(query)
+                        );
+
+                      const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
+                      const matchesFilter =
+                        activeFilter === "all" ||
+                        (activeFilter === "deadlines" && isDeadlineToday) ||
+                        activeFilter === app.derivedStatus;
+
+                      return matchesSearch && matchesFilter;
+                    })
+                    .sort((a, b) => {
+                      const dateA = new Date(a.date || a.createdAt || 0);
+                      const dateB = new Date(b.date || b.createdAt || 0);
+                      return dateB - dateA;
+                    });
+
+                  const totalPages = Math.max(1, Math.ceil(filteredApps.length / 15));
+                  const activePage = Math.min(currentPage, totalPages);
+                  const paginatedApps = filteredApps.slice((activePage - 1) * 15, activePage * 15);
+
+                  return (
+                    <>
+                      {filteredApps.length > 0 ? (
+                        <>
+                          <div className="app-grid">
+                            {paginatedApps.map((app) => {
+                              const dateToShow = app.date || app.createdAt;
+                              const formattedDate = dateToShow
+                                ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                                : "N/A";
+                              const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
+                              const statusKey = app.derivedStatus;
+                              const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied";
+                              const isDone = statusKey === "done";
+
+                              const getDeterministicColor = (str) => {
+                                let hash = 0;
+                                for (let i = 0; i < str.length; i++) {
+                                  hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                                }
+                                const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                                return "00000".substring(0, 6 - c.length) + c;
+                              };
+                              const fallbackColor = getDeterministicColor(app.company || "Unknown");
+                              const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
+
+                              return (
+                                <div
+                                  key={app._id}
+                                  className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
+                                  style={{ cursor: "pointer" }}
+                                  onClick={(e) => {
+                                    if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
+                                    setSelectedApp(app);
+                                    setShowInfoModal(true);
+                                  }}
+                                >
+                                  <div className="app-header">
+                                    <div className="app-info">
+                                      <div className="company-logo-container">
+                                        {app.companyInfo?.logo || app.companyInfo?.domain ? (
+                                          <img
+                                            src={app.companyInfo?.logo || uiAvatarUrl}
+                                            alt={app.company}
+                                            className="company-logo-img"
+                                            onError={(e) => {
+                                              const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                                              const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                              if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
+                                                e.target.src = googleFallback;
+                                              } else if (!e.target.src.includes('ui-avatars.com')) {
+                                                e.target.src = uiAvatarUrl;
+                                              } else {
+                                                e.target.onerror = null;
+                                                e.target.style.display = 'none';
+                                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                              }
+                                            }}
+                                          />
+                                        ) : null}
+                                        <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
+                                          {companyInitials}
+                                        </div>
+                                      </div>
+                                      <div className="role-company">
+                                        <div className="role-title">{app.company || "Unknown Company"}</div>
+                                        {(() => {
+                                          const sub = app.subtitle
+                                            || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
+                                          return sub ? <div className="company-name">{sub}</div> : null;
+                                        })()}
+                                      </div>
+                                    </div>
+                                    <div className="status-badge-container">
+                                      <span className={`status-badge status-${app.derivedStatus}`}>
+                                        {app.derivedStatus}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {(() => {
+                                    const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
+                                      ? app.displayFields.filter(f => f && f.label && f.value)
+                                      : null;
+
+                                    if (flexFields && flexFields.length > 0) {
+                                      return (
+                                        <div className="program-details">
+                                          {flexFields.map(({ label, value }) => (
+                                            <div key={label} className="program-detail">
+                                              <span className="program-detail-label">{label}</span>
+                                              <span className="program-detail-value">{value}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+
+                                    let legacyFields = app.fieldsToDisplay;
+                                    if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
+                                      legacyFields = [];
+                                      if (app.programRoles) legacyFields.push("role");
+                                      if (app.programStipend) legacyFields.push("stipend");
+                                      if (app.deadlineText) legacyFields.push("deadline");
+                                      if (app.programDuration) legacyFields.push("duration");
+                                      if (app.venue) legacyFields.push("venue");
+                                    }
+                                    if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
+
+                                    const FIELD_CONFIG = {
+                                      role: { label: "Roles", value: app.programRoles },
+                                      stipend: { label: "Stipend", value: app.programStipend },
+                                      deadline: { label: "Deadline", value: app.deadlineText },
+                                      duration: { label: "Duration", value: app.programDuration },
+                                      venue: { label: "Venue", value: app.venue },
+                                      eventName: { label: "Event", value: app.subtitle },
+                                    };
+                                    const rows = legacyFields
+                                      .map(f => FIELD_CONFIG[f])
+                                      .filter(r => r && r.value && r.value.trim().length > 0);
+                                    if (rows.length === 0) return null;
+                                    return (
+                                      <div className="program-details">
+                                        {rows.map(({ label, value }) => (
+                                          <div key={label} className="program-detail">
+                                            <span className="program-detail-label">{label}</span>
+                                            <span className="program-detail-value">{value}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {app.deadline && !app.deadlineText &&
+                                    (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) &&
+                                    (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
+                                      <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
+                                        ? 'urgent' : ''
+                                        }`}>
+                                        Deadline: {app.deadline}
+                                      </div>
+                                    )}
+
+                                  <div className="app-footer">
+                                    <div className="email-info">
+                                      <span style={{ fontSize: 16 }}>✉️</span>
+                                      <span>{app.email || "user@gmail.com"}</span>
+                                    </div>
+                                    <span>{formattedDate}</span>
+                                  </div>
+
+                                  <div className="note-container">
+                                    <textarea
+                                      className="note-input"
+                                      placeholder="Add a personal note..."
+                                      value={app.note || ""}
+                                      onChange={(e) => handleUpdateNote(app._id, e.target.value)}
+                                      onBlur={(e) => handleSaveNote(app._id, e.target.value)}
+                                    />
+                                    <div className="note-save-hint">Auto-saves on blur</div>
+                                  </div>
+
+                                  <div className="card-actions">
+                                    <button
+                                      className="card-btn card-btn-edit"
+                                      onClick={() => {
+                                        setEditingApp(app);
+
+                                        const getField = (label, dbField) => {
+                                          if (app.displayFields && app.displayFields.length > 0) {
+                                            const f = app.displayFields.find(df => df.label === label);
+                                            if (f) return f.value;
+                                          }
+                                          return dbField || "";
+                                        };
+
+                                        const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
+                                        const dynamicFields = [];
+                                        if (app.displayFields && app.displayFields.length > 0) {
+                                          app.displayFields.forEach(df => {
+                                            if (!standardLabels.includes(df.label)) {
+                                              dynamicFields.push({ label: df.label, value: df.value });
+                                            }
+                                          });
+                                        }
+
+                                        setEditFormData({
+                                          company: app.company || "",
+                                          subtitle: app.subtitle || "",
+                                          role: getField("Role", app.role),
+                                          stipend: getField("Stipend", app.programStipend),
+                                          ctc: getField("CTC", app.salaryText),
+                                          duration: getField("Duration", app.programDuration),
+                                          location: getField("Location", app.venue),
+                                          joining: getField("Joining", ""),
+                                          deadline: getField("Deadline", app.deadlineText),
+                                          date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
+                                          link: app.link || "",
+                                          dynamicFields: dynamicFields
+                                        });
+                                        setShowEditModal(true);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    {app.link && !isDone && (
+                                      <a
+                                        className="card-btn card-btn-apply"
+                                        href={app.link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                          if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
+                                            handleApply(app._id);
+                                          }
+                                        }}
+                                      >
+                                        {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
+                                      </a>
+                                    )}
+                                    <button
+                                      className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
+                                      onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
+                                    >
+                                      {isDone ? "Unmark Done" : "Mark Done"}
+                                    </button>
+                                    <button
+                                      className="card-btn card-btn-remove"
+                                      onClick={() => handleDeleteOne(app._id)}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {totalPages > 1 && (
+                            <div className="pagination-container">
+                              <button
+                                className="pagination-btn"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={activePage === 1}
+                                title="Previous Page"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                              </button>
+                              <span className="pagination-info">Page {activePage} of {totalPages}</span>
+                              <button
+                                className="pagination-btn"
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={activePage === totalPages}
+                                title="Next Page"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p style={{ textAlign: 'center', marginTop: 60, color: '#6d7a77' }}>
+                          {syncStatus === "pending"
+                            ? "Emails are being synced in the background. Please wait..."
+                            : "No applications found. Try syncing emails."}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
             )}
           </main>
 
-          <button
-            className="floating-add-btn"
-            onClick={() => setShowAddModal(true)}
-            title="Add Application"
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </button>
+          {activeFilter !== "settings" && (
+            <button
+              className="floating-add-btn"
+              onClick={() => setShowAddModal(true)}
+              title="Add Application"
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1953,7 +3775,7 @@ export default function JobTrackerDashboard() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="modal-grid-2col">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Subtitle</label>
                   <input
@@ -2047,7 +3869,7 @@ export default function JobTrackerDashboard() {
 
               <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                 <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
-                
+
                 {formData.customFields && formData.customFields.map((cf, index) => (
                   <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <div style={{ flex: 1 }}>
@@ -2175,7 +3997,7 @@ export default function JobTrackerDashboard() {
                 <input type="text" className="form-input" value={editFormData.company || ""} onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })} required />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="modal-grid-2col">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Subtitle</label>
                   <input type="text" className="form-input" value={editFormData.subtitle || ""} onChange={(e) => setEditFormData({ ...editFormData, subtitle: e.target.value })} />
@@ -2216,7 +4038,7 @@ export default function JobTrackerDashboard() {
 
               <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                 <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
-                
+
                 {editFormData.dynamicFields && editFormData.dynamicFields.map((df, index) => (
                   <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <div style={{ flex: 1 }}>
@@ -2318,90 +4140,259 @@ export default function JobTrackerDashboard() {
         </div>
       )}
 
-      {showInfoModal && selectedApp && (
-        <div className="modal-overlay" onClick={() => setShowInfoModal(false)}>
-          <div className="modal-content info-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">{selectedApp.company}</h3>
-                <p style={{ fontSize: '14px', color: '#64748b' }}>Application Details</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowInfoModal(false)}>&times;</button>
-            </div>
+      {showInfoModal && selectedApp && (() => {
+        const app = selectedApp;
+        const closeInfoModal = () => {
+          setShowInfoModal(false);
+        };
+        const statusKey = (app.status || 'new').toLowerCase().replace(/\s+/g, '-');
+        const isUrgent = app.deadlineISO && new Date(app.deadlineISO) - Date.now() < 72 * 60 * 60 * 1000;
+        const logoSrc = app.companyInfo?.logo;
+        const FIELD_CONFIG = {
+          role: { label: "Role(s)", value: app.programRoles },
+          stipend: { label: "Stipend", value: app.programStipend },
+          deadline: { label: "Deadline", value: app.deadlineText },
+          duration: { label: "Duration", value: app.programDuration },
+          venue: { label: "Venue", value: app.venue },
+          eventName: { label: "Event", value: app.subtitle },
+        };
+        const displayRowsFromFields = Array.isArray(app.fieldsToDisplay)
+          ? app.fieldsToDisplay.map(f => FIELD_CONFIG[f]).filter(r => r && r.value?.trim())
+          : [];
+        const displayFieldRows = Array.isArray(app.displayFields)
+          ? app.displayFields.filter(f => f?.label && f?.value?.trim())
+          : [];
+        const skills = Array.isArray(app.skills) ? app.skills : [];
 
-            {/* Info modal details — also driven by fieldsToDisplay */}
-            {(() => {
-              let displayFields = selectedApp.fieldsToDisplay;
-              if ((!Array.isArray(displayFields) || displayFields.length === 0) && selectedApp.emailType !== "event" && selectedApp.emailType !== "nonRecruitment") {
-                displayFields = [];
-                if (selectedApp.programRoles) displayFields.push("role");
-                if (selectedApp.programStipend) displayFields.push("stipend");
-                if (selectedApp.deadlineText) displayFields.push("deadline");
-                if (selectedApp.programDuration) displayFields.push("duration");
-                if (selectedApp.venue) displayFields.push("venue");
-              }
-              if (!Array.isArray(displayFields) || displayFields.length === 0) return null;
-              const FIELD_CONFIG = {
-                role: { label: "Roles", value: selectedApp.programRoles },
-                stipend: { label: "Stipend", value: selectedApp.programStipend },
-                deadline: { label: "Deadline", value: selectedApp.deadlineText },
-                duration: { label: "Duration", value: selectedApp.programDuration },
-                venue: { label: "Venue", value: selectedApp.venue },
-                eventName: { label: "Event", value: selectedApp.subtitle },
-              };
-              const rows = displayFields
-                .map(f => FIELD_CONFIG[f])
-                .filter(r => r && r.value && r.value.trim().length > 0);
-              if (rows.length === 0) return null;
-              return (
-                <div className="program-details" style={{ marginBottom: '20px' }}>
-                  {rows.map(({ label, value }) => (
-                    <div key={label} className="program-detail">
-                      <span className="program-detail-label">{label}:</span>
-                      <span>{value}</span>
+        return (
+          <div className="modal-overlay" onClick={closeInfoModal}>
+            <div className="modal-content info-modal-content" onClick={e => e.stopPropagation()}>
+
+              {/* ── Header ── */}
+              <div className="info-modal-header">
+                <div className="info-modal-header-top">
+                  <div className="info-modal-company-row">
+                    {logoSrc && (
+                      <img src={logoSrc} alt={app.company} className="info-modal-logo"
+                        onError={e => { e.currentTarget.style.display = 'none'; }} />
+                    )}
+                    <div>
+                      <h3 className="info-modal-company-name">{app.company}</h3>
+                      {app.subtitle && <p className="info-modal-subtitle">{app.subtitle}</p>}
                     </div>
-                  ))}
+                  </div>
+                  <button className="modal-close" onClick={closeInfoModal}>&times;</button>
                 </div>
-              );
-            })()}
-
-            {selectedApp.events && selectedApp.events.length > 0 && (
-              <div className="event-timeline" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                <h4 style={{ marginTop: '0', marginBottom: '16px', fontSize: '16px', color: '#1e293b', fontWeight: '600' }}>Application Timeline</h4>
-                <div className="timeline-container" style={{ position: 'relative', marginLeft: '8px' }}>
-                  {selectedApp.events.map((ev, i) => {
-                    const d = new Date(ev.date);
-                    const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
-                    return (
-                      <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === selectedApp.events.length - 1 ? '0' : '16px' }}>
-                        <div className="timeline-date" style={{ width: '48px', fontSize: '13px', color: '#64748b', textAlign: 'right', marginRight: '16px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
-                          {formattedD}
-                        </div>
-                        <div className="timeline-dot" style={{ position: 'absolute', left: '59px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
-                        {i !== selectedApp.events.length - 1 && (
-                          <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-16px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
-                        )}
-                        <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
-                          <div className="timeline-title" style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                            {ev.title || "Email Notification"}
-                          </div>
-                          <div className="timeline-subtitle" style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', lineHeight: '1.4' }}>
-                            {ev.status && <span style={{ textTransform: 'capitalize', marginRight: '6px', fontWeight: '600', color: '#3b82f6' }}>[{ev.status}]</span>}
-                            <span style={{ opacity: 0.9 }}>{ev.subject ? (ev.subject.length > 60 ? ev.subject.substring(0, 60) + "..." : ev.subject) : ""}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="info-modal-meta-chips">
+                  <span className={`meta-chip status-${statusKey}`} style={{ textTransform: 'capitalize' }}>
+                    {app.status || 'New'}
+                  </span>
+                  {app.type && app.type !== 'unknown' && app.type !== app.emailType && (
+                    <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.type}</span>
+                  )}
+                  {app.deadlineText && (
+                    <span className={`meta-chip${isUrgent ? ' urgent' : ''}`}>
+                      {isUrgent ? '⚡ ' : '🗓 '}Deadline: {app.deadlineText}
+                    </span>
+                  )}
+                  {app.emailType && app.emailType !== 'job' && (
+                    <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.emailType}</span>
+                  )}
                 </div>
               </div>
-            )}
 
-            <div className="modal-actions">
-              <button className="btn-primary" onClick={() => setShowInfoModal(false)}>
-                Close
-              </button>
+              {/* ── Scrollable body ── */}
+              <div className="info-modal-body">
+
+                {/* Application Timeline — Only section in body */}
+                {app.events && app.events.length > 0 && (
+                  <div className="info-modal-section">
+                    <div className="info-modal-section-header">Application Timeline</div>
+                    <div className="info-modal-section-body">
+                      <div className="timeline-container" style={{ position: 'relative', marginLeft: '8px' }}>
+                        {app.events.map((ev, i) => {
+                          const d = new Date(ev.date);
+                          const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
+                          return (
+                            <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === app.events.length - 1 ? '0' : '18px' }}>
+                              <div className="timeline-date" style={{ width: '48px', fontSize: '13px', color: '#64748b', textAlign: 'right', marginRight: '16px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
+                                {formattedD}
+                              </div>
+                              <div className="timeline-dot" style={{ position: 'absolute', left: '59px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
+                              {i !== app.events.length - 1 && (
+                                <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-18px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
+                              )}
+                              <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
+                                <div className="timeline-title" style={{ fontSize: '14.5px', fontWeight: '600', color: '#0f172a' }}>
+                                  {ev.title || ev.classification || 'Email Notification'}
+                                </div>
+                                <div className="timeline-subtitle" style={{ fontSize: '12.5px', color: '#475569', marginTop: '3px', lineHeight: '1.5' }}>
+                                  {ev.summary ? ev.summary : (ev.subject ? (ev.subject.length > 80 ? ev.subject.substring(0, 80) + '...' : ev.subject) : '')}
+                                </div>
+                                {ev.link && (
+                                  <div style={{ marginTop: '6px' }}>
+                                    <a href={ev.link} target="_blank" rel="noopener noreferrer"
+                                      style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'underline', fontWeight: '500' }}
+                                      onClick={e => e.stopPropagation()}>
+                                      {ev.classification === 'Registration Link' || ev.classification === 'New Hiring Opportunity' || ev.classification === 'Internship Opportunity' ? 'Apply Link ↗' : 'Open Link ↗'}
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* ── Footer ── */}
+              <div className="info-modal-footer">
+                <button className="btn-primary" onClick={closeInfoModal}>
+                  Close
+                </button>
+              </div>
+
             </div>
+          </div>
+        );
+      })()}
+
+
+      {showDeleteModal && (
+        <div className="modal-overlay" onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}>
+          <div className="modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#dc2626' }}>Delete Account</h3>
+              <button className="modal-close" onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleDeleteSubmit} style={{ marginTop: '16px' }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                <p style={{ marginBottom: '12px', fontWeight: '600' }}>
+                  Warning: This action is permanent and irreversible.
+                </p>
+                <p style={{ marginBottom: '12px' }}>
+                  The following data associated with your account will be permanently deleted:
+                </p>
+                <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
+                  <li>Your user account and credentials</li>
+                  <li>All synced job applications</li>
+                  <li>Any custom notes you have written</li>
+                  <li>Your synchronization log history</li>
+                </ul>
+                <p style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>
+                  Note: Shared company metadata (such as logos and company domains) is not affected.
+                </p>
+              </div>
+
+              {deleteError && (
+                <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', fontWeight: '500' }}>
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                  To confirm, type <strong style={{ color: '#dc2626' }}>DELETE</strong> in the box below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="DELETE"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  disabled={deletingAccount}
+                  required
+                  style={{ borderColor: deleteConfirmText === "DELETE" ? '#dc2626' : 'var(--border-color)', outline: 'none' }}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}
+                  disabled={deletingAccount}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  style={{ backgroundColor: deleteConfirmText === "DELETE" ? '#dc2626' : '#ef4444', opacity: deleteConfirmText === "DELETE" ? 1 : 0.6 }}
+                  disabled={deletingAccount || deleteConfirmText !== "DELETE"}
+                >
+                  {deletingAccount ? "Deleting..." : "Permanently Delete"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showClearModal && (
+        <div className="modal-overlay" onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>
+          <div className="modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#ef4444' }}>Clear Workspace</h3>
+              <button className="modal-close" onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleClearSubmit} style={{ marginTop: '16px' }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                <p style={{ marginBottom: '12px', fontWeight: '600' }}>
+                  Warning: This action will delete all synced applications.
+                </p>
+                <p style={{ marginBottom: '12px' }}>
+                  Your account settings, notes, and Gmail credentials will remain intact, but all applications displayed on your dashboard will be removed.
+                </p>
+              </div>
+
+              {clearError && (
+                <div style={{ color: '#dc2626', backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', fontWeight: '500' }}>
+                  {clearError}
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                  To confirm, type <strong style={{ color: '#ef4444' }}>CLEAR</strong> in the box below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="CLEAR"
+                  value={clearConfirmText}
+                  onChange={(e) => setClearConfirmText(e.target.value)}
+                  disabled={clearing}
+                  required
+                  style={{ borderColor: clearConfirmText === "CLEAR" ? '#ef4444' : 'var(--border-color)', outline: 'none' }}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}
+                  disabled={clearing}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  style={{ backgroundColor: clearConfirmText === "CLEAR" ? '#ef4444' : '#f87171', opacity: clearConfirmText === "CLEAR" ? 1 : 0.6 }}
+                  disabled={clearing || clearConfirmText !== "CLEAR"}
+                >
+                  {clearing ? "Clearing..." : "Clear Workspace"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

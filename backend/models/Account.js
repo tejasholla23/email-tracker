@@ -5,7 +5,7 @@ const accountSchema = new mongoose.Schema({
   tokens: Object,
   syncStatus: {
     type: String,
-    enum: ["success", "failed", "pending"],
+    enum: ["success", "failed", "pending", "idle"],
     default: "success",
   },
   syncError: {
@@ -24,6 +24,34 @@ const accountSchema = new mongoose.Schema({
     type: String,
     enum: ["full", "incremental"],
     default: "full",
+  },
+  refreshTokenHash: {
+    type: String,
+    default: null,
+  },
+  refreshTokenExpiresAt: {
+    type: Date,
+    default: null,
+  },
+  calendarSyncEnabled: {
+    type: Boolean,
+    default: false,
+  },
+  pushSubscriptions: {
+    type: [{
+      endpoint: { type: String, required: true },
+      keys: {
+        p256dh: { type: String, required: true },
+        auth: { type: String, required: true },
+      },
+      userAgent: { type: String, default: "" },
+      createdAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
+  pushEnabled: {
+    type: Boolean,
+    default: true,
   },
 });
 

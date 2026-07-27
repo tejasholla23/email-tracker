@@ -13,12 +13,14 @@ const applicationSchema = new mongoose.Schema(
       type: [{ label: { type: String }, value: { type: String } }],
       default: [],
     },
+    // Skills extracted from email body by Gemini (e.g. ["Python", "Machine Learning"])
+    skills: { type: [String], default: [] },
     companyKey: { type: String, default: "" }, // normalized key for company-level dedup
-    role: { type: String, required: true },
+    role: { type: String, default: "Unknown Role" }, // Derived from displayFields — kept for search indexing and backward compatibility
     type: { type: String },
-    deadline: { type: String },
-    deadlineISO: { type: String },
-    deadlineText: { type: String },
+    deadline: { type: String }, // Derived from displayFields
+    deadlineISO: { type: String }, // Parsed deadline ISO
+    deadlineText: { type: String }, // Derived from displayFields
     programRoles: { type: String },
     programDuration: { type: String },
     programStipend: { type: String },
@@ -36,7 +38,7 @@ const applicationSchema = new mongoose.Schema(
     isDeleted: { type: Boolean, default: false },
     rawText: { type: String },
     note: { type: String, default: "" },
-    messageId: { type: String, unique: true, sparse: true },
+    messageId: { type: String, sparse: true },
     classification: { type: String },
     confidenceScore: { type: Number },
     parserVersion: { type: String, default: "v2" },
@@ -52,6 +54,16 @@ const applicationSchema = new mongoose.Schema(
     salaryText: { type: String },
     parseMeta: { type: mongoose.Schema.Types.Mixed },
     manualOverrides: { type: [String], default: [] },
+    
+    // Calendar Integration Fields
+    calendarEventId: { type: String, default: null },
+    calendarEventFingerprint: { type: String, default: null },
+    calendarPayloadHash: { type: String, default: null },
+    calendarSyncVersion: { type: Number, default: 0 },
+    needsCalendarSync: { type: Boolean, default: false },
+    calendarLastSyncedAt: { type: Date, default: null },
+    calendarSyncError: { type: String, default: null },
+
     events: {
       type: [
         {
@@ -62,17 +74,26 @@ const applicationSchema = new mongoose.Schema(
           subject: String,
           status: String,
           link: String,
+          summary: String,
         },
       ],
       default: [],
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Account"
     },
   },
   { timestamps: true }
 );
 
-// Company-level identity index: one Application per normalized company (one hiring process)applicationSchema.index({ companyKey: 1, isDeleted: 1 });
+// Unique messageId per user index to prevent duplicate imports for the same user
+applicationSchema.index({ userId: 1, messageId: 1 }, { unique: true, sparse: true });
+
+// Company-level identity index: one Application per normalized company (one hiring process)
+applicationSchema.index({ userId: 1, companyKey: 1, isDeleted: 1 });
 
 // Compound index for primary dashboard query: Application.find({ isDeleted: false }).sort({ date: -1 })
-applicationSchema.index({ isDeleted: 1, date: -1 });
+applicationSchema.index({ userId: 1, isDeleted: 1, date: -1 });
 
 module.exports = mongoose.model("Application", applicationSchema);

@@ -1,10 +1,11 @@
-const { GoogleGenAI } = require("@google/genai");
+const { OpenAI } = require("openai");
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+const nvidiaClient = new OpenAI({
+  apiKey: process.env.NVIDIA_API_KEY,
+  baseURL: "https://integrate.api.nvidia.com/v1",
 });
 
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const MODEL_NAME = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
 
 // ---------------------------------------------------------------------------
 // Text utilities
@@ -29,9 +30,14 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
   const text = deadlineText.trim();
   if (!text) return "";
 
-  // ── Extract time component (e.g. "10 PM", "5:30 AM") ──────────────────────
+  const createDateInIST = (year, month, day, hours, minutes) => {
+    const pad = (num) => String(num).padStart(2, '0');
+    const isoString = `${year}-${pad(month)}-${pad(day)}T${pad(hours)}:${pad(minutes)}:00+05:30`;
+    return new Date(isoString);
+  };
+
   const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
-  let hours = 0, minutes = 0;
+  let hours = 23, minutes = 59;
   if (timeMatch) {
     hours = parseInt(timeMatch[1], 10);
     minutes = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
@@ -42,54 +48,146 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
 
   const lower = text.toLowerCase();
 
-  // ── Relative dates: "today", "tomorrow" ────────────────────────────────────
-  if (/\btoday\b/i.test(lower)) {
-    const d = new Date(referenceDate);
-    d.setHours(hours, minutes, 0, 0);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  const parts = formatter.formatToParts(referenceDate);
+  const getPartVal = (type) => parseInt(parts.find(p => p.type === type).value, 10);
+
+  const refYear = getPartVal("year");
+  const refMonth = getPartVal("month");
+  const refDay = getPartVal("day");
+
+  if (/\b(?:today|tonight)\b/i.test(lower)) {
+    const d = createDateInIST(refYear, refMonth, refDay, hours, minutes);
     return d.toISOString();
   }
   if (/\btomorrow\b/i.test(lower)) {
-    const d = new Date(referenceDate);
-    d.setDate(d.getDate() + 1);
-    d.setHours(hours, minutes, 0, 0);
+    const dRef = new Date(referenceDate);
+    dRef.setDate(dRef.getDate() + 1);
+
+    const partsTom = formatter.formatToParts(dRef);
+    const getTomVal = (type) => parseInt(partsTom.find(p => p.type === type).value, 10);
+    const tomYear = getTomVal("year");
+    const tomMonth = getTomVal("month");
+    const tomDay = getTomVal("day");
+
+    const d = createDateInIST(tomYear, tomMonth, tomDay, hours, minutes);
     return d.toISOString();
   }
 
-  // ── Absolute dates ─────────────────────────────────────────────────────────
-  // Strip ordinal suffixes (1st, 2nd, 3rd, 4th, etc.) for Date.parse
   const cleaned = text.replace(/(\d{1,2})(st|nd|rd|th)/gi, "$1");
 
-  // Try parsing the cleaned text directly
-  const parsed = new Date(cleaned);
-  if (!isNaN(parsed.getTime())) {
-    if (timeMatch) {
-      parsed.setHours(hours, minutes, 0, 0);
+  // ── DD-MM-YYYY / DD/MM/YYYY (Indian date format) ─────────────────────────
+  // Must be checked BEFORE new Date() which assumes US MM-DD-YYYY for hyphenated dates.
+  const ddmmyyyyMatch = cleaned.match(/(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);
+  if (ddmmyyyyMatch) {
+    const part1 = parseInt(ddmmyyyyMatch[1], 10);
+    const part2 = parseInt(ddmmyyyyMatch[2], 10);
+    const year  = parseInt(ddmmyyyyMatch[3], 10);
+    let day, month;
+    if (part1 > 12) {
+      // Unambiguous: first part must be day (e.g. 25-07-2026)
+      day = part1; month = part2;
+    } else if (part2 > 12) {
+      // Unambiguous: second part must be day (e.g. 07-25-2026)
+      day = part2; month = part1;
+    } else {
+      // Ambiguous (e.g. 05-07-2026): default to DD-MM-YYYY (Indian convention)
+      day = part1; month = part2;
     }
-    return parsed.toISOString();
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const finalDate = createDateInIST(year, month, day, hours, minutes);
+      return finalDate.toISOString();
+    }
   }
 
-  // Try extracting just the date portion ("25 June 2026", "June 25, 2026", etc.)
+  const parsed = new Date(cleaned);
+  if (!isNaN(parsed.getTime())) {
+    let y = parsed.getFullYear();
+    let m = parsed.getMonth() + 1;
+    let d = parsed.getDate();
+
+    if (cleaned.includes("-")) {
+      y = parsed.getUTCFullYear();
+      m = parsed.getUTCMonth() + 1;
+      d = parsed.getUTCDate();
+    }
+    const finalDate = createDateInIST(y, m, d, hours, minutes);
+    return finalDate.toISOString();
+  }
+
   const datePattern = /(?:(\d{1,2})\s+(?:of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)[,\s]+(\d{4})|(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})[,\s]+(\d{4}))/i;
   const dateMatch = cleaned.match(datePattern);
   if (dateMatch) {
     let dateStr;
     if (dateMatch[1]) {
-      // day month year
       dateStr = `${dateMatch[2]} ${dateMatch[1]}, ${dateMatch[3]}`;
     } else {
-      // month day year
       dateStr = `${dateMatch[4]} ${dateMatch[5]}, ${dateMatch[6]}`;
     }
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
-      if (timeMatch) {
-        d.setHours(hours, minutes, 0, 0);
-      }
-      return d.toISOString();
+      const finalDate = createDateInIST(d.getFullYear(), d.getMonth() + 1, d.getDate(), hours, minutes);
+      return finalDate.toISOString();
     }
   }
 
   return "";
+}
+
+function resolveEventDateISO(dateText, timeText, referenceDate = new Date()) {
+  if (!dateText || typeof dateText !== "string") return null;
+  const parsedDate = parseDateString(dateText, referenceDate);
+  if (!parsedDate) return null;
+
+  let hours = 12, minutes = 0;
+  if (timeText && typeof timeText === "string") {
+    const timeMatch = timeText.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (timeMatch) {
+      hours = parseInt(timeMatch[1], 10);
+      minutes = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      const meridian = timeMatch[3].toLowerCase();
+      if (meridian === "pm" && hours !== 12) hours += 12;
+      if (meridian === "am" && hours === 12) hours = 0;
+    }
+  }
+
+  const pad = (num) => String(num).padStart(2, '0');
+  const isoString = `${parsedDate.getFullYear()}-${pad(parsedDate.getMonth() + 1)}-${pad(parsedDate.getDate())}T${pad(hours)}:${pad(minutes)}:00+05:30`;
+  const result = new Date(isoString);
+  return isNaN(result.getTime()) ? null : result;
+}
+
+// ---------------------------------------------------------------------------
+// Derive legacy flat fields from displayFields (single source of truth).
+// This ensures role, salaryText, deadlineText, etc. always mirror displayFields.
+// ---------------------------------------------------------------------------
+
+function deriveFromDisplayFields(displayFields = []) {
+  const get = (...labels) => {
+    for (const label of labels) {
+      const f = displayFields.find(f =>
+        new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i').test(f.label)
+      );
+      if (f?.value) return f.value;
+    }
+    return "";
+  };
+  return {
+    role:            get("Role", "Roles", "Position", "Designation") || "Unknown Role",
+    salaryText:      get("CTC", "Salary", "Compensation", "Package"),
+    programStipend:  get("Stipend"),
+    programDuration: get("Duration"),
+    venue:           get("Location", "Venue"),
+    deadlineText:    get("Deadline", "Last Date", "Due Date", "Closing Date"),
+    programRoles:    get("Role", "Roles"),
+    eventDateText:   get("Date", "Event Date", "Interview Date", "Presentation Date", "PPT Date", "Talk Date"),
+    eventTime:       get("Time", "Event Time", "Reporting Time", "Schedule Time", "PPT Time"),
+  };
 }
 
 /**
@@ -97,17 +195,17 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
  * Used ONLY when more than 5 valid fields are returned (to select top 5).
  */
 const FIELD_PRIORITY = {
-  JOB_APPLICATION: ["role", "ctc", "stipend", "deadline", "duration", "location", "eligibility", "joining"],
-  HACKATHON: ["prize", "prize pool", "registration deadline", "deadline", "team size", "eligibility", "mode", "organizer", "timeline"],
-  WEBINAR: ["date", "time", "speaker", "topic", "eligibility"],
-  OTHER_PLACEMENT_EVENT: ["date", "time", "organizer", "mode", "eligibility"],
+  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "duration", "location", "joining"],
+  HACKATHON: ["registration deadline", "deadline", "last date", "due date", "closing date", "prize", "prize pool", "team size", "mode", "organizer", "timeline"],
+  WEBINAR: ["date", "time", "speaker", "topic"],
+  OTHER_PLACEMENT_EVENT: ["date", "time", "organizer", "mode"],
 };
 
 /**
  * Patterns that indicate a field label boundary inside a value string.
  * Used to detect when Gemini has merged two fields together.
  */
-const FIELD_LABEL_PATTERNS = /\b(?:Stipend|CTC|Duration|Location|Deadline|Role|Eligibility|Joining|Venue|Date|Time|Mode|Prize|Team Size|Speaker|Topic|Organizer|Registration Deadline|Type|Salary|Package|Compensation)\s*:/i;
+const FIELD_LABEL_PATTERNS = /\b(?:Stipend|CTC|Duration|Location|Deadline|Role|Joining|Venue|Date|Time|Mode|Prize|Team Size|Speaker|Topic|Organizer|Registration Deadline|Type|Salary|Package|Compensation)\s*:/i;
 
 /**
  * Descriptive parenthetical content that should be stripped from field values.
@@ -223,7 +321,7 @@ function preprocessBody(rawText = "") {
     text = text.replace(/<br\s*\/?>/gi, "\n");
     text = text.replace(/<\/(p|div|tr|li|h[1-6]|thead|tbody|tfoot)>/gi, "\n");
     text = text.replace(/<(p|div|tr|li|h[1-6]|thead|tbody|tfoot)[^>]*>/gi, "\n");
-    text = text.replace(/<[^>]*>/g, " ");
+    text = text.replace(/<(?!.*?@)[^>]*>/g, " ");
     decisions.push("Stripped HTML style/script blocks and mapped block tags to newlines");
   }
 
@@ -1386,6 +1484,7 @@ const VALID_CLASSIFICATIONS = [
   "Assessment Announcement",
   "Interview Schedule",
   "Interview Result",
+  "Interview Reminder",
   "Venue Update",
   "Deadline Reminder",
   "Generic Placement Notice",
@@ -1418,7 +1517,10 @@ function validateGeminiResponse(raw) {
     return cleanProgramValue(v.substring(0, maxLen));
   };
   const company  = sanitizeTextField(raw.company,  100);
+  const domain   = typeof raw.domain === "string" ? raw.domain.trim().toLowerCase() : "";
   const subtitle = sanitizeTextField(raw.subtitle, 160);
+  const timelineTitle = sanitizeTextField(raw.timelineTitle, 100);
+  const timelineSummary = sanitizeTextField(raw.timelineSummary, 300);
 
   // displayFields — flexible [{label, value}] array, max 8 items through (trimmed to 5 later)
   let displayFields = [];
@@ -1457,11 +1559,17 @@ function validateGeminiResponse(raw) {
     opportunityType: raw.opportunityType || "JOB_APPLICATION",
     classification,
     company,
+    domain,
     subtitle,
     displayFields,
     status,
     type,
+    skills: Array.isArray(raw.skills)
+      ? raw.skills.filter(s => typeof s === "string" && s.trim()).map(s => s.trim()).slice(0, 10)
+      : [],
     link: typeof raw.link === "string" && raw.link.startsWith("http") ? raw.link : "",
+    timelineTitle,
+    timelineSummary,
   };
 }
 
@@ -1474,56 +1582,66 @@ function validateGeminiResponse(raw) {
 async function callGeminiStructured({ subject = "", sender = "", body = "", opportunityType = "JOB_APPLICATION" }) {
   const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
 
-  const prompt = `You are a smart placement-email parser for a college student dashboard. Analyze the email and return ONLY valid JSON â€” no markdown, no explanation.
+  const prompt = `You are a smart placement-email parser for a college student dashboard. Analyze the email and return ONLY valid JSON — no markdown, no explanation.
 
-CONTEXT: Emails are forwarded from a campus placement department (MSRIT/RIT). The ACTUAL company is the ORIGINAL SENDER â€” NOT the forwarding institution. Ignore all forwarding footers ("Regards, Placement Department, RIT/MSRIT").
+CONTEXT: Emails are forwarded from a campus placement department (MSRIT/RIT). The ACTUAL company is the ORIGINAL SENDER — NOT the forwarding institution. Ignore all forwarding footers ("Regards, Placement Department, RIT/MSRIT").
 
 Return exactly this JSON schema:
 {
   "emailType": "<job | event | nonRecruitment>",
   "opportunityType": "<JOB_APPLICATION | HACKATHON | WEBINAR | OTHER_PLACEMENT_EVENT>",
   "classification": "<one of: New Hiring Opportunity | Internship Opportunity | Registration Link | Application Reminder | PPT Announcement | Assessment Announcement | Interview Schedule | Interview Result | Venue Update | Deadline Reminder | Generic Placement Notice | Hackathon / Event Invitation | Workshop / Webinar | Expert Talk Series | Scholarship | Non-Recruitment Email>",
-  "company": "<actual organizing company â€” see COMPANY RULES>",
-  "subtitle": "<program/event/role name shown below the company name on the card â€” see SUBTITLE RULES>",
+  "company": "<actual organizing company — see COMPANY RULES>",
+  "domain": "<official website domain of the company (e.g., wipro.com, atos.net, eightfold.ai), or empty string if unknown. Prioritize IT/tech service companies when ambiguous>",
+  "subtitle": "<program/event/role name shown below the company name on the card — see SUBTITLE RULES>",
   "type": "<internship | full-time | event | test | unknown>",
   "link": "<primary registration or application URL, or empty string>",
   "displayFields": [
     { "label": "<concise label>", "value": "<explicitly stated value>" }
-  ]
+  ],
+  "skills": ["<skill 1>", "<skill 2>"],
+  "timelineTitle": "<a concise 2-4 word description of what this specific email is for (e.g., 'Internship Invite', 'Interview Shortlist', 'Interview Reminder', 'Assessment Scheduled', 'Job Offer')>",
+  "timelineSummary": "<a concise 1-sentence summary explaining the key details or action required in this specific email (e.g., 'Invited students to apply for an unpaid AI/IoT internship', 'Shortlisted 11 candidates and scheduled face-to-face interviews on July 1st', 'Sent a gentle reminder to confirm interview availability for today')>"
 }
 
+SKILLS RULES:
+- Extract technical and soft skills explicitly required or mentioned in the email (e.g. "Python", "Machine Learning", "Node.js", "REST APIs").
+- Return as a flat array of concise strings. Max 10. Return empty array [] if no skills are mentioned.
+- Only extract skills explicitly stated in the email, not inferred from the role name.
+
 DISPLAY FIELDS RULES:
-- Maximum 5 fields. Only include fields with values EXPLICITLY stated in the email.
+- Extract all applicable fields (e.g. Role, CTC, Stipend, Deadline, Duration, Location, Joining) as displayFields. Do not limit the list size in your response; the system will prioritize and filter them. Only include fields with values EXPLICITLY stated in the email.
+- NEVER extract or return "Eligibility". It is redundant as all recipients are eligible.
 - Do NOT include empty, vague, or inferred values.
 - Choose labels a student would want to see immediately on a card.
 - Ignore forwarding footers entirely. NEVER use RIT, MSRIT, Placement Department, or Dean's name as a venue, location, or company.
 - CRITICAL: Strongly prioritize fields based on the provided Opportunity Type (${opportunityType}):
 
-  If JOB_APPLICATION: Extract Role, CTC, Stipend, Deadline, Duration, Location, Joining, Eligibility.
-  If HACKATHON: Extract Event Name, Registration Deadline, Timeline, Prize Amount, Eligibility, Team Size, Mode, Organizer, Benefits.
-  If WEBINAR: Extract Event Title, Date, Time, Speaker/Company, Eligibility.
+  If JOB_APPLICATION: Extract Role, CTC, Stipend, Deadline, Duration, Location, Joining.
+  If HACKATHON: Extract Event Name, Registration Deadline, Timeline, Prize Amount, Team Size, Mode, Organizer, Benefits.
+  If WEBINAR: Extract Event Title, Date, Time, Speaker/Company.
   If OTHER_PLACEMENT_EVENT: Extract Event Title, Important Dates, Organizer, Mode.
 
 SUBTITLE RULES (what shows as the tagline below the company name):
-  Internship Opportunity    â†’ program/team name (e.g. "IS Team Internship")
-  New Hiring Opportunity    â†’ role or position name
-  Hackathon / Event Invitation â†’ event name (e.g. "InnoVent-27", "HackVega 2.0")
-  Workshop / Webinar        â†’ session/program name (e.g. "Ericsson Edge Academy")
-  Expert Talk Series        â†’ full series name (e.g. "POD Expert Talk Series on Databases")
-  Registration Link         â†’ concise description of what to register for
-  Non-Recruitment Email     â†’ empty string""
+  Internship Opportunity    → program/team name (e.g. "IS Team Internship")
+  New Hiring Opportunity    → role or position name
+  Hackathon / Event Invitation → event name (e.g. "InnoVent-27", "HackVega 2.0")
+  Workshop / Webinar        → session/program name (e.g. "Ericsson Edge Academy")
+  Expert Talk Series        → full series name (e.g. "POD Expert Talk Series on Databases")
+  Registration Link         → concise description of what to register for
+  Non-Recruitment Email     → empty string""
 
 COMPANY RULES:
-1. Use the ACTUAL ORGANIZING ENTITY â€” not the forwarding institution.
+1. Use the ACTUAL ORGANIZING ENTITY — not the forwarding institution.
 2. For forwarded emails, use original sender company from the "Forwarded message From:" or signature.
 3. NEVER use: MSRIT, RIT, Ramaiah Institute, Placement Department, Dean.
 4. NEVER use generic phrases: "Here", "Seeking", "Potential opportunities", "Greetings".
 5. Ignore platform names (Teams, Zoom, Google Forms, Unstop, Brazen) when identifying company.
 
 CLASSIFICATION GUIDE:
-  emailType "job"   â†’ hiring, internship, placement, recruitment, assessment, interview
-  emailType "event" â†’ hackathon, competition, webinar, workshop, expert talk, scholarship, event invitation
-  emailType "nonRecruitment" â†’ newsletter, announcement unrelated to placement
+  emailType "job"   → hiring, internship, placement, recruitment, assessment, interview
+  emailType "event" → hackathon, competition, webinar, workshop, expert talk, scholarship, event invitation
+  emailType "nonRecruitment" → newsletter, announcement unrelated to placement
 
 Subject: ${subject}
 Sender: ${sender}
@@ -1534,16 +1652,15 @@ Body: ${truncatedBody}`;
 
   while (retries > 0) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
-      const response = await ai.models.generateContent({
+      const response = await nvidiaClient.chat.completions.create({
         model: MODEL_NAME,
-        contents: prompt,
-        config: { abortSignal: controller.signal }
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+        max_tokens: 1000,
+        stream: false
       });
-      clearTimeout(timeoutId);
 
-      let jsonText = (response.text || "").trim();
+      let jsonText = (response.choices[0]?.message?.content || "").trim();
       jsonText = jsonText
         .replace(/^```json\s*/i, "")
         .replace(/^```\s*/i, "")
@@ -1554,44 +1671,50 @@ Body: ${truncatedBody}`;
       try {
         rawParsed = JSON.parse(jsonText);
       } catch (parseErr) {
-        console.error(`[GEMINI_STRUCTURED] JSON parse failed using ${MODEL_NAME}:`, parseErr.message);
+        console.error(`[NVIDIA_STRUCTURED] JSON parse failed using ${MODEL_NAME}:`, parseErr.message);
         return { status: "content_error" };
       }
 
-      console.log("[GEMINI_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
+      console.log("[NVIDIA_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
       console.log("RAW_DISPLAY_FIELDS", rawParsed.displayFields);
       
       const validated = validateGeminiResponse(rawParsed);
 
       if (!validated) {
-        console.warn("[GEMINI_STRUCTURED] Response failed schema validation, discarding.");
+        console.warn("[NVIDIA_STRUCTURED] Response failed schema validation, discarding.");
         return { status: "content_error" };
       }
 
       console.log("VALIDATED_DISPLAY_FIELDS", validated.displayFields);
-      console.log(`[GEMINI_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+      console.log(`[NVIDIA_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+      
+      // Preserve geminiUsed key so we don't break existing UI checks for LLM parsing success
+      validated.parseMeta = {
+        geminiUsed: true,
+        nvidiaUsed: true,
+        model: MODEL_NAME
+      };
+
       return { status: "success", data: validated };
 
     } catch (err) {
       retries--;
       const errorMsg = err?.message || err;
       
-      if (err.name === "AbortError") {
-        console.warn(`[GEMINI_STRUCTURED] Request timed out. Retries left: ${retries}`);
-      } else if (errorMsg.toString().includes("429") || errorMsg.toString().toLowerCase().includes("quota") || errorMsg.toString().toLowerCase().includes("rate")) {
-        console.warn(`[GEMINI_STRUCTURED] Rate limit hit (429). Retries left: ${retries}. Waiting ${delayMs}ms...`);
+      if (errorMsg.toString().includes("429") || errorMsg.toString().toLowerCase().includes("quota") || errorMsg.toString().toLowerCase().includes("rate")) {
+        console.warn(`[NVIDIA_STRUCTURED] Rate limit hit (429). Retries left: ${retries}. Waiting ${delayMs}ms...`);
       } else if (errorMsg.toString().includes("503") || errorMsg.toString().toLowerCase().includes("overloaded")) {
-        console.warn(`[GEMINI_STRUCTURED] Service unavailable (503). Retries left: ${retries}. Waiting ${delayMs}ms...`);
+        console.warn(`[NVIDIA_STRUCTURED] Service unavailable (503). Retries left: ${retries}. Waiting ${delayMs}ms...`);
       } else {
-        console.error("[GEMINI_STRUCTURED] Failed with unrecoverable error:", errorMsg);
+        console.error("[NVIDIA_STRUCTURED] Failed with unrecoverable error:", errorMsg);
         return { status: "transport_error" };
       }
 
       if (retries > 0) {
         await new Promise(r => setTimeout(r, delayMs));
-        delayMs += 4000; // Increase backoff penalty
+        delayMs += 4000;
       } else {
-        console.error("[GEMINI_STRUCTURED] Final failure after all retries.");
+        console.error("[NVIDIA_STRUCTURED] Final failure after all retries.");
         return { status: "transport_error" };
       }
     }
@@ -1606,8 +1729,24 @@ Body: ${truncatedBody}`;
 function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION") {
   const fields = [];
   
+  // Clean forwarded headers at the beginning of the text to prevent matching metadata like Subject
+  let cleanBody = body || "";
+  const lines = cleanBody.split(/\r?\n/);
+  let headerIndex = 0;
+  while (headerIndex < lines.length) {
+    const line = lines[headerIndex].trim();
+    if (line === "" || /^(?:from|subject|date|to|cc|bcc|sent)\s*:/i.test(line)) {
+      headerIndex++;
+    } else {
+      break;
+    }
+  }
+  if (headerIndex > 0) {
+    cleanBody = lines.slice(headerIndex).join("\n");
+  }
+  
   const extract = (regex, label) => {
-    const match = body.match(regex);
+    const match = cleanBody.match(regex);
     if (match && match[1]) {
       // Clean and trim, taking at most 60 chars to avoid run-on sentences
       let val = match[1].trim();
@@ -1618,26 +1757,24 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
   };
 
   if (opportunityType === "HACKATHON") {
-    extract(/(?:prize pool|cash prizes|total prize|win up to|rewards|prize)[ \t:]*([^•*\n\r]+)/i, "Prize");
-    extract(/(?:team format|team size)[ \t:]*([^•*\n\r]+)/i, "Team Size");
-    extract(/(?:who can participate|who can apply|eligibility(?: criteria(?: for participation)?)?)[ \t:]*[\n\r]*[ \t]*([^•*\n\r]+)/i, "Eligibility");
-    extract(/(?:registration deadline|registration & submission window|registration closes|register by|last date|apply by|submission window)[ \t:]*([^•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:prize pool|cash prizes|total prize|win up to|rewards|prize)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Prize");
+    extract(/\b(?:team format|team size)\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Team Size");
+    extract(/\b(?:registration deadline|registration & submission window|registration closes|register by|last date|apply by|submission window)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Deadline");
   } else if (opportunityType === "WEBINAR" || opportunityType === "OTHER_PLACEMENT_EVENT") {
-    extract(/(?:date|scheduled on)[ \t:]*([^•*\n\r]+)/i, "Date");
-    extract(/(?:time)[ \t:]*([^•*\n\r]+)/i, "Time");
-    extract(/(?:speaker|speaker profile|resource person)[ \t:]*([^•*\n\r]+)/i, "Speaker");
-    extract(/(?:eligibility|eligible|who can apply(?: criteria(?: for participation)?)?)[ \t:]*[\n\r]*[ \t]*([^•*\n\r]+)/i, "Eligibility");
-    extract(/(?:topic|agenda)[ \t:]*([^•*\n\r]+)/i, "Topic");
-    extract(/(?:registration closes|registration deadline|last date|register by)[ \t:]*([^•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:date|scheduled on)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Date");
+    extract(/\b(?:time)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Time");
+    extract(/\b(?:speaker|speaker profile|resource person)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Speaker");
+    extract(/\b(?:topic|agenda)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Topic");
+    extract(/\b(?:registration closes|registration deadline|last date|register by)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Deadline");
   } else {
     // Default JOB_APPLICATION
-    extract(/(?:stipend|compensation)[ \t:]*([^-|•*\n\r]+)/i, "Stipend");
-    extract(/(?:ctc|package|salary)[ \t:]*([^-|•*\n\r]+)/i, "CTC");
-    extract(/(?:duration|period)[ \t:]*([^-|•*\n\r]+)/i, "Duration");
-    extract(/(?:location|job location|venue)[ \t:]*([^-|•*\n\r]+)/i, "Location");
-    extract(/(?:deadline|last date(?: to apply| for registration)?|register before)[ \t:]*([^-|•*\n\r]+)/i, "Deadline");
-    extract(/(?:role|designation|position)[ \t:]*([^-|•*\n\r]+)/i, "Role");
-    extract(/(?:joining(?: date)?)[ \t:]*([^-|•*\n\r]+)/i, "Joining");
+    extract(/\b(?:stipend|compensation)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Stipend");
+    extract(/\b(?:ctc|package|salary)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "CTC");
+    extract(/\b(?:duration|period)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Duration");
+    extract(/\b(?:location|job location|venue)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Location");
+    extract(/\b(?:deadline|last date(?: to apply| for registration)?|register before)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:role|designation|position)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Role");
+    extract(/\b(?:joining(?: date)?)\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Joining");
   }
 
   // Deduplicate by label (just in case) and return top 5
@@ -1816,17 +1953,20 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   // Keep generateTitle for the title field only (not subtitle)
   const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, "", sourceBody);
 
-  // ── Step 6: role field (DB required: true) ──────────────────────────────────
-  // For job emails: the classification or "Unknown Role" (never the subtitle).
+  // ── Step 6: role field (DB required) ──────────────────────────────────
+  // Derived from displayFields first (LLM-extracted), then regex fallback.
   // For event emails: "Event" as a neutral placeholder.
   const isJobEmail = emailType === "job";
-  const fallbackRole = extractFallbackRole(sourceSubject, sourceBody);
+  const displayFieldsRole = (gemini?.displayFields || []).find(f =>
+    /^(role|roles|position|designation)$/i.test(f?.label)
+  )?.value || "";
+  const fallbackRole = displayFieldsRole || extractFallbackRole(sourceSubject, sourceBody);
   const roleField = isJobEmail ? (fallbackRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
 
   // ── Step 7: displayFields — flexible [{label,value}] from Gemini ─────────────
   let displayFields = gemini?.displayFields || [];
   if (displayFields.length === 0) {
-    displayFields = extractFallbackDisplayFields(fullBodyText || rawText || "", detClassification.opportunityType);
+    displayFields = extractFallbackDisplayFields(sourceBody, detClassification.opportunityType);
   }
 
   // Sanitize and validate all display fields
@@ -1922,7 +2062,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     },
   } : undefined;
 
-  // // â”€â”€ Step 9: Build parsed output â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // // ── Step 9: Build parsed output ──────────────────────────────────────────
   const parsed = {
     // Core
     emailType,
@@ -1932,9 +2072,12 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     type:           finalType,
     status:         finalStatus,
     confidenceScore: Math.min(1, detClassification.confidence + (resolvedCompany ? 0.05 : 0)),
+    timelineTitle:   gemini?.timelineTitle   || "",
+    timelineSummary: gemini?.timelineSummary || "",
 
     // Identity
     company:  resolvedCompany,
+    domain:   gemini?.domain || "",
     subtitle,
     role:     roleField,  // DB required field — actual role placeholder
     title:    subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
@@ -1944,19 +2087,30 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     // ── NEW: flexible display fields from Gemini ─────────────────────────
     // This is the primary source of card details for new records.
     displayFields,
+    skills: gemini?.skills || [],
 
-    // ————————————————— LEGACY: empty for new records — legacy records keep their own values
-    // in MongoDB and the frontend falls back to them automatically.
-    fieldsToDisplay: [],
-    programRoles:    "",
-    programStipend:  "",
-    programDuration: "",
-    deadlineText:    "",
-    deadline:        deadlineField?.value || "",
-    deadlineISO:     resolvedDeadlineISO,
-    venue:           "",
-    durationText:    "",
-    salaryText:      "",
+    // ────────────────── LEGACY: derived from displayFields (single source of truth).
+    // These fields are kept for backward compatibility, search, calendar, and indexing.
+    // They mirror displayFields so all consumers see consistent data.
+    ...(() => {
+      const derived = deriveFromDisplayFields(displayFields);
+      const resolvedEventDate = resolveEventDateISO(derived.eventDateText, derived.eventTime, referenceDate);
+      return {
+        fieldsToDisplay: [],
+        programRoles:    derived.programRoles,
+        programStipend:  derived.programStipend,
+        programDuration: derived.programDuration,
+        deadlineText:    derived.deadlineText,
+        deadline:        deadlineField?.value || derived.deadlineText || "",
+        deadlineISO:     resolvedDeadlineISO,
+        venue:           derived.venue,
+        durationText:    derived.programDuration,
+        salaryText:      derived.salaryText,
+        eventDate:       resolvedEventDate,
+        eventTime:       derived.eventTime,
+        reportingTime:   derived.eventTime,
+      };
+    })(),
 
     // Links (still from deterministic link extractor)
     link:       linkInfo.primary || gemini?.link || "",
@@ -1965,9 +2119,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
 
     // Legacy slots kept for schema compatibility
     jobRole:       "",
-    eventDate:     null,
-    eventTime:     "",
-    reportingTime: "",
 
     // Parse metadata
     parseMeta: {

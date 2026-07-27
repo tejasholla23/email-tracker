@@ -6,9 +6,10 @@ const CompanyInfo = require("../models/CompanyInfo");
  * If not found, generates a domain/logo deterministically and saves it.
  * 
  * @param {string} companyName - Name of the company to look up
+ * @param {string} parsedDomain - Domain hint from LLM parser
  * @returns {Promise<object|null>} - Company info object or null
  */
-async function getCompanyInfo(companyName) {
+async function getCompanyInfo(companyName, parsedDomain = "") {
   if (!companyName) return null;
 
   const normalizedName = companyName.trim();
@@ -20,12 +21,18 @@ async function getCompanyInfo(companyName) {
       return cachedInfo;
     }
 
-    // Generate deterministic fallback URLs
+    // Resolve domain: use parsedDomain from LLM if available, otherwise fall back to deterministic guess
     const lowerName = normalizedName.toLowerCase();
-    let domain = `${lowerName.replace(/[^a-z0-9]/g, "")}.com`;
-    
-    if (lowerName === "eightfold" || lowerName === "eightfold ai") {
-      domain = "eightfold.ai";
+    let domain = parsedDomain ? parsedDomain.replace(/[^a-z0-9.-]/gi, "").toLowerCase() : "";
+
+    if (!domain) {
+      domain = `${lowerName.replace(/[^a-z0-9]/g, "")}.com`;
+      
+      if (lowerName === "eightfold" || lowerName === "eightfold ai") {
+        domain = "eightfold.ai";
+      } else if (lowerName === "atos" || lowerName === "atos ai" || lowerName === "atos syntel" || lowerName === "atos evidian") {
+        domain = "atos.net";
+      }
     }
 
     const clearbitUrl = `https://logo.clearbit.com/${domain}`;
@@ -39,23 +46,32 @@ async function getCompanyInfo(companyName) {
     const fallbackColor = "00000".substring(0, 6 - c.length) + c;
     const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(str)}&background=${fallbackColor}&color=fff&size=128&bold=true`;
 
+    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=https://${domain}&sz=128`;
+
     let finalLogo = uiAvatarUrl;
 
-    try {
-      // 1. Attempt Clearbit
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const clearbitRes = await fetch(clearbitUrl, { method: 'HEAD', signal: controller.signal });
-      clearTimeout(timeout);
-      
-      if (clearbitRes.ok) {
-        finalLogo = clearbitUrl;
-      } else {
-        throw new Error('Clearbit failed or 404');
+    async function checkUrl(url) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(url, { method: "HEAD", signal: controller.signal });
+        clearTimeout(timeout);
+        return res.ok;
+      } catch (e) {
+        return false;
       }
-    } catch (clearbitErr) {
-      // 2. Fall back to Google Favicon (high-quality icon for active domains)
-      finalLogo = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    }
+
+    const clearbitOk = await checkUrl(clearbitUrl);
+    if (clearbitOk) {
+      finalLogo = clearbitUrl;
+    } else {
+      const googleFaviconOk = await checkUrl(googleFaviconUrl);
+      if (googleFaviconOk) {
+        finalLogo = googleFaviconUrl;
+      } else {
+        finalLogo = uiAvatarUrl;
+      }
     }
 
     const newCompanyInfo = await CompanyInfo.create({

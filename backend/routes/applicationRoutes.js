@@ -1,27 +1,24 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Application = require("../models/Application");
 const CompanyInfo = require("../models/CompanyInfo");
 const Account = require("../models/Account");
+const { processCalendarSyncQueue } = require("../utils/calendarService");
 
 const router = express.Router();
 
-const ALLOWED_EMAIL = "1ms23ci126@msrit.edu";
+const config = require("../config/appConfig");
 
-const authCheck = (req, res, next) => {
-  const email = req.headers["x-user-email"];
-  if (email !== ALLOWED_EMAIL) {
-    return res.status(401).json({ message: "Unauthorized. Please log in as the administrator." });
-  }
-  next();
-};
+const authenticate = require("../middleware/authenticate");
+const { writeLimiter, readLimiter } = require("../middleware/rateLimiters");
 
 // Protect all routes below
-router.use(authCheck);
+router.use(authenticate);
 
 // GET /applications/sync-status - return Google sync status
-router.get("/sync-status", async (req, res) => {
+router.get("/sync-status", readLimiter, async (req, res) => {
   try {
-    const email = req.headers["x-user-email"];
+    const email = req.userEmail;
     const account = await Account.findOne({ email });
     if (!account) {
       return res.status(404).json({ message: "Account not found" });
@@ -38,10 +35,16 @@ router.get("/sync-status", async (req, res) => {
 });
 
 // GET /applications - return all applications with company info
-router.get("/", async (req, res) => {
+router.get("/", readLimiter, async (req, res) => {
   try {
     const applications = await Application.aggregate([
-      { $match: { isDeleted: { $ne: true }, status: { $nin: ["pending", "failed_retryable"] } } },
+      { 
+        $match: { 
+          userId: new mongoose.Types.ObjectId(req.userId),
+          isDeleted: { $ne: true }, 
+          status: { $nin: ["pending", "failed_retryable"] } 
+        } 
+      },
       { $sort: { date: -1 } },
       {
         $lookup: {
@@ -70,22 +73,32 @@ router.get("/", async (req, res) => {
 });
 
 // POST /applications - add a new application
-router.post("/", async (req, res) => {
+router.post("/", writeLimiter, async (req, res) => {
   try {
-    // Remove companyInfo from body if passed manually (should be fetched/generated during sync)
-    const { companyInfo, ...appData } = req.body;
-    const newApplication = await Application.create(appData);
+    const { companyInfo, userId, ...appData } = req.body;
+    const newApplication = await Application.create({
+      ...appData,
+      userId: req.userId,
+      needsCalendarSync: true
+    });
+
     res.status(201).json(newApplication);
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(400).json({ message: "Failed to create application" });
   }
 });
 
 // PATCH /applications/:id - update application status and/or note
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", writeLimiter, async (req, res) => {
   try {
     const { status, note, manualEdits } = req.body;
-    const update = {};
+    const update = { needsCalendarSync: true };
     if (status !== undefined) update.status = status;
     if (note  !== undefined) update.note   = note;
 
@@ -103,10 +116,10 @@ router.patch("/:id", async (req, res) => {
       }
     }
 
-    const updatedApplication = await Application.findByIdAndUpdate(
-      req.params.id,
+    const updatedApplication = await Application.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       update,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!updatedApplication) {
@@ -114,37 +127,62 @@ router.patch("/:id", async (req, res) => {
     }
 
     res.json(updatedApplication);
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(400).json({ message: "Failed to update application" });
   }
 });
 
 // DELETE /applications/clear - delete all applications
-router.delete("/clear", async (req, res) => {
+router.delete("/clear", writeLimiter, async (req, res) => {
   try {
-    await Application.deleteMany({});
-    res.json({ message: "All applications permanently cleared" });
+    // Soft-delete and queue all for sync so Google Calendar is cleaned up
+    await Application.updateMany(
+      { userId: req.userId, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, needsCalendarSync: true } }
+    );
+
+    res.json({ message: "All applications marked for sync and clearance" });
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(500).json({ message: "Failed to clear applications" });
   }
 });
 
 // DELETE /applications/:id - soft-delete a single application
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", writeLimiter, async (req, res) => {
   try {
-    const deleted = await Application.findByIdAndUpdate(
-      req.params.id,
-      { isDeleted: true },
-      { new: true }
+    const deleted = await Application.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      { isDeleted: true, needsCalendarSync: true },
+      { returnDocument: 'after' }
     );
     if (!deleted) {
       return res.status(404).json({ message: "Application not found" });
     }
     res.json({ message: "Application removed from dashboard" });
+
+    // Sync in background
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error:", err.message));
+
   } catch (error) {
     res.status(500).json({ message: "Failed to delete application" });
   }
 });
+
+
 
 module.exports = router;
 
