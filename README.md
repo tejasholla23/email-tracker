@@ -32,8 +32,6 @@ Email Tracker is a multi-user web application that automatically organizes place
 
 ![Email Tracker Dashboard](./docs/dashboard-preview.png)
 
-*Figure 1: Email Tracker Applications Overview Dashboard featuring application cards, metrics widgets, status filters, search, and communication timelines.*
-
 ---
 
 ## Features

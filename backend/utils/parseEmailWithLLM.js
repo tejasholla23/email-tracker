@@ -1,7 +1,7 @@
 const { OpenAI } = require("openai");
 
 const nvidiaClient = new OpenAI({
-  apiKey: process.env.NVIDIA_API_KEY,
+  apiKey: process.env.NVIDIA_API_KEY || "dummy_key",
   baseURL: "https://integrate.api.nvidia.com/v1",
 });
 
@@ -141,7 +141,14 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
 
 function resolveEventDateISO(dateText, timeText, referenceDate = new Date()) {
   if (!dateText || typeof dateText !== "string") return null;
-  const parsedDate = parseDateString(dateText, referenceDate);
+
+  let dateToParse = dateText.trim();
+  if (/\s+(?:to|-|–|until)\s+/i.test(dateToParse)) {
+    const parts = dateToParse.split(/\s+(?:to|-|–|until)\s+/i);
+    if (parts[0]) dateToParse = parts[0].trim();
+  }
+
+  const parsedDate = parseDateString(dateToParse, referenceDate);
   if (!parsedDate) return null;
 
   let hours = 12, minutes = 0;
@@ -169,11 +176,19 @@ function resolveEventDateISO(dateText, timeText, referenceDate = new Date()) {
 
 function deriveFromDisplayFields(displayFields = []) {
   const get = (...labels) => {
+    // 1. Try exact or optional plural match: e.g. "Event Date" or "Event Dates"
     for (const label of labels) {
-      const f = displayFields.find(f =>
-        new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i').test(f.label)
+      const fExact = displayFields.find(f =>
+        f?.label && new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?$`, 'i').test(f.label)
       );
-      if (f?.value) return f.value;
+      if (fExact?.value) return fExact.value;
+    }
+    // 2. Fallback to flexible substring match
+    for (const label of labels) {
+      const fSub = displayFields.find(f =>
+        f?.label && f.label.toLowerCase().includes(label.toLowerCase())
+      );
+      if (fSub?.value) return fSub.value;
     }
     return "";
   };
@@ -185,7 +200,7 @@ function deriveFromDisplayFields(displayFields = []) {
     venue:           get("Location", "Venue"),
     deadlineText:    get("Deadline", "Last Date", "Due Date", "Closing Date"),
     programRoles:    get("Role", "Roles"),
-    eventDateText:   get("Date", "Event Date", "Interview Date", "Presentation Date", "PPT Date", "Talk Date"),
+    eventDateText:   get("Event Date", "Event Dates", "Dates", "Date", "Interview Date", "Presentation Date", "PPT Date", "Talk Date"),
     eventTime:       get("Time", "Event Time", "Reporting Time", "Schedule Time", "PPT Time"),
   };
 }
@@ -195,10 +210,10 @@ function deriveFromDisplayFields(displayFields = []) {
  * Used ONLY when more than 5 valid fields are returned (to select top 5).
  */
 const FIELD_PRIORITY = {
-  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "duration", "location", "joining"],
-  HACKATHON: ["registration deadline", "deadline", "last date", "due date", "closing date", "prize", "prize pool", "team size", "mode", "organizer", "timeline"],
-  WEBINAR: ["date", "time", "speaker", "topic"],
-  OTHER_PLACEMENT_EVENT: ["date", "time", "organizer", "mode"],
+  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "duration", "location", "joining", "registration link"],
+  HACKATHON: ["registration deadline", "deadline", "last date", "due date", "closing date", "prize", "prize pool", "team size", "mode", "organizer", "timeline", "registration link"],
+  WEBINAR: ["event title", "title", "speaker/company", "speaker", "organizer", "date", "event dates", "dates", "time", "topic", "session topics", "registration link", "certificate"],
+  OTHER_PLACEMENT_EVENT: ["event title", "title", "date", "event dates", "dates", "time", "organizer", "mode", "registration link"],
 };
 
 /**
@@ -665,21 +680,30 @@ function sanitizeCompany(raw = "") {
   const wordCount = trimmed.split(/\s+/).length;
   if (wordCount > 5) return null;
 
-  const invalid = ["", "unknown", "n/a", "na", "none", "company", "team", "the company", "our company", "hiring team", "mandatory", "invitation", "eligibility criteria", "design", "registration", "assessment", "interview", "reminder", "opportunity", "deadline", "hiring process", "campus recruitment", "placement drive", "aptitude test", "roadshow", "sep roadshow", "lpa registration", "guidelines", "instructions"];
+  const invalid = [
+    "", "unknown", "n/a", "na", "none", "company", "team", "the company", 
+    "our company", "hiring team", "mandatory", "invitation", "eligibility criteria", 
+    "design", "registration", "assessment", "interview", "reminder", "opportunity", 
+    "deadline", "hiring process", "campus recruitment", "placement drive", 
+    "aptitude test", "roadshow", "sep roadshow", "lpa registration", "guidelines", 
+    "instructions", "hiring", "placement", "recruitment", "drive"
+  ];
   const rejectIfContains = [
     "your institution", "your college", "your university", "your institute",
     "register", "registration", "apply by", "application", "last date",
     "subject", "dear sir", "dear madam", "please find", "please register",
     "inbox", "forwarded message", "authorised signatory",
-    "dear students", "kindly", "venue", "today", "tomorrow", "assessment",
-    "online test", "placement", "recruitment", "opportunity", "hiring",
-    "drive"
+    "dear students", "kindly", "venue", "today", "tomorrow", "placement drive",
+    "campus recruitment"
   ];
   if (invalid.includes(lower)) return null;
   if (rejectIfContains.some((term) => lower.includes(term))) return null;
   if (/\b(your|our|this|the)\s+(institution|college|university|institute)\b/.test(lower)) return null;
 
-  if (/[.!?][\sA-Za-z]/.test(trimmed)) return null;
+  // Reject sentence boundaries (exclamation/question mark or period followed by whitespace and a capital word)
+  // Preserve domain names (POD.ai, unstop.com, etc.) and company abbreviations (Stellantis N.V.)
+  if (/[!?]\s+[A-Z]/.test(trimmed)) return null;
+  if (/\.\s+[A-Z][a-z]{3,}/.test(trimmed)) return null;
 
   return trimmed;
 }
@@ -1675,23 +1699,21 @@ Body: ${truncatedBody}`;
         return { status: "content_error" };
       }
 
-      console.log("[NVIDIA_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
-      console.log("RAW_DISPLAY_FIELDS", rawParsed.displayFields);
+      console.log("[LLM_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
       
       const validated = validateGeminiResponse(rawParsed);
 
       if (!validated) {
-        console.warn("[NVIDIA_STRUCTURED] Response failed schema validation, discarding.");
+        console.warn("[LLM_STRUCTURED] Response failed schema validation, discarding.");
         return { status: "content_error" };
       }
 
-      console.log("VALIDATED_DISPLAY_FIELDS", validated.displayFields);
-      console.log(`[NVIDIA_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+      console.log(`[LLM_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
       
       // Preserve geminiUsed key so we don't break existing UI checks for LLM parsing success
       validated.parseMeta = {
         geminiUsed: true,
-        nvidiaUsed: true,
+        llmUsed: true,
         model: MODEL_NAME
       };
 
@@ -1864,7 +1886,35 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     company = detCompanyObj.company; companySource = detCompanyObj.source; companyConfidence = detCompanyObj.confidence;
   }
 
-  const resolvedCompany = company ? (sanitizeCompany(company) || "") : "";
+  let resolvedCompany = company ? (sanitizeCompany(company) || "") : "";
+
+  // Event & Non-job fallback for missing company:
+  if (!resolvedCompany && (gemini?.emailType === "event" || detClassification.category === "workshopWebinar" || detClassification.category === "hackathonEvent")) {
+    if (gemini?.domain && sanitizeCompany(gemini.domain)) {
+      resolvedCompany = sanitizeCompany(gemini.domain);
+      companySource = "domain_fallback";
+      companyConfidence = 0.70;
+    } else {
+      // Check displayFields for organizer/speaker/host
+      const hostField = (gemini?.displayFields || []).find(f =>
+        /^(speaker\/company|organizer|host|speaker|company|presenter)$/i.test(f?.label)
+      )?.value;
+      if (hostField && sanitizeCompany(hostField)) {
+        resolvedCompany = sanitizeCompany(hostField);
+        companySource = "host_field";
+        companyConfidence = 0.70;
+      } else if (gemini?.subtitle && sanitizeCompany(gemini.subtitle)) {
+        // Try extracting organizer from subtitle (e.g. "POD Expert Talk Series..." -> "POD")
+        const firstWord = gemini.subtitle.split(/\s+/)[0];
+        if (firstWord && sanitizeCompany(firstWord) && firstWord.length > 2) {
+          resolvedCompany = sanitizeCompany(firstWord);
+          companySource = "subtitle_prefix";
+          companyConfidence = 0.60;
+        }
+      }
+    }
+  }
+
   if (!resolvedCompany) { companySource = "none"; companyConfidence = 0; }
 
   // â”€â”€ // ── Step 4: Classification arbitration (relative confidence) ──────────────
@@ -2142,7 +2192,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   console.log(
     `[PARSER_SUMMARY] Company: ${parsed.company || "None"} (via ${companySource}) | emailType: ${emailType} | Classification: ${parsed.classification} | subtitle: "${parsed.subtitle}" | displayFields: ${parsed.displayFields.length} fields`
   );
-  console.log("PARSED_DISPLAY_FIELDS", parsed.displayFields);
 
   if (isDev && parseTrace) {
     console.log("[PARSER_TRACE]", JSON.stringify(parseTrace, null, 2));

@@ -71,6 +71,18 @@ function extractHtml(payload) {
     html = html.replace(/<br\s*\/?>/gi, "\n");
     html = html.replace(/<\/(p|div|tr|li|h[1-6]|thead|tbody|tfoot)>/gi, "\n");
     html = html.replace(/<(p|div|tr|li|h[1-6]|thead|tbody|tfoot)[^>]*>/gi, "\n");
+
+    // 3b. Preserve hyperlinks: convert <a href="URL">Anchor Text</a> to Anchor Text (URL)
+    html = html.replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, (match, href, text) => {
+      const cleanText = text.replace(/<[^>]*>/g, "").trim();
+      if (!href || href.startsWith("javascript:") || href.startsWith("#")) {
+        return cleanText;
+      }
+      if (cleanText && cleanText.toLowerCase() !== href.toLowerCase()) {
+        return `${cleanText} (${href})`;
+      }
+      return href;
+    });
     
     // 4. Strip remaining HTML tags
     html = html.replace(/<[^>]*>/g, " ");
@@ -1064,6 +1076,12 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         parsed.parseMeta.internetMessageId = internetMessageId;
       }
       console.log(`[PARSE_RESULT] ${id}`, parsed);
+    }
+
+    // Safety check for events/webinars/talks: fallback company if missing
+    if (parsed && parsed.isRelevant && !parsed.company && (parsed.emailType === "event" || parsed.opportunityType !== "JOB_APPLICATION")) {
+      parsed.company = parsed.domain ? (parsed.domain.charAt(0).toUpperCase() + parsed.domain.slice(1)) : "Campus Event";
+      console.log(`[COMPANY_EVENT_FALLBACK] Assigned fallback company "${parsed.company}" for event email ${id}`);
     }
     
     if (!parsed || !parsed.isRelevant || !parsed.company) {
