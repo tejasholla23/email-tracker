@@ -83,10 +83,6 @@ const applicationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Account"
     },
-    displayOrder: {
-      type: Number,
-      default: null,
-    },
   },
   { timestamps: true }
 );
@@ -99,8 +95,5 @@ applicationSchema.index({ userId: 1, companyKey: 1, isDeleted: 1 });
 
 // Compound index for primary dashboard query: Application.find({ isDeleted: false }).sort({ date: -1 })
 applicationSchema.index({ userId: 1, isDeleted: 1, date: -1 });
-
-// Index for custom drag and drop ordering
-applicationSchema.index({ userId: 1, isDeleted: 1, displayOrder: 1 });
 
 module.exports = mongoose.model("Application", applicationSchema);
