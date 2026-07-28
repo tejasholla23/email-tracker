@@ -1226,6 +1226,26 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
     const parserVer = shouldRetry ? "v1" : CURRENT_PARSER_VERSION;
 
+    // Check if manual ordering exists (at least one non-null displayOrder for this user)
+    const hasCustomOrder = await Application.exists({
+      userId: acc._id,
+      isDeleted: { $ne: true },
+      status: { $nin: ["pending", "failed_retryable"] },
+      displayOrder: { $ne: null }
+    });
+
+    let newDisplayOrder = null;
+    if (hasCustomOrder) {
+      const minApp = await Application.findOne({
+        userId: acc._id,
+        isDeleted: { $ne: true },
+        status: { $nin: ["pending", "failed_retryable"] }
+      }).sort({ displayOrder: 1 }).select("displayOrder").lean();
+      
+      const minOrder = minApp && typeof minApp.displayOrder === 'number' ? minApp.displayOrder : 0;
+      newDisplayOrder = minOrder - 1;
+    }
+
     const newApp = new Application({
       userId: acc._id,
       company: parsed.company,
@@ -1276,6 +1296,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       email: acc.email,
       date: new Date(parseInt(email.data.internalDate)),
       parserVersion: parserVer,
+      displayOrder: newDisplayOrder,
     });
 
     await newApp.save();

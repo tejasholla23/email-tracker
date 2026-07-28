@@ -3,6 +3,23 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 let activeRefreshPromise = null;
 
 import React, { useEffect, useState } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 export default function JobTrackerDashboard() {
   const [applications, setApplications] = useState([]);
@@ -12,6 +29,97 @@ export default function JobTrackerDashboard() {
   const [syncStatus, setSyncStatus] = useState("success");
   const [syncError, setSyncError] = useState(null);
   const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resettingOrder, setResettingOrder] = useState(false);
+
+  const customOrderEnabled = applications.length > 0 && applications.some(app => app.displayOrder !== null && app.displayOrder !== undefined);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 6,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 180,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  };
+
+  const handleResetOrder = async () => {
+    setResettingOrder(true);
+    try {
+      const response = await apiFetch(`${BASE_URL}/applications/reset-order`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        setShowResetModal(false);
+        showToast("✓ Dashboard order reset to default");
+        await fetchApplications();
+      } else {
+        console.error("Failed to reset order");
+      }
+    } catch (err) {
+      console.error("Error resetting order:", err);
+    } finally {
+      setResettingOrder(false);
+    }
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = applications.findIndex((app) => app._id === active.id);
+    const newIndex = applications.findIndex((app) => app._id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reorderedApps = arrayMove(applications, oldIndex, newIndex);
+
+      const updatedApps = reorderedApps.map((app, index) => ({
+        ...app,
+        displayOrder: index,
+      }));
+
+      setApplications(updatedApps);
+
+      try {
+        const payload = updatedApps.map((app) => ({
+          id: app._id,
+          displayOrder: app.displayOrder,
+        }));
+
+        const response = await apiFetch(`${BASE_URL}/applications/reorder`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          showToast("✓ Dashboard order saved");
+        } else {
+          console.error("Failed to save reorder");
+          await fetchApplicationsSilent();
+        }
+      } catch (err) {
+        console.error("Error saving reorder:", err);
+        await fetchApplicationsSilent();
+      }
+    }
+  };
 
   // Add Application Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -3397,31 +3505,56 @@ export default function JobTrackerDashboard() {
                   </div>
                 </div>
 
-                <div className="dashboard-filters-row">
-                  {[
-                    { label: "New Emails", value: "new" },
-                    { label: "Deadline today", value: "deadlines" },
-                    { label: "Applied", value: "applied" },
-                    { label: "Marked Done", value: "done" },
-                    { label: "Unmarked", value: "unmarked" }
-                  ].map(({ label, value }) => {
-                    const isActive = activeFilter === value;
-                    return (
-                      <button
-                        key={value}
-                        className={`filter-tab ${isActive ? "active" : ""}`}
-                        onClick={() => {
-                          if (isActive) {
-                            setActiveFilter("all");
-                          } else {
-                            setActiveFilter(value);
-                          }
-                        }}
-                      >
-                        <span className="filter-tab-text">{label}</span>
-                      </button>
-                    );
-                  })}
+                <div className="dashboard-filters-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {[
+                      { label: "New Emails", value: "new" },
+                      { label: "Deadline today", value: "deadlines" },
+                      { label: "Applied", value: "applied" },
+                      { label: "Marked Done", value: "done" },
+                      { label: "Unmarked", value: "unmarked" }
+                    ].map(({ label, value }) => {
+                      const isActive = activeFilter === value;
+                      return (
+                        <button
+                          key={value}
+                          className={`filter-tab ${isActive ? "active" : ""}`}
+                          onClick={() => {
+                            if (isActive) {
+                              setActiveFilter("all");
+                            } else {
+                              setActiveFilter(value);
+                            }
+                          }}
+                        >
+                          <span className="filter-tab-text">{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {customOrderEnabled && (
+                    <button
+                      className="btn-reset-order"
+                      onClick={() => setShowResetModal(true)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#f87171',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                      Reset Order
+                    </button>
+                  )}
                 </div>
 
 
@@ -3458,6 +3591,11 @@ export default function JobTrackerDashboard() {
                       return matchesSearch && matchesFilter;
                     })
                     .sort((a, b) => {
+                      if (customOrderEnabled) {
+                        const orderA = (a.displayOrder !== null && a.displayOrder !== undefined) ? a.displayOrder : Infinity;
+                        const orderB = (b.displayOrder !== null && b.displayOrder !== undefined) ? b.displayOrder : Infinity;
+                        if (orderA !== orderB) return orderA - orderB;
+                      }
                       const dateA = new Date(a.date || a.createdAt || 0);
                       const dateB = new Date(b.date || b.createdAt || 0);
                       return dateB - dateA;
@@ -3471,239 +3609,64 @@ export default function JobTrackerDashboard() {
                     <>
                       {filteredApps.length > 0 ? (
                         <>
-                          <div className="app-grid">
-                            {paginatedApps.map((app) => {
-                              const dateToShow = app.date || app.createdAt;
-                              const formattedDate = dateToShow
-                                ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                                : "N/A";
-                              const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                              const statusKey = app.derivedStatus;
-                              const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied";
-                              const isDone = statusKey === "done";
+                          <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                          >
+                            <SortableContext
+                              items={paginatedApps.map((app) => app._id)}
+                              strategy={rectSortingStrategy}
+                            >
+                              <div className="app-grid">
+                                {paginatedApps.map((app) => {
+                                  const dateToShow = app.date || app.createdAt;
+                                  const formattedDate = dateToShow
+                                    ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                                    : "N/A";
+                                  const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
+                                  const statusKey = app.derivedStatus;
+                                  const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied";
+                                  const isDone = statusKey === "done";
 
-                              const getDeterministicColor = (str) => {
-                                let hash = 0;
-                                for (let i = 0; i < str.length; i++) {
-                                  hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                                }
-                                const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-                                return "00000".substring(0, 6 - c.length) + c;
-                              };
-                              const fallbackColor = getDeterministicColor(app.company || "Unknown");
-                              const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
-
-                              return (
-                                <div
-                                  key={app._id}
-                                  className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
-                                  style={{ cursor: "pointer" }}
-                                  onClick={(e) => {
-                                    if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
-                                    setSelectedApp(app);
-                                    setShowInfoModal(true);
-                                  }}
-                                >
-                                  <div className="app-header">
-                                    <div className="app-info">
-                                      <div className="company-logo-container">
-                                        {app.companyInfo?.logo || app.companyInfo?.domain ? (
-                                          <img
-                                            src={app.companyInfo?.logo || uiAvatarUrl}
-                                            alt={app.company}
-                                            className="company-logo-img"
-                                            onError={(e) => {
-                                              const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
-                                              const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-                                              if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
-                                                e.target.src = googleFallback;
-                                              } else if (!e.target.src.includes('ui-avatars.com')) {
-                                                e.target.src = uiAvatarUrl;
-                                              } else {
-                                                e.target.onerror = null;
-                                                e.target.style.display = 'none';
-                                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                              }
-                                            }}
-                                          />
-                                        ) : null}
-                                        <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
-                                          {companyInitials}
-                                        </div>
-                                      </div>
-                                      <div className="role-company">
-                                        <div className="role-title">{app.company || "Unknown Company"}</div>
-                                        {(() => {
-                                          const sub = app.subtitle
-                                            || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
-                                          return sub ? <div className="company-name">{sub}</div> : null;
-                                        })()}
-                                      </div>
-                                    </div>
-                                    <div className="status-badge-container">
-                                      <span className={`status-badge status-${app.derivedStatus}`}>
-                                        {app.derivedStatus}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {(() => {
-                                    const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
-                                      ? app.displayFields.filter(f => f && f.label && f.value)
-                                      : null;
-
-                                    if (flexFields && flexFields.length > 0) {
-                                      return (
-                                        <div className="program-details">
-                                          {flexFields.map(({ label, value }) => (
-                                            <div key={label} className="program-detail">
-                                              <span className="program-detail-label">{label}</span>
-                                              <span className="program-detail-value">{value}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      );
+                                  const getDeterministicColor = (str) => {
+                                    let hash = 0;
+                                    for (let i = 0; i < str.length; i++) {
+                                      hash = str.charCodeAt(i) + ((hash << 5) - hash);
                                     }
+                                    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                                    return "00000".substring(0, 6 - c.length) + c;
+                                  };
+                                  const fallbackColor = getDeterministicColor(app.company || "Unknown");
+                                  const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
 
-                                    let legacyFields = app.fieldsToDisplay;
-                                    if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
-                                      legacyFields = [];
-                                      if (app.programRoles) legacyFields.push("role");
-                                      if (app.programStipend) legacyFields.push("stipend");
-                                      if (app.deadlineText) legacyFields.push("deadline");
-                                      if (app.programDuration) legacyFields.push("duration");
-                                      if (app.venue) legacyFields.push("venue");
-                                    }
-                                    if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
-
-                                    const FIELD_CONFIG = {
-                                      role: { label: "Roles", value: app.programRoles },
-                                      stipend: { label: "Stipend", value: app.programStipend },
-                                      deadline: { label: "Deadline", value: app.deadlineText },
-                                      duration: { label: "Duration", value: app.programDuration },
-                                      venue: { label: "Venue", value: app.venue },
-                                      eventName: { label: "Event", value: app.subtitle },
-                                    };
-                                    const rows = legacyFields
-                                      .map(f => FIELD_CONFIG[f])
-                                      .filter(r => r && r.value && r.value.trim().length > 0);
-                                    if (rows.length === 0) return null;
-                                    return (
-                                      <div className="program-details">
-                                        {rows.map(({ label, value }) => (
-                                          <div key={label} className="program-detail">
-                                            <span className="program-detail-label">{label}</span>
-                                            <span className="program-detail-value">{value}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    );
-                                  })()}
-
-                                  {app.deadline && !app.deadlineText &&
-                                    (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) &&
-                                    (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
-                                      <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
-                                        ? 'urgent' : ''
-                                        }`}>
-                                        Deadline: {app.deadline}
-                                      </div>
-                                    )}
-
-                                  <div className="app-footer">
-                                    <div className="email-info">
-                                      <span style={{ fontSize: 16 }}>✉️</span>
-                                      <span>{app.email || "user@gmail.com"}</span>
-                                    </div>
-                                    <span>{formattedDate}</span>
-                                  </div>
-
-                                  <div className="note-container">
-                                    <textarea
-                                      className="note-input"
-                                      placeholder="Add a personal note..."
-                                      value={app.note || ""}
-                                      onChange={(e) => handleUpdateNote(app._id, e.target.value)}
-                                      onBlur={(e) => handleSaveNote(app._id, e.target.value)}
+                                  return (
+                                    <SortableAppCard
+                                      key={app._id}
+                                      app={app}
+                                      formattedDate={formattedDate}
+                                      companyInitials={companyInitials}
+                                      statusKey={statusKey}
+                                      isUrgent={isUrgent}
+                                      isDone={isDone}
+                                      uiAvatarUrl={uiAvatarUrl}
+                                      setSelectedApp={setSelectedApp}
+                                      setShowInfoModal={setShowInfoModal}
+                                      handleUpdateNote={handleUpdateNote}
+                                      handleSaveNote={handleSaveNote}
+                                      setEditingApp={setEditingApp}
+                                      setEditFormData={setEditFormData}
+                                      setShowEditModal={setShowEditModal}
+                                      handleApply={handleApply}
+                                      handleMarkDone={handleMarkDone}
+                                      handleUnmarkDone={handleUnmarkDone}
+                                      handleDeleteOne={handleDeleteOne}
                                     />
-                                    <div className="note-save-hint">Auto-saves on blur</div>
-                                  </div>
-
-                                  <div className="card-actions">
-                                    <button
-                                      className="card-btn card-btn-edit"
-                                      onClick={() => {
-                                        setEditingApp(app);
-
-                                        const getField = (label, dbField) => {
-                                          if (app.displayFields && app.displayFields.length > 0) {
-                                            const f = app.displayFields.find(df => df.label === label);
-                                            if (f) return f.value;
-                                          }
-                                          return dbField || "";
-                                        };
-
-                                        const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
-                                        const dynamicFields = [];
-                                        if (app.displayFields && app.displayFields.length > 0) {
-                                          app.displayFields.forEach(df => {
-                                            if (!standardLabels.includes(df.label)) {
-                                              dynamicFields.push({ label: df.label, value: df.value });
-                                            }
-                                          });
-                                        }
-
-                                        setEditFormData({
-                                          company: app.company || "",
-                                          subtitle: app.subtitle || "",
-                                          role: getField("Role", app.role),
-                                          stipend: getField("Stipend", app.programStipend),
-                                          ctc: getField("CTC", app.salaryText),
-                                          duration: getField("Duration", app.programDuration),
-                                          location: getField("Location", app.venue),
-                                          joining: getField("Joining", ""),
-                                          deadline: getField("Deadline", app.deadlineText),
-                                          date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
-                                          link: app.link || "",
-                                          dynamicFields: dynamicFields
-                                        });
-                                        setShowEditModal(true);
-                                      }}
-                                    >
-                                      Edit
-                                    </button>
-                                    {app.link && !isDone && (
-                                      <a
-                                        className="card-btn card-btn-apply"
-                                        href={app.link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => {
-                                          if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
-                                            handleApply(app._id);
-                                          }
-                                        }}
-                                      >
-                                        {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
-                                      </a>
-                                    )}
-                                    <button
-                                      className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
-                                      onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
-                                    >
-                                      {isDone ? "Unmark Done" : "Mark Done"}
-                                    </button>
-                                    <button
-                                      className="card-btn card-btn-remove"
-                                      onClick={() => handleDeleteOne(app._id)}
-                                    >
-                                      Remove
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                  );
+                                })}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
 
                           {totalPages > 1 && (
                             <div className="pagination-container">
@@ -4396,7 +4359,339 @@ export default function JobTrackerDashboard() {
           </div>
         </div>
       )}
+
+      {showResetModal && (
+        <div className="modal-overlay" onClick={() => setShowResetModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Reset Dashboard Order?</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: '1.5' }}>
+              Are you sure you want to remove your custom card arrangement and restore default chronological ordering (by latest email date)?
+            </p>
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setShowResetModal(false)}
+                disabled={resettingOrder}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-submit"
+                style={{ backgroundColor: '#ef4444' }}
+                onClick={handleResetOrder}
+                disabled={resettingOrder}
+              >
+                {resettingOrder ? "Resetting..." : "Reset Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastMessage && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            backgroundColor: "#10b981",
+            color: "#ffffff",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            fontWeight: "500",
+            fontSize: "14px",
+          }}
+        >
+          {toastMessage}
+        </div>
+      )}
     </>
+  );
+}
+
+function SortableAppCard({
+  app,
+  formattedDate,
+  companyInitials,
+  statusKey,
+  isUrgent,
+  isDone,
+  uiAvatarUrl,
+  setSelectedApp,
+  setShowInfoModal,
+  handleUpdateNote,
+  handleSaveNote,
+  setEditingApp,
+  setEditFormData,
+  setShowEditModal,
+  handleApply,
+  handleMarkDone,
+  handleUnmarkDone,
+  handleDeleteOne,
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: app._id });
+
+  const style = {
+    transform: transform
+      ? `${CSS.Transform.toString(transform)} scale(${isDragging ? 1.02 : 1})`
+      : undefined,
+    transition,
+    cursor: "pointer",
+    zIndex: isDragging ? 50 : 1,
+    opacity: isDragging ? 0.7 : 1,
+    boxShadow: isDragging ? "0 10px 25px rgba(0, 0, 0, 0.4)" : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
+      onClick={(e) => {
+        if (
+          e.target.closest('.card-btn') ||
+          e.target.closest('.note-input') ||
+          e.target.closest('a') ||
+          e.target.closest('button') ||
+          e.target.closest('.drag-handle')
+        ) return;
+        setSelectedApp(app);
+        setShowInfoModal(true);
+      }}
+    >
+      <div className="app-header">
+        <div className="app-info">
+          <div className="company-logo-container">
+            {app.companyInfo?.logo || app.companyInfo?.domain ? (
+              <img
+                src={app.companyInfo?.logo || uiAvatarUrl}
+                alt={app.company}
+                className="company-logo-img"
+                onError={(e) => {
+                  const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                  const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                  if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
+                    e.target.src = googleFallback;
+                  } else if (!e.target.src.includes('ui-avatars.com')) {
+                    e.target.src = uiAvatarUrl;
+                  } else {
+                    e.target.onerror = null;
+                    e.target.style.display = 'none';
+                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                  }
+                }}
+              />
+            ) : null}
+            <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
+              {companyInitials}
+            </div>
+          </div>
+          <div className="role-company">
+            <div className="role-title">{app.company || "Unknown Company"}</div>
+            {(() => {
+              const sub = app.subtitle
+                || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
+              return sub ? <div className="company-name">{sub}</div> : null;
+            })()}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="status-badge-container">
+            <span className={`status-badge status-${app.derivedStatus}`}>
+              {app.derivedStatus}
+            </span>
+          </div>
+          <div
+            className="drag-handle"
+            {...attributes}
+            {...listeners}
+            style={{
+              cursor: "grab",
+              padding: "4px 8px",
+              color: "#6b7280",
+              fontSize: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              userSelect: "none",
+              borderRadius: "4px",
+              transition: "background-color 0.2s"
+            }}
+            title="Drag to reorder card"
+          >
+            ⋮⋮
+          </div>
+        </div>
+      </div>
+
+      {(() => {
+        const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
+          ? app.displayFields.filter(f => f && f.label && f.value)
+          : null;
+
+        if (flexFields && flexFields.length > 0) {
+          return (
+            <div className="program-details">
+              {flexFields.map(({ label, value }) => (
+                <div key={label} className="program-detail">
+                  <span className="program-detail-label">{label}</span>
+                  <span className="program-detail-value">{value}</span>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        let legacyFields = app.fieldsToDisplay;
+        if ((!Array.isArray(legacyFields) || legacyFields.length === 0) && app.emailType !== "event" && app.emailType !== "nonRecruitment") {
+          legacyFields = [];
+          if (app.programRoles) legacyFields.push("role");
+          if (app.programStipend) legacyFields.push("stipend");
+          if (app.deadlineText) legacyFields.push("deadline");
+          if (app.programDuration) legacyFields.push("duration");
+          if (app.venue) legacyFields.push("venue");
+        }
+        if (!Array.isArray(legacyFields) || legacyFields.length === 0) return null;
+
+        const FIELD_CONFIG = {
+          role: { label: "Roles", value: app.programRoles },
+          stipend: { label: "Stipend", value: app.programStipend },
+          deadline: { label: "Deadline", value: app.deadlineText },
+          duration: { label: "Duration", value: app.programDuration },
+          venue: { label: "Venue", value: app.venue },
+          eventName: { label: "Event", value: app.subtitle },
+        };
+        const rows = legacyFields
+          .map(f => FIELD_CONFIG[f])
+          .filter(r => r && r.value && r.value.trim().length > 0);
+        if (rows.length === 0) return null;
+        return (
+          <div className="program-details">
+            {rows.map(({ label, value }) => (
+              <div key={label} className="program-detail">
+                <span className="program-detail-label">{label}</span>
+                <span className="program-detail-value">{value}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {app.deadline && !app.deadlineText &&
+        (!Array.isArray(app.fieldsToDisplay) || app.fieldsToDisplay.length === 0) &&
+        (!Array.isArray(app.displayFields) || app.displayFields.length === 0) && (
+          <div className={`deadline-badge ${app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString()
+            ? 'urgent' : ''
+            }`}>
+            Deadline: {app.deadline}
+          </div>
+        )}
+
+      <div className="app-footer">
+        <div className="email-info">
+          <span style={{ fontSize: 16 }}>✉️</span>
+          <span>{app.email || "user@gmail.com"}</span>
+        </div>
+        <span>{formattedDate}</span>
+      </div>
+
+      <div className="note-container">
+        <textarea
+          className="note-input"
+          placeholder="Add a personal note..."
+          value={app.note || ""}
+          onChange={(e) => handleUpdateNote(app._id, e.target.value)}
+          onBlur={(e) => handleSaveNote(app._id, e.target.value)}
+        />
+        <div className="note-save-hint">Auto-saves on blur</div>
+      </div>
+
+      <div className="card-actions">
+        <button
+          className="card-btn card-btn-edit"
+          onClick={() => {
+            setEditingApp(app);
+
+            const getField = (label, dbField) => {
+              if (app.displayFields && app.displayFields.length > 0) {
+                const f = app.displayFields.find(df => df.label === label);
+                if (f) return f.value;
+              }
+              return dbField || "";
+            };
+
+            const standardLabels = ["Stipend", "CTC", "Duration", "Location", "Joining", "Deadline", "Role"];
+            const dynamicFields = [];
+            if (app.displayFields && app.displayFields.length > 0) {
+              app.displayFields.forEach(df => {
+                if (!standardLabels.includes(df.label)) {
+                  dynamicFields.push({ label: df.label, value: df.value });
+                }
+              });
+            }
+
+            setEditFormData({
+              company: app.company || "",
+              subtitle: app.subtitle || "",
+              role: getField("Role", app.role),
+              stipend: getField("Stipend", app.programStipend),
+              ctc: getField("CTC", app.salaryText),
+              duration: getField("Duration", app.programDuration),
+              location: getField("Location", app.venue),
+              joining: getField("Joining", ""),
+              deadline: getField("Deadline", app.deadlineText),
+              date: app.date ? new Date(app.date).toISOString().substring(0, 10) : "",
+              link: app.link || "",
+              dynamicFields: dynamicFields
+            });
+            setShowEditModal(true);
+          }}
+        >
+          Edit
+        </button>
+        {app.link && !isDone && (
+          <a
+            className="card-btn card-btn-apply"
+            href={app.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
+                handleApply(app._id);
+              }
+            }}
+          >
+            {((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply" : "Open Link"}
+          </a>
+        )}
+        <button
+          className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
+          onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
+        >
+          {isDone ? "Unmark Done" : "Mark Done"}
+        </button>
+        <button
+          className="card-btn card-btn-remove"
+          onClick={() => handleDeleteOne(app._id)}
+        >
+          Remove
+        </button>
+      </div>
+    </div>
   );
 }
 

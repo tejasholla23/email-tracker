@@ -23,10 +23,20 @@ router.get("/sync-status", readLimiter, async (req, res) => {
     if (!account) {
       return res.status(404).json({ message: "Account not found" });
     }
+
+    // Check if any applications have custom order enabled
+    const hasCustomOrder = await Application.exists({
+      userId: req.userId,
+      isDeleted: { $ne: true },
+      status: { $nin: ["pending", "failed_retryable"] },
+      displayOrder: { $ne: null }
+    });
+
     res.json({
       syncStatus: account.syncStatus || "success",
       syncError: account.syncError || null,
       lastSyncTime: account.lastSyncTime || null,
+      customOrderEnabled: !!hasCustomOrder
     });
   } catch (error) {
     console.error("Fetch sync status error:", error.message);
@@ -37,6 +47,18 @@ router.get("/sync-status", readLimiter, async (req, res) => {
 // GET /applications - return all applications with company info
 router.get("/", readLimiter, async (req, res) => {
   try {
+    // Check if any applications have custom order enabled
+    const hasCustomOrder = await Application.exists({
+      userId: req.userId,
+      isDeleted: { $ne: true },
+      status: { $nin: ["pending", "failed_retryable"] },
+      displayOrder: { $ne: null }
+    });
+
+    const sortStage = hasCustomOrder
+      ? { $sort: { displayOrder: 1, date: -1 } }
+      : { $sort: { date: -1 } };
+
     const applications = await Application.aggregate([
       { 
         $match: { 
@@ -45,7 +67,7 @@ router.get("/", readLimiter, async (req, res) => {
           status: { $nin: ["pending", "failed_retryable"] } 
         } 
       },
-      { $sort: { date: -1 } },
+      sortStage,
       {
         $lookup: {
           from: "companyinfos", // MongoDB collection name for CompanyInfo model
@@ -182,7 +204,64 @@ router.delete("/:id", writeLimiter, async (req, res) => {
   }
 });
 
+// PUT /applications/reorder - reorder user applications inside a transaction
+router.put("/reorder", writeLimiter, async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    const items = req.body; // Array of { id, displayOrder }
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ message: "Request body must be an array" });
+    }
 
+    const applicationIds = items.map(item => item.id);
+
+    await session.withTransaction(async () => {
+      // 1. Verify user ownership of ALL specified applications
+      const count = await Application.countDocuments({
+        _id: { $in: applicationIds },
+        userId: req.userId
+      }).session(session);
+
+      if (count !== items.length) {
+        throw new Error("Unauthorized or invalid application IDs");
+      }
+
+      // Sort items by incoming displayOrder to normalize sequence to 0, 1, 2...
+      const sortedItems = [...items].sort((a, b) => a.displayOrder - b.displayOrder);
+
+      // 2. Perform updates sequentially
+      for (let i = 0; i < sortedItems.length; i++) {
+        const item = sortedItems[i];
+        await Application.updateOne(
+          { _id: item.id, userId: req.userId },
+          { $set: { displayOrder: i } }
+        ).session(session);
+      }
+    });
+
+    res.json({ success: true, message: "Dashboard order updated successfully" });
+  } catch (error) {
+    console.error("Reorder transaction failed:", error.message);
+    res.status(error.message === "Unauthorized or invalid application IDs" ? 403 : 500)
+       .json({ message: error.message || "Failed to update reorder" });
+  } finally {
+    session.endSession();
+  }
+});
+
+// POST /applications/reset-order - clear custom order
+router.post("/reset-order", writeLimiter, async (req, res) => {
+  try {
+    await Application.updateMany(
+      { userId: req.userId },
+      { $set: { displayOrder: null } }
+    );
+    res.json({ success: true, message: "Dashboard order reset to default" });
+  } catch (error) {
+    console.error("Reset order failed:", error.message);
+    res.status(500).json({ message: "Failed to reset order" });
+  }
+});
 
 module.exports = router;
 
