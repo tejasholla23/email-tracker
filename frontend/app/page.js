@@ -2981,7 +2981,7 @@ export default function JobTrackerDashboard() {
                           <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
                               <h4 style={{ margin: 0, fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span>📅</span>
+                                <span></span>
                                 <span>Destination Calendar</span>
                               </h4>
                               <span style={{
@@ -3090,7 +3090,7 @@ export default function JobTrackerDashboard() {
                         {calendarSyncEnabled && (
                           <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
                             <h4 style={{ marginTop: 0, marginBottom: '10px', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span>⚡</span>
+                              <span></span>
                               <span>Sync Diagnostics & Controls</span>
                             </h4>
                             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', marginBottom: '18px' }}>
@@ -3108,42 +3108,6 @@ export default function JobTrackerDashboard() {
                         )}
                       </div>
                     )}
-                </div>
-
-                <div className="settings-card" style={{ padding: '28px' }}>
-                  <h3 className="settings-title">Features</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '16px' }}>
-                    <div className="feature-panel">
-                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                      </span>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Event Types</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                        Deadlines sync as <b>All-Day Events</b>. Timed entries like online tests and interviews use customized slots (tests: 2h, interviews: 45m).
-                      </p>
-                    </div>
-
-                    <div className="feature-panel">
-                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                      </span>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Application Deadlines Reminders</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                        Deadline reminders are set automatically to alert you <b>1 day before</b> and <b>2 hours before</b> they expire to prevent missing forms.
-                      </p>
-                    </div>
-
-                    <div className="feature-panel">
-                      <span className="settings-title-icon" style={{ marginBottom: '12px' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                      </span>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: 'var(--text-primary)' }}>Contextual Deep Links</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                        Every calendar event includes quick links to jump directly to the application card in Email Tracker or the company's registration portal.
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </div>
             ) : activeFilter === "settings" ? (
               <div className="settings-container">
