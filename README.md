@@ -15,19 +15,6 @@ Email Tracker is a multi-user web application that automatically organizes place
 
 ---
 
-## Key Highlights
-
-- **Multi-user SaaS architecture**
-- **Google OAuth 2.0 authentication**
-- **Incremental Gmail History API synchronization**
-- **AI-powered email parsing with deterministic fallbacks**
-- **Automatic Google Calendar event creation**
-- **Real-time Web Push notifications**
-- **Timeline-based application tracking**
-- **Responsive dashboard built with Next.js**
-
----
-
 ## Screenshots
 
 ![Email Tracker Dashboard](./docs/dashboard-preview.png)
@@ -41,11 +28,11 @@ Email Tracker is a multi-user web application that automatically organizes place
 - **Reliable Fallbacks:** Uses pattern matching to ensure data extraction continues smoothly even if API limits are reached.
 - **Company Normalization:** Standardizes company names and displays matching logos automatically.
 
-### Multi-User Data Isolation
+### Multiuser Data Isolation
 - **OAuth Authentication:** Connects users via Google OAuth with minimal read-only Gmail and Calendar permissions.
 - **Per-User Isolation:** Ensures every user only sees their own emails, applications, and calendar events.
 
-### Google Calendar Integration
+### Google Calendar Events
 - **Deadline Synchronization:** Automatically adds and updates deadlines, interview schedules, online assessments, and talk sessions on the user's Google Calendar.
 - **Smart Change Detection:** Avoids duplicate calendar events and unnecessary API calls when updates occur.
 
