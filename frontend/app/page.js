@@ -3108,6 +3108,7 @@ export default function JobTrackerDashboard() {
                         )}
                       </div>
                     )}
+                </div>
               </div>
             ) : activeFilter === "settings" ? (
               <div className="settings-container">
