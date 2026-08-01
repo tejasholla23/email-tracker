@@ -2897,173 +2897,218 @@ export default function JobTrackerDashboard() {
 
                 <div className="settings-card" style={{ padding: '32px' }}>
                   <div style={{ marginBottom: '24px' }}>
-                    <h3 className="settings-title" style={{ margin: 0 }}>Sync Deadlines & Events</h3>
-                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                      Automatically add form deadlines, interviews, online assessments, etc directly to primary Google Calendar (@msrit.edu account).
-                    </p>
-                  </div>
-
-                  {calendarSuccessMsg && (
-                    <div className="success-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(46, 213, 115, 0.1)', border: '1px solid rgba(46, 213, 115, 0.3)', color: '#2ed573', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>✅</span>
-                      <span>{calendarSuccessMsg}</span>
-                    </div>
-                  )}
-
-                  {calendarErrorMsg && (
-                    <div className="error-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(255, 71, 87, 0.1)', border: '1px solid rgba(255, 71, 87, 0.3)', color: '#ff4757', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>⚠️</span>
-                      <span>{calendarErrorMsg}</span>
-                    </div>
-                  )}
-
-                  {loadingCalendarStatus ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
-                      <span className="spinner">Loading status...</span>
-                    </div>
-                  ) : !hasCalendarScope ? (
-                    <div className="about-info-box calendar-card-panel">
-                      <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)' }}>Authorization Required</h4>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
-                        To create and update calendar events, Email Tracker needs permission to access your Google Calendar events. We request the <b>least-privilege</b> scope (<code>calendar.events</code>) to read, create, and modify events strictly on your primary college calendar. We will never view or edit unrelated personal events.
+                    <div>
+                      <h3 className="settings-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span>Google Calendar Integration</span>
+                      </h3>
+                      <p style={{ margin: '6px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                        Automatically add form deadlines, interviews, online assessments, and webinars directly to your configured Google Calendar.
                       </p>
-                      <a
-                        href={`${BASE_URL}/auth/google/calendar`}
-                        className="btn-primary"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', fontWeight: '500', padding: '12px 24px', borderRadius: '8px' }}
-                      >
-                        Authorize & Connect Google Calendar
-                      </a>
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                      <div className="calendar-status-box">
-                        <div style={{ flex: '1', minWidth: '250px' }}>
-                          <div style={{ fontWeight: '600', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>Integration Status:</span>
-                            <span style={{
-                              padding: '4px 8px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: '600',
-                              background: calendarSyncEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                              color: calendarSyncEnabled ? '#2ed573' : 'var(--text-secondary)'
-                            }}>
-                              {calendarSyncEnabled ? "ACTIVE" : "PAUSED"}
-                            </span>
-                          </div>
-                          <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                            {calendarSyncEnabled
-                              ? "Deadlines and placement events are synced automatically in the background."
-                              : "Background calendar synchronization is currently paused."}
-                          </p>
-                        </div>
-                        <button
-                          className={calendarSyncEnabled ? "btn-danger" : "btn-primary"}
-                          onClick={handleToggleCalendarSync}
-                          disabled={syncingCalendar}
-                          style={{ minWidth: '130px' }}
-                        >
-                          {syncingCalendar ? "Updating..." : calendarSyncEnabled ? "Pause Sync" : "Enable Sync"}
-                        </button>
+
+                    {calendarSuccessMsg && (
+                      <div className="success-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(46, 213, 115, 0.1)', border: '1px solid rgba(46, 213, 115, 0.3)', color: '#2ed573', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                        <span>✅</span>
+                        <span>{calendarSuccessMsg}</span>
                       </div>
+                    )}
 
-                      {hasCalendarScope && (
-                        <div className="about-info-box calendar-card-panel">
-                          <h4 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px', color: 'var(--text-primary)' }}>
-                            Destination Calendar
-                          </h4>
-                          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', marginBottom: '16px' }}>
-                            Select which Google Calendar Email Tracker should sync placement events into. Changing the target calendar will automatically move all existing synced events.
-                          </p>
+                    {calendarErrorMsg && (
+                      <div className="error-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(255, 71, 87, 0.1)', border: '1px solid rgba(255, 71, 87, 0.3)', color: '#ff4757', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                        <span>⚠️</span>
+                        <span>{calendarErrorMsg}</span>
+                      </div>
+                    )}
 
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
-                            {availableCalendars.length > 0 ? (
-                              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
-                                <select
-                                  value={calendarTargetId || "primary"}
-                                  onChange={(e) => {
-                                    const val = e.target.value === "primary" ? "" : e.target.value;
-                                    setCalendarTargetId(val);
-                                    handleSaveCalendarTarget(val);
-                                  }}
-                                  disabled={savingTargetCalendar}
-                                  style={{
-                                    padding: '10px 14px',
-                                    borderRadius: '8px',
-                                    background: 'var(--bg-secondary)',
-                                    border: '1px solid var(--border-color)',
-                                    color: 'var(--text-primary)',
-                                    fontSize: '14px',
-                                    cursor: 'pointer',
-                                    flex: 1,
-                                    minWidth: '220px',
-                                    outline: 'none'
-                                  }}
-                                >
-                                  <option value="primary">Primary Calendar (Default)</option>
-                                  {availableCalendars
-                                    .filter(c => !c.primary)
-                                    .map(c => (
-                                      <option key={c.id} value={c.id}>
-                                        {c.summary} ({c.id})
-                                      </option>
-                                    ))
-                                  }
-                                </select>
-                                {savingTargetCalendar && (
-                                  <span style={{ fontSize: '13px', color: 'var(--accent-color)' }}>Saving & Migrating...</span>
-                                )}
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '260px' }}>
-                                <input
-                                  type="text"
-                                  placeholder="Calendar ID (leave blank for Primary)"
-                                  value={calendarTargetId}
-                                  onChange={(e) => setCalendarTargetId(e.target.value)}
-                                  style={{
-                                    padding: '10px 14px',
-                                    borderRadius: '8px',
-                                    background: 'var(--bg-secondary)',
-                                    border: '1px solid var(--border-color)',
-                                    color: 'var(--text-primary)',
-                                    fontSize: '14px',
-                                    flex: 1
-                                  }}
-                                />
-                                <button
-                                  className="btn-primary"
-                                  onClick={() => handleSaveCalendarTarget(calendarTargetId)}
-                                  disabled={savingTargetCalendar}
-                                  style={{ padding: '10px 18px', borderRadius: '8px', whiteSpace: 'nowrap' }}
-                                >
-                                  {savingTargetCalendar ? "Saving..." : "Save & Migrate"}
-                                </button>
-                              </div>
-                            )}
+                    {loadingCalendarStatus ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                        <span className="spinner">Loading calendar settings...</span>
+                      </div>
+                    ) : !hasCalendarScope ? (
+                      <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
+                        <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>🔐</span>
+                          <span>Authorization Required</span>
+                        </h4>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                          To create and update calendar events automatically, Email Tracker needs permission to access your Google Calendar events. We request the <b>least-privilege</b> scope (<code>calendar.events</code>) strictly to read, create, and modify placement events. We will never view or edit unrelated personal events.
+                        </p>
+                        <a
+                          href={`${BASE_URL}/auth/google/calendar`}
+                          className="btn-primary"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', fontWeight: '500', padding: '12px 24px', borderRadius: '8px' }}
+                        >
+                          Authorize & Connect Google Calendar
+                        </a>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {/* Integration Status Card */}
+                        <div className="calendar-status-box" style={{ padding: '20px 24px' }}>
+                          <div style={{ flex: '1', minWidth: '250px' }}>
+                            <div style={{ fontWeight: '600', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span>Integration Status:</span>
+                              <span style={{
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                letterSpacing: '0.5px',
+                                background: calendarSyncEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                color: calendarSyncEnabled ? '#2ed573' : 'var(--text-secondary)',
+                                border: calendarSyncEnabled ? '1px solid rgba(46, 213, 115, 0.3)' : '1px solid var(--border-color)'
+                              }}>
+                                {calendarSyncEnabled ? "ACTIVE" : "PAUSED"}
+                              </span>
+                            </div>
+                            <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                              {calendarSyncEnabled
+                                ? "Deadlines, OAs, and placement interviews are automatically synced to Google Calendar."
+                                : "Background calendar synchronization is currently paused."}
+                            </p>
                           </div>
-                        </div>
-                      )}
-
-                      {calendarSyncEnabled && (
-                        <div className="about-info-box calendar-card-panel">
-                          <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px', color: 'var(--text-primary)' }}>Sync Diagnostics & Controls</h4>
-                          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
-                            Email Tracker is the single source of truth. If any calendar events are out of sync or if you want to push all active deadlines to your Google Calendar immediately, click "Re-sync All" below. This runs a delta sync using payload verification to ensure zero duplicate events are created.
-                          </p>
                           <button
-                            className="btn-outline-primary"
-                            onClick={handleManualCalendarSync}
+                            className={calendarSyncEnabled ? "btn-danger" : "btn-primary"}
+                            onClick={handleToggleCalendarSync}
                             disabled={syncingCalendar}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px' }}
+                            style={{ minWidth: '130px', padding: '10px 18px', borderRadius: '8px' }}
                           >
-                            🔄 {syncingCalendar ? "Syncing..." : "Re-sync All Calendar Events"}
+                            {syncingCalendar ? "Updating..." : calendarSyncEnabled ? "Pause Sync" : "Enable Sync"}
                           </button>
                         </div>
-                      )}
-                    </div>
-                  )}
+
+                        {/* Destination Calendar Card */}
+                        {hasCalendarScope && (
+                          <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
+                              <h4 style={{ margin: 0, fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span>📅</span>
+                                <span>Destination Calendar</span>
+                              </h4>
+                              <span style={{
+                                fontSize: '12px',
+                                padding: '3px 10px',
+                                borderRadius: '12px',
+                                background: 'rgba(52, 152, 219, 0.12)',
+                                color: '#3498db',
+                                border: '1px solid rgba(52, 152, 219, 0.25)',
+                                fontWeight: '500'
+                              }}>
+                                Active Target: {calendarTargetId ? (availableCalendars.find(c => c.id === calendarTargetId)?.summary || calendarTargetId) : "Primary Calendar"}
+                              </span>
+                            </div>
+
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', marginBottom: '16px' }}>
+                              Select which Google Calendar Email Tracker should sync placement events into. Changing the destination calendar automatically migrates all existing synced events in the background.
+                            </p>
+
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                              {availableCalendars.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <select
+                                      value={calendarTargetId || "primary"}
+                                      onChange={(e) => {
+                                        const val = e.target.value === "primary" ? "" : e.target.value;
+                                        setCalendarTargetId(val);
+                                        handleSaveCalendarTarget(val);
+                                      }}
+                                      disabled={savingTargetCalendar}
+                                      style={{
+                                        padding: '10px 14px',
+                                        borderRadius: '8px',
+                                        background: 'var(--bg-secondary)',
+                                        border: '1px solid var(--border-color)',
+                                        color: 'var(--text-primary)',
+                                        fontSize: '14px',
+                                        cursor: 'pointer',
+                                        flex: 1,
+                                        minWidth: '240px',
+                                        outline: 'none'
+                                      }}
+                                    >
+                                      <option value="primary">Primary Calendar (Default)</option>
+                                      {availableCalendars
+                                        .filter(c => !c.primary)
+                                        .map(c => (
+                                          <option key={c.id} value={c.id}>
+                                            {c.summary} ({c.id})
+                                          </option>
+                                        ))
+                                      }
+                                    </select>
+                                    {savingTargetCalendar && (
+                                      <span style={{ fontSize: '13px', color: '#3498db', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span className="spinner" style={{ width: '14px', height: '14px' }}></span>
+                                        Saving & Migrating...
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '260px' }}>
+                                  <input
+                                    type="text"
+                                    placeholder="Calendar ID (leave blank for Primary)"
+                                    value={calendarTargetId}
+                                    onChange={(e) => setCalendarTargetId(e.target.value)}
+                                    style={{
+                                      padding: '10px 14px',
+                                      borderRadius: '8px',
+                                      background: 'var(--bg-secondary)',
+                                      border: '1px solid var(--border-color)',
+                                      color: 'var(--text-primary)',
+                                      fontSize: '14px',
+                                      flex: 1
+                                    }}
+                                  />
+                                  <button
+                                    className="btn-primary"
+                                    onClick={() => handleSaveCalendarTarget(calendarTargetId)}
+                                    disabled={savingTargetCalendar}
+                                    style={{ padding: '10px 18px', borderRadius: '8px', whiteSpace: 'nowrap' }}
+                                  >
+                                    {savingTargetCalendar ? "Saving..." : "Save & Migrate"}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            <div style={{ marginTop: '12px', fontSize: '12px' }}>
+                              <a
+                                href="https://calendar.google.com/calendar/u/0/r/settings/createcalendar"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: '#3498db', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                ➕ Create a new secondary calendar in Google Calendar ↗
+                              </a>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Diagnostics Card */}
+                        {calendarSyncEnabled && (
+                          <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
+                            <h4 style={{ marginTop: 0, marginBottom: '10px', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>⚡</span>
+                              <span>Sync Diagnostics & Controls</span>
+                            </h4>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', marginBottom: '18px' }}>
+                              Email Tracker is the single source of truth. If any calendar events are out of sync or if you want to push all active deadlines to your Google Calendar immediately, click "Re-sync All" below. This runs a delta sync using payload verification to ensure zero duplicate events are created.
+                            </p>
+                            <button
+                              className="btn-outline-primary"
+                              onClick={handleManualCalendarSync}
+                              disabled={syncingCalendar}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px' }}
+                            >
+                              🔄 {syncingCalendar ? "Syncing..." : "Re-sync All Calendar Events"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
 
                 <div className="settings-card" style={{ padding: '28px' }}>
