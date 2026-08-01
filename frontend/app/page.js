@@ -82,6 +82,9 @@ export default function JobTrackerDashboard() {
   const [syncingCalendar, setSyncingCalendar] = useState(false);
   const [calendarSuccessMsg, setCalendarSuccessMsg] = useState("");
   const [calendarErrorMsg, setCalendarErrorMsg] = useState("");
+  const [calendarTargetId, setCalendarTargetId] = useState("");
+  const [availableCalendars, setAvailableCalendars] = useState([]);
+  const [savingTargetCalendar, setSavingTargetCalendar] = useState(false);
 
 
 
@@ -558,12 +561,47 @@ export default function JobTrackerDashboard() {
       if (res.ok) {
         const data = await res.json();
         setCalendarSyncEnabled(data.calendarSyncEnabled);
+        setCalendarTargetId(data.calendarTargetId || "");
         setHasCalendarScope(data.hasCalendarScope);
+      }
+
+      const listRes = await apiFetch(`${BASE_URL}/auth/calendar/list`);
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        setAvailableCalendars(listData.calendars || []);
       }
     } catch (err) {
       console.error("Failed to fetch calendar status:", err);
     } finally {
       setLoadingCalendarStatus(false);
+    }
+  };
+
+  const handleSaveCalendarTarget = async (targetIdToSave) => {
+    try {
+      setSavingTargetCalendar(true);
+      setCalendarSuccessMsg("");
+      setCalendarErrorMsg("");
+
+      const res = await apiFetch(`${BASE_URL}/auth/calendar/target`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarTargetId: targetIdToSave })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarTargetId(data.calendarTargetId || "");
+        setCalendarSuccessMsg("Destination calendar updated! Existing events are being migrated in the background.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setCalendarErrorMsg(err.message || "Failed to update destination calendar.");
+      }
+    } catch (err) {
+      console.error("Save target calendar error:", err);
+      setCalendarErrorMsg("Failed to connect to backend server.");
+    } finally {
+      setSavingTargetCalendar(false);
     }
   };
 
@@ -2929,6 +2967,84 @@ export default function JobTrackerDashboard() {
                           {syncingCalendar ? "Updating..." : calendarSyncEnabled ? "Pause Sync" : "Enable Sync"}
                         </button>
                       </div>
+
+                      {hasCalendarScope && (
+                        <div className="about-info-box calendar-card-panel">
+                          <h4 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px', color: 'var(--text-primary)' }}>
+                            Destination Calendar
+                          </h4>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', marginBottom: '16px' }}>
+                            Select which Google Calendar Email Tracker should sync placement events into. Changing the target calendar will automatically move all existing synced events.
+                          </p>
+
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                            {availableCalendars.length > 0 ? (
+                              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+                                <select
+                                  value={calendarTargetId || "primary"}
+                                  onChange={(e) => {
+                                    const val = e.target.value === "primary" ? "" : e.target.value;
+                                    setCalendarTargetId(val);
+                                    handleSaveCalendarTarget(val);
+                                  }}
+                                  disabled={savingTargetCalendar}
+                                  style={{
+                                    padding: '10px 14px',
+                                    borderRadius: '8px',
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-primary)',
+                                    fontSize: '14px',
+                                    cursor: 'pointer',
+                                    flex: 1,
+                                    minWidth: '220px',
+                                    outline: 'none'
+                                  }}
+                                >
+                                  <option value="primary">Primary Calendar (Default)</option>
+                                  {availableCalendars
+                                    .filter(c => !c.primary)
+                                    .map(c => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.summary} ({c.id})
+                                      </option>
+                                    ))
+                                  }
+                                </select>
+                                {savingTargetCalendar && (
+                                  <span style={{ fontSize: '13px', color: 'var(--accent-color)' }}>Saving & Migrating...</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '260px' }}>
+                                <input
+                                  type="text"
+                                  placeholder="Calendar ID (leave blank for Primary)"
+                                  value={calendarTargetId}
+                                  onChange={(e) => setCalendarTargetId(e.target.value)}
+                                  style={{
+                                    padding: '10px 14px',
+                                    borderRadius: '8px',
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-primary)',
+                                    fontSize: '14px',
+                                    flex: 1
+                                  }}
+                                />
+                                <button
+                                  className="btn-primary"
+                                  onClick={() => handleSaveCalendarTarget(calendarTargetId)}
+                                  disabled={savingTargetCalendar}
+                                  style={{ padding: '10px 18px', borderRadius: '8px', whiteSpace: 'nowrap' }}
+                                >
+                                  {savingTargetCalendar ? "Saving..." : "Save & Migrate"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {calendarSyncEnabled && (
                         <div className="about-info-box calendar-card-panel">

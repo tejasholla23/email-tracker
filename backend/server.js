@@ -18,7 +18,7 @@ const { advanceStatus, classificationToStatus } = require("./utils/statusMachine
 const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
-const { processCalendarSyncQueue } = require("./utils/calendarService");
+const { processCalendarSyncQueue, migrateAccountCalendar } = require("./utils/calendarService");
 const {
   authLimiter,
   syncLimiter,
@@ -482,8 +482,67 @@ app.get("/auth/calendar/status", readLimiter, authenticate, async (req, res) => 
 
     res.json({
       calendarSyncEnabled: account.calendarSyncEnabled || false,
+      calendarTargetId: account.calendarTargetId || "",
       hasCalendarScope: !!hasCalendarScope
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /auth/calendar/list - get list of user's Google Calendars
+app.get("/auth/calendar/list", readLimiter, authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account || !account.tokens) return res.status(404).json({ message: "Account not connected" });
+
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    oauth2Client.setCredentials(account.tokens);
+    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+    const calendarListRes = await calendar.calendarList.list();
+    const calendars = (calendarListRes.data.items || []).map(c => ({
+      id: c.id,
+      summary: c.summary,
+      primary: !!c.primary
+    }));
+
+    res.json({ calendars });
+  } catch (err) {
+    console.error("[CALENDAR_LIST] Error fetching calendar list:", err.message);
+    res.json({ calendars: [] });
+  }
+});
+
+// POST /auth/calendar/target - set target calendar ID and trigger migration
+app.post("/auth/calendar/target", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    const newTargetId = (req.body.calendarTargetId || "").trim();
+    const oldTargetId = account.calendarTargetId || "primary";
+
+    account.calendarTargetId = newTargetId || null;
+    await account.save();
+
+    res.json({ 
+      success: true, 
+      calendarTargetId: account.calendarTargetId,
+      message: "Target calendar updated successfully." 
+    });
+
+    // Trigger migration asynchronously if calendar sync is enabled and target changed
+    if (account.calendarSyncEnabled && (newTargetId || "primary") !== oldTargetId) {
+      console.log(`[CALENDAR_MIGRATE] Triggering async migration for ${account.email} from ${oldTargetId} to ${newTargetId || "primary"}`);
+      migrateAccountCalendar(account, oldTargetId).catch(err => 
+        console.error("[CALENDAR_MIGRATE] Async target migration error:", err.message)
+      );
+    }
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

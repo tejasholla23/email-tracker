@@ -37,6 +37,10 @@ const accountSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  calendarTargetId: {
+    type: String,
+    default: null,
+  },
   pushSubscriptions: {
     type: [{
       endpoint: { type: String, required: true },
