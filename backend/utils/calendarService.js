@@ -6,6 +6,14 @@ const CALENDAR_SYNC_VERSION = 2;
 const activeCalendarSyncs = new Set();
 
 /**
+ * Resolve which calendar ID to use for operations.
+ * Priority: per-account setting (account.calendarTargetId) -> env var GOOGLE_CALENDAR_ID -> "primary"
+ */
+function resolveCalendarId(account) {
+  return (account && account.calendarTargetId) || process.env.GOOGLE_CALENDAR_ID || "primary";
+}
+
+/**
  * Normalizes input strings (case-insensitive, strips common suffixes, collapses spaces)
  * to build a deterministic event fingerprint.
  */
@@ -31,7 +39,7 @@ function normalizeString(str, type = "generic") {
 function getAppField(app, label, fallbackVal) {
   if (app && Array.isArray(app.displayFields) && app.displayFields.length > 0) {
     const f = app.displayFields.find(df => 
-      new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i').test(df.label)
+      new RegExp(`^${label.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}$`, 'i').test(df.label)
     );
     if (f?.value) return f.value;
   }
@@ -181,9 +189,9 @@ function buildEventPayload(app, eventType, dateInfo, fingerprint) {
     }
   }
   
-  descriptionHtml += `<br><a href="${appDeepLink}">View in Email Tracker Dashboard</a>`;
+  descriptionHtml += `<br><a href=\"${appDeepLink}\">View in Email Tracker Dashboard</a>`;
   if (app.link) {
-    descriptionHtml += ` | <a href="${app.link}">Direct Registration/Application Link</a>`;
+    descriptionHtml += ` | <a href=\"${app.link}\">Direct Registration/Application Link</a>`;
   }
 
   if (app.note) {
@@ -254,6 +262,9 @@ async function syncAppToCalendar(account, app) {
   );
   oauth2Client.setCredentials(account.tokens);
   const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+  // resolve calendar id to use for this account
+  const calendarId = resolveCalendarId(account);
 
   // 1. Resolve event type from classification
   const roleVal = getAppField(app, "Role", app.role);
@@ -331,7 +342,7 @@ async function syncAppToCalendar(account, app) {
       if (app.calendarEventId) {
         console.log(`[CALENDAR_SYNC] Deleting event ${app.calendarEventId} for soft-deleted application ${app._id}`);
         await calendar.events.delete({
-          calendarId: "primary",
+          calendarId: calendarId,
           eventId: app.calendarEventId
         });
       }
@@ -356,7 +367,7 @@ async function syncAppToCalendar(account, app) {
       // Patch existing event
       console.log(`[CALENDAR_SYNC] Patching event ${eventId} for application ${app._id}`);
       await calendar.events.patch({
-        calendarId: "primary",
+        calendarId: calendarId,
         eventId: eventId,
         resource: payload
       });
@@ -364,7 +375,7 @@ async function syncAppToCalendar(account, app) {
       // Perform fingerprint lookup to prevent duplicate events on primary calendar
       console.log(`[CALENDAR_SYNC] Checking fingerprint ${fingerprint} for application ${app._id}`);
       const listResponse = await calendar.events.list({
-        calendarId: "primary",
+        calendarId: calendarId,
         privateExtendedProperty: `fingerprint=${fingerprint}`
       });
 
@@ -374,7 +385,7 @@ async function syncAppToCalendar(account, app) {
         eventId = existingEvent.id;
         console.log(`[CALENDAR_SYNC] Found existing calendar event ${eventId} via fingerprint lookup`);
         await calendar.events.patch({
-          calendarId: "primary",
+          calendarId: calendarId,
           eventId: eventId,
           resource: payload
         });
@@ -382,7 +393,7 @@ async function syncAppToCalendar(account, app) {
         // Insert new event
         console.log(`[CALENDAR_SYNC] Creating new calendar event for application ${app._id}`);
         const insertRes = await calendar.events.insert({
-          calendarId: "primary",
+          calendarId: calendarId,
           resource: payload
         });
         eventId = insertRes.data.id;
@@ -466,8 +477,117 @@ async function processCalendarSyncQueue(account) {
   }
 }
 
+/**
+ * Migrate application events for an account from a source calendar (usually "primary")
+ * to the account's target calendar (account.calendarTargetId or GOOGLE_CALENDAR_ID).
+ *
+ * Strategy:
+ *  - For every Application for the user that has calendarEventId, try to fetch the event
+ *    from the source calendar (sourceCalendarId, default "primary").
+ *  - If event exists: insert a copy into destination calendar, update app.calendarEventId,
+ *    delete the original from source calendar.
+ *  - If event not found in source (maybe already moved), skip.
+ *
+ * Note: using insert+delete rather than events.move to avoid relying on the move method
+ * availability and to preserve extended properties reliably.
+ */
+async function migrateAccountCalendar(account, sourceCalendarId = "primary") {
+  if (!account.calendarSyncEnabled) {
+    console.log(`[CALENDAR_MIGRATE] Calendar sync disabled for ${account.email} — skipping migration`);
+    return;
+  }
+
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+  oauth2Client.setCredentials(account.tokens);
+  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+  const destCalendarId = resolveCalendarId(account);
+  if (destCalendarId === sourceCalendarId) {
+    console.log(`[CALENDAR_MIGRATE] Source and destination are same (${sourceCalendarId}) — nothing to migrate`);
+    return;
+  }
+
+  // Find all applications for this user that reference a calendarEventId in the DB
+  const apps = await Application.find({
+    userId: account._id,
+    calendarEventId: { $exists: true, $ne: null }
+  });
+
+  console.log(`[CALENDAR_MIGRATE] Attempting migration of ${apps.length} events for ${account.email} from ${sourceCalendarId} -> ${destCalendarId}`);
+
+  for (const app of apps) {
+    try {
+      const srcEventId = app.calendarEventId;
+      if (!srcEventId) continue;
+
+      // Try to get the event from source calendar
+      let getRes;
+      try {
+        getRes = await calendar.events.get({
+          calendarId: sourceCalendarId,
+          eventId: srcEventId
+        });
+      } catch (err) {
+        // If not found, skip; maybe event already moved or was deleted
+        console.log(`[CALENDAR_MIGRATE] Source event ${srcEventId} not found in ${sourceCalendarId} for app ${app._id}: ${err.message}`);
+        continue;
+      }
+
+      const eventResource = getRes.data;
+
+      // Remove read-only fields that Google will reject on insert
+      const fieldsToStrip = [
+        'id', 'etag', 'htmlLink', 'created', 'updated',
+        'iCalUID', 'sequence', 'status', 'organizer', 'creator', 'hangoutLink'
+      ];
+      for (const f of fieldsToStrip) delete eventResource[f];
+
+      // Ensure extendedProperties remain intact (private)
+      // Insert into destination calendar
+      const insertRes = await calendar.events.insert({
+        calendarId: destCalendarId,
+        resource: eventResource
+      });
+
+      const newEventId = insertRes.data.id;
+
+      // Delete original event from source calendar
+      try {
+        await calendar.events.delete({
+          calendarId: sourceCalendarId,
+          eventId: srcEventId
+        });
+      } catch (err) {
+        // If deletion fails, log and continue — we still update DB to point to new event
+        console.warn(`[CALENDAR_MIGRATE] Failed to delete source event ${srcEventId} from ${sourceCalendarId}: ${err.message}`);
+      }
+
+      // Update application record to point to new event ID, fingerprint remains same
+      app.calendarEventId = newEventId;
+      app.calendarLastSyncedAt = new Date();
+      app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
+      app.needsCalendarSync = false;
+      app.calendarSyncError = null;
+      await app.save();
+      console.log(`[CALENDAR_MIGRATE] Migrated app ${app._id} event ${srcEventId} -> ${newEventId}`);
+
+    } catch (err) {
+      console.error(`[CALENDAR_MIGRATE] Error migrating app ${app._id}:`, err.message);
+      // don't throw; continue with other apps
+    }
+  }
+
+  console.log(`[CALENDAR_MIGRATE] Migration sweep completed for ${account.email}`);
+}
+
 module.exports = {
   syncAppToCalendar,
   processCalendarSyncQueue,
-  CALENDAR_SYNC_VERSION
+  CALENDAR_SYNC_VERSION,
+  migrateAccountCalendar,
+  resolveCalendarId
 };
