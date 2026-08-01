@@ -102,7 +102,15 @@ function parseEventTime(dateInput, timeInput, eventType) {
   let startMinute = 0;
 
   if (timeInput) {
-    const timeMatch = timeInput.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    // Strip ordinal date numbers (e.g. 3rd, 1st, 22nd) and month names to prevent false positive hour matches
+    const cleanedTimeInput = timeInput
+      .replace(/\b\d{1,2}(st|nd|rd|th)\b/gi, "")
+      .replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/gi, "");
+
+    // Match patterns like "10:30 AM", "10:30", "10 AM", "10.30 AM"
+    const timeMatch = cleanedTimeInput.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)/i) 
+      || cleanedTimeInput.match(/(\d{1,2}):(\d{2})/);
+
     if (timeMatch) {
       let h = parseInt(timeMatch[1], 10);
       let m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
@@ -111,8 +119,10 @@ function parseEventTime(dateInput, timeInput, eventType) {
         if (meridiem.toLowerCase() === "pm" && h !== 12) h += 12;
         if (meridiem.toLowerCase() === "am" && h === 12) h = 0;
       }
-      startHour = h;
-      startMinute = m;
+      if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+        startHour = h;
+        startMinute = m;
+      }
     }
   }
 
@@ -179,11 +189,14 @@ function buildEventPayload(app, eventType, dateInfo, fingerprint) {
     descriptionHtml += `<b>Skills:</b> ${app.skills.join(", ")}<br>`;
   }
 
-  // Include all displayFields for completeness
+  // Include displayFields excluding those already rendered explicitly above
   if (Array.isArray(app.displayFields) && app.displayFields.length > 0) {
-    descriptionHtml += `<br><b>Details:</b><br>`;
-    for (const f of app.displayFields) {
-      if (f.label && f.value) {
+    const skipLabels = new Set(["role", "venue", "location", "deadline", "ctc", "salary"]);
+    const extraFields = app.displayFields.filter(f => f.label && f.value && !skipLabels.has(f.label.trim().toLowerCase()));
+
+    if (extraFields.length > 0) {
+      descriptionHtml += `<br><b>Details:</b><br>`;
+      for (const f of extraFields) {
         descriptionHtml += `• <b>${f.label}:</b> ${f.value}<br>`;
       }
     }
