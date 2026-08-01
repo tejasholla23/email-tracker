@@ -2897,14 +2897,13 @@ export default function JobTrackerDashboard() {
 
                 <div className="settings-card" style={{ padding: '32px' }}>
                   <div style={{ marginBottom: '24px' }}>
-                    <div>
-                      <h3 className="settings-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span>Google Calendar Integration</span>
-                      </h3>
-                      <p style={{ margin: '6px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                        Automatically add form deadlines, interviews, online assessments, and webinars directly to your configured Google Calendar.
-                      </p>
-                    </div>
+                    <h3 className="settings-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span>Google Calendar Integration</span>
+                    </h3>
+                    <p style={{ margin: '6px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                      Automatically add form deadlines, interviews, online assessments, and webinars directly to your configured Google Calendar.
+                    </p>
+                  </div>
 
                     {calendarSuccessMsg && (
                       <div className="success-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(46, 213, 115, 0.1)', border: '1px solid rgba(46, 213, 115, 0.3)', color: '#2ed573', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
