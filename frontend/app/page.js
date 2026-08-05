@@ -3554,16 +3554,36 @@ export default function JobTrackerDashboard() {
                 {loading && applications.length === 0 ? (
                   <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
                 ) : (() => {
+                  const getLatestReceivedTime = (app) => {
+                    let maxTime = app.latestEmailDate ? new Date(app.latestEmailDate).getTime() : 0;
+                    if (!maxTime && app.date) {
+                      maxTime = new Date(app.date).getTime();
+                    }
+                    if (Array.isArray(app.events) && app.events.length > 0) {
+                      for (const ev of app.events) {
+                        if (ev.date) {
+                          const evTime = new Date(ev.date).getTime();
+                          if (evTime > maxTime) maxTime = evTime;
+                        }
+                      }
+                    }
+                    if (!maxTime && app.createdAt) {
+                      maxTime = new Date(app.createdAt).getTime();
+                    }
+                    return maxTime;
+                  };
+
                   const filteredApps = applications
                     .map(app => {
+                      const latestEmailTime = getLatestReceivedTime(app);
                       let derivedStatus = (app.status || "new").toLowerCase();
                       if (derivedStatus === "new") {
-                        const ageInMs = Date.now() - new Date(app.date || app.createdAt || 0).getTime();
+                        const ageInMs = Date.now() - latestEmailTime;
                         if (ageInMs > 24 * 60 * 60 * 1000) {
                           derivedStatus = "unmarked";
                         }
                       }
-                      return { ...app, derivedStatus };
+                      return { ...app, derivedStatus, latestEmailTime };
                     })
                     .filter((app) => {
                       const query = searchQuery.toLowerCase();
@@ -3582,11 +3602,7 @@ export default function JobTrackerDashboard() {
 
                       return matchesSearch && matchesFilter;
                     })
-                    .sort((a, b) => {
-                      const dateA = new Date(a.date || a.createdAt || 0);
-                      const dateB = new Date(b.date || b.createdAt || 0);
-                      return dateB - dateA;
-                    });
+                    .sort((a, b) => b.latestEmailTime - a.latestEmailTime);
 
                   const totalPages = Math.max(1, Math.ceil(filteredApps.length / 15));
                   const activePage = Math.min(currentPage, totalPages);
@@ -3598,7 +3614,7 @@ export default function JobTrackerDashboard() {
                         <>
                           <div className="app-grid">
                             {paginatedApps.map((app) => {
-                              const dateToShow = app.date || app.createdAt;
+                              const dateToShow = app.latestEmailTime ? new Date(app.latestEmailTime) : (app.date || app.createdAt);
                               const formattedDate = dateToShow
                                 ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
                                 : "N/A";

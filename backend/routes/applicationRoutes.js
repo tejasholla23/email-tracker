@@ -45,7 +45,17 @@ router.get("/", readLimiter, async (req, res) => {
           status: { $nin: ["pending", "failed_retryable"] } 
         } 
       },
-      { $sort: { date: -1 } },
+      {
+        $addFields: {
+          latestEmailDate: {
+            $max: [
+              { $ifNull: ["$date", new Date(0)] },
+              { $ifNull: [{ $max: "$events.date" }, new Date(0)] }
+            ]
+          }
+        }
+      },
+      { $sort: { latestEmailDate: -1, date: -1, _id: -1 } },
       {
         $lookup: {
           from: "companyinfos", // MongoDB collection name for CompanyInfo model
