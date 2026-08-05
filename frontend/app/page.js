@@ -2205,7 +2205,7 @@ export default function JobTrackerDashboard() {
         /* Pin Button */
         .pin-btn {
           position: absolute;
-          top: 8px;
+          top: 0px;
           left: 50%;
           right: auto;
           transform: translateX(-50%) translateY(-6px) scale(0.95);
