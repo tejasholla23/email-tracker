@@ -2205,14 +2205,15 @@ export default function JobTrackerDashboard() {
         /* Pin Button */
         .pin-btn {
           position: absolute;
-          top: 50%;
-          right: 88px;
-          transform: translateY(-50%) translateY(-6px) scale(0.95);
+          top: 8px;
+          left: 50%;
+          right: auto;
+          transform: translateX(-50%) translateY(-6px) scale(0.95);
           width: 28px;
           height: 28px;
           border-radius: 50%;
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          background: rgba(15, 23, 42, 0.6);
+          border: 1px solid rgba(148, 163, 184, 0.25);
+          background: rgba(15, 23, 42, 0.85);
           backdrop-filter: blur(8px);
           display: flex;
           align-items: center;
@@ -2220,24 +2221,31 @@ export default function JobTrackerDashboard() {
           cursor: pointer;
           opacity: 0;
           transition: opacity 180ms ease-out, transform 180ms ease-out, background 150ms ease, border-color 150ms ease;
-          z-index: 5;
+          z-index: 10;
           padding: 0;
           outline: none;
         }
         .app-header { position: relative; }
-        .app-card:hover .pin-btn { opacity: 1; transform: translateY(-50%) translateY(0) scale(1); }
-        .app-card:not(:hover) .pin-btn { opacity: 0; transform: translateY(-50%) translateY(-6px) scale(0.95); pointer-events: none; }
-        .app-card .pin-btn.is-pinned { opacity: 1; transform: translateY(-50%) translateY(0) scale(1); pointer-events: auto; }
-        .pin-btn:hover { background: rgba(13, 148, 136, 0.15); border-color: rgba(20, 184, 166, 0.4); }
-        .pin-btn:active { transform: translateY(-50%) scale(0.9); }
+        .app-card:hover .pin-btn { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        .app-card:not(:hover) .pin-btn { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.95); pointer-events: none; }
+        .app-card .pin-btn.is-pinned { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); pointer-events: auto; }
+        .pin-btn:hover { background: rgba(13, 148, 136, 0.2); border-color: rgba(20, 184, 166, 0.5); }
+        .pin-btn:active { transform: translateX(-50%) scale(0.9); }
         .pin-btn svg { width: 14px; height: 14px; color: #94a3b8; transition: color 150ms ease, transform 200ms ease; }
         .pin-btn:hover svg { color: #14b8a6; }
         .pin-btn.is-pinned svg { color: #14b8a6; transform: rotate(45deg); }
-        .pin-btn.is-pinned { background: rgba(13, 148, 136, 0.12); border-color: rgba(20, 184, 166, 0.35); }
+        .pin-btn.is-pinned { background: rgba(13, 148, 136, 0.2); border-color: rgba(20, 184, 166, 0.45); }
         .app-card.is-done .pin-btn { display: none; }
 
         /* Pinned Section */
-        .pinned-section { margin-bottom: 32px; }
+        .pinned-section {
+          margin-bottom: 36px;
+          padding-bottom: 28px;
+          border-bottom: 1px solid var(--border-color);
+        }
+        .dark .pinned-section {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
         .pinned-section-header {
           display: flex;
           align-items: center;
