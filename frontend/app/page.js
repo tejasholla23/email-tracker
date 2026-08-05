@@ -859,7 +859,7 @@ export default function JobTrackerDashboard() {
       });
       if (!response.ok) throw new Error("Failed to mark as done");
       setApplications((prev) =>
-        prev.map((app) => app._id === id ? { ...app, status: "done" } : app)
+        prev.map((app) => app._id === id ? { ...app, status: "done", isPinned: false, pinnedAt: null } : app)
       );
     } catch (error) {
       console.error("Mark done failed:", error);
@@ -939,6 +939,30 @@ export default function JobTrackerDashboard() {
     } catch (error) {
       console.error("Save note failed:", error);
       alert("Could not save note. Please try again.");
+    }
+  };
+
+  const handleTogglePin = async (id) => {
+    const app = applications.find(a => a._id === id);
+    if (!app) return;
+    const wasPinned = app.isPinned;
+    // Optimistic update
+    setApplications(prev => prev.map(a => a._id === id ? {
+      ...a,
+      isPinned: !wasPinned,
+      pinnedAt: !wasPinned ? new Date().toISOString() : null
+    } : a));
+    try {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}/pin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (!response.ok) throw new Error("Failed to toggle pin");
+    } catch (error) {
+      console.error("Pin toggle failed:", error);
+      setApplications(prev => prev.map(a => a._id === id ? {
+        ...a, isPinned: wasPinned, pinnedAt: app.pinnedAt
+      } : a));
     }
   };
 
@@ -2177,6 +2201,74 @@ export default function JobTrackerDashboard() {
           filter: blur(0.4px);
         }
         .app-card.is-done .role-title { text-decoration: none; }
+
+        /* Pin Button */
+        .pin-btn {
+          position: absolute;
+          top: 50%;
+          right: 88px;
+          transform: translateY(-50%) translateY(-6px) scale(0.95);
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          background: rgba(15, 23, 42, 0.6);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          opacity: 0;
+          transition: opacity 180ms ease-out, transform 180ms ease-out, background 150ms ease, border-color 150ms ease;
+          z-index: 5;
+          padding: 0;
+          outline: none;
+        }
+        .app-header { position: relative; }
+        .app-card:hover .pin-btn { opacity: 1; transform: translateY(-50%) translateY(0) scale(1); }
+        .app-card:not(:hover) .pin-btn { opacity: 0; transform: translateY(-50%) translateY(-6px) scale(0.95); pointer-events: none; }
+        .app-card .pin-btn.is-pinned { opacity: 1; transform: translateY(-50%) translateY(0) scale(1); pointer-events: auto; }
+        .pin-btn:hover { background: rgba(13, 148, 136, 0.15); border-color: rgba(20, 184, 166, 0.4); }
+        .pin-btn:active { transform: translateY(-50%) scale(0.9); }
+        .pin-btn svg { width: 14px; height: 14px; color: #94a3b8; transition: color 150ms ease, transform 200ms ease; }
+        .pin-btn:hover svg { color: #14b8a6; }
+        .pin-btn.is-pinned svg { color: #14b8a6; transform: rotate(45deg); }
+        .pin-btn.is-pinned { background: rgba(13, 148, 136, 0.12); border-color: rgba(20, 184, 166, 0.35); }
+        .app-card.is-done .pin-btn { display: none; }
+
+        /* Pinned Section */
+        .pinned-section { margin-bottom: 32px; }
+        .pinned-section-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 16px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid var(--border-color);
+        }
+        .pinned-section-icon { color: #14b8a6; display: flex; align-items: center; }
+        .pinned-section-label {
+          font-size: 13px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: #14b8a6;
+        }
+        .pinned-section-count {
+          font-size: 11px;
+          font-weight: 600;
+          padding: 2px 8px;
+          border-radius: 10px;
+          background: rgba(20, 184, 166, 0.1);
+          color: #14b8a6;
+          border: 1px solid rgba(20, 184, 166, 0.2);
+        }
+
+        @keyframes pinSlideIn {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .pinned-section .app-card { animation: pinSlideIn 250ms ease-out; }
         
         /* Responsive Styles */
         .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #0d9488; }
@@ -3604,89 +3696,101 @@ export default function JobTrackerDashboard() {
                     })
                     .sort((a, b) => b.latestEmailTime - a.latestEmailTime);
 
-                  const totalPages = Math.max(1, Math.ceil(filteredApps.length / 15));
+                  // Split into pinned (sorted by pinnedAt) and unpinned
+                  const pinnedApps = filteredApps
+                    .filter(a => a.isPinned && a.derivedStatus !== "done")
+                    .sort((a, b) => new Date(a.pinnedAt || 0) - new Date(b.pinnedAt || 0));
+                  const unpinnedApps = filteredApps.filter(a => !a.isPinned || a.derivedStatus === "done");
+
+                  const totalPages = Math.max(1, Math.ceil(unpinnedApps.length / 15));
                   const activePage = Math.min(currentPage, totalPages);
-                  const paginatedApps = filteredApps.slice((activePage - 1) * 15, activePage * 15);
+                  const paginatedApps = unpinnedApps.slice((activePage - 1) * 15, activePage * 15);
 
-                  return (
-                    <>
-                      {filteredApps.length > 0 ? (
-                        <>
-                          <div className="app-grid">
-                            {paginatedApps.map((app) => {
-                              const dateToShow = app.latestEmailTime ? new Date(app.latestEmailTime) : (app.date || app.createdAt);
-                              const formattedDate = dateToShow
-                                ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                                : "N/A";
-                              const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
-                              const statusKey = app.derivedStatus;
-                              const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied";
-                              const isDone = statusKey === "done";
+                  const renderCard = (app) => {
+                    const dateToShow = app.latestEmailTime ? new Date(app.latestEmailTime) : (app.date || app.createdAt);
+                    const formattedDate = dateToShow
+                      ? new Date(dateToShow).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                      : "N/A";
+                    const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
+                    const statusKey = app.derivedStatus;
+                    const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied";
+                    const isDone = statusKey === "done";
 
-                              const getDeterministicColor = (str) => {
-                                let hash = 0;
-                                for (let i = 0; i < str.length; i++) {
-                                  hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                                }
-                                const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-                                return "00000".substring(0, 6 - c.length) + c;
-                              };
-                              const fallbackColor = getDeterministicColor(app.company || "Unknown");
-                              const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
+                    const getDeterministicColor = (str) => {
+                      let hash = 0;
+                      for (let i = 0; i < str.length; i++) {
+                        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                      }
+                      const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                      return "00000".substring(0, 6 - c.length) + c;
+                    };
+                    const fallbackColor = getDeterministicColor(app.company || "Unknown");
+                    const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.company || "U")}&background=${fallbackColor}&color=fff&size=128&bold=true`;
 
-                              return (
-                                <div
-                                  key={app._id}
-                                  className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
-                                  style={{ cursor: "pointer" }}
-                                  onClick={(e) => {
-                                    if (e.target.closest('.card-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
-                                    setSelectedApp(app);
-                                    setShowInfoModal(true);
+                    return (
+                      <div
+                        key={app._id}
+                        className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
+                        style={{ cursor: "pointer" }}
+                        onClick={(e) => {
+                          if (e.target.closest('.card-btn') || e.target.closest('.pin-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
+                          setSelectedApp(app);
+                          setShowInfoModal(true);
+                        }}
+                      >
+                        <div className="app-header">
+                          <div className="app-info">
+                            <div className="company-logo-container">
+                              {app.companyInfo?.logo || app.companyInfo?.domain ? (
+                                <img
+                                  src={app.companyInfo?.logo || uiAvatarUrl}
+                                  alt={app.company}
+                                  className="company-logo-img"
+                                  onError={(e) => {
+                                    const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
+                                    const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                                    if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
+                                      e.target.src = googleFallback;
+                                    } else if (!e.target.src.includes('ui-avatars.com')) {
+                                      e.target.src = uiAvatarUrl;
+                                    } else {
+                                      e.target.onerror = null;
+                                      e.target.style.display = 'none';
+                                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }
                                   }}
-                                >
-                                  <div className="app-header">
-                                    <div className="app-info">
-                                      <div className="company-logo-container">
-                                        {app.companyInfo?.logo || app.companyInfo?.domain ? (
-                                          <img
-                                            src={app.companyInfo?.logo || uiAvatarUrl}
-                                            alt={app.company}
-                                            className="company-logo-img"
-                                            onError={(e) => {
-                                              const domain = app.companyInfo?.domain || `${app.company.toLowerCase().replace(/\s+/g, '')}.com`;
-                                              const googleFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-                                              if (!e.target.src.includes('google.com') && !e.target.src.includes('ui-avatars.com')) {
-                                                e.target.src = googleFallback;
-                                              } else if (!e.target.src.includes('ui-avatars.com')) {
-                                                e.target.src = uiAvatarUrl;
-                                              } else {
-                                                e.target.onerror = null;
-                                                e.target.style.display = 'none';
-                                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                              }
-                                            }}
-                                          />
-                                        ) : null}
-                                        <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
-                                          {companyInitials}
-                                        </div>
-                                      </div>
-                                      <div className="role-company">
-                                        <div className="role-title">{app.company || "Unknown Company"}</div>
-                                        {(() => {
-                                          const sub = app.subtitle
-                                            || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
-                                          return sub ? <div className="company-name">{sub}</div> : null;
-                                        })()}
-                                      </div>
-                                    </div>
-                                    <div className="status-badge-container">
-                                      <span className={`status-badge status-${app.derivedStatus}`}>
-                                        {app.derivedStatus}
-                                      </span>
-                                    </div>
-                                  </div>
+                                />
+                              ) : null}
+                              <div className="company-logo-fallback" style={{ display: (app.companyInfo?.logo || app.companyInfo?.domain) ? 'none' : 'flex' }}>
+                                {companyInitials}
+                              </div>
+                            </div>
+                            <div className="role-company">
+                              <div className="role-title">{app.company || "Unknown Company"}</div>
+                              {(() => {
+                                const sub = app.subtitle
+                                  || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
+                                return sub ? <div className="company-name">{sub}</div> : null;
+                              })()}
+                            </div>
+                          </div>
+                          {!isDone && (
+                            <button
+                              className={`pin-btn${app.isPinned ? " is-pinned" : ""}`}
+                              onClick={(e) => { e.stopPropagation(); handleTogglePin(app._id); }}
+                              title={app.isPinned ? "Unpin" : "Pin to top"}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 17v5"/><path d="M9 2h6l-1.5 5.5L16 11h-3.5l-.5 6-.5-6H8l2.5-3.5L9 2z"/>
+                              </svg>
+                            </button>
+                          )}
+                          <div className="status-badge-container">
+                            <span className={`status-badge status-${app.derivedStatus}`}>
+                              {app.derivedStatus}
+                            </span>
+                          </div>
+                        </div>
 
                                   {(() => {
                                     const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
@@ -3843,8 +3947,34 @@ export default function JobTrackerDashboard() {
                                   </div>
                                 </div>
                               );
-                            })}
-                          </div>
+                    };
+
+                  return (
+                    <>
+                      {(pinnedApps.length > 0 || unpinnedApps.length > 0) ? (
+                        <>
+                          {pinnedApps.length > 0 && (
+                            <div className="pinned-section">
+                              <div className="pinned-section-header">
+                                <span className="pinned-section-icon">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 17v5"/><path d="M9 2h6l-1.5 5.5L16 11h-3.5l-.5 6-.5-6H8l2.5-3.5L9 2z"/>
+                                  </svg>
+                                </span>
+                                <span className="pinned-section-label">Pinned</span>
+                                <span className="pinned-section-count">{pinnedApps.length}</span>
+                              </div>
+                              <div className="app-grid">
+                                {pinnedApps.map(renderCard)}
+                              </div>
+                            </div>
+                          )}
+
+                          {paginatedApps.length > 0 && (
+                            <div className="app-grid">
+                              {paginatedApps.map(renderCard)}
+                            </div>
+                          )}
 
                           {totalPages > 1 && (
                             <div className="pagination-container">

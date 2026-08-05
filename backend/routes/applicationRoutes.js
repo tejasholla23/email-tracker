@@ -111,6 +111,11 @@ router.patch("/:id", writeLimiter, async (req, res) => {
     const update = { needsCalendarSync: true };
     if (status !== undefined) update.status = status;
     if (note  !== undefined) update.note   = note;
+    // Auto-unpin when marking as done
+    if (status === "done") {
+      update.isPinned = false;
+      update.pinnedAt = null;
+    }
 
     if (manualEdits && typeof manualEdits === 'object') {
       for (const [key, value] of Object.entries(manualEdits)) {
@@ -192,7 +197,22 @@ router.delete("/:id", writeLimiter, async (req, res) => {
   }
 });
 
+// PATCH /applications/:id/pin - toggle pin
+router.patch("/:id/pin", writeLimiter, async (req, res) => {
+  try {
+    const app = await Application.findOne({ _id: req.params.id, userId: req.userId });
+    if (!app) return res.status(404).json({ message: "Application not found" });
+    if (app.status === "done") return res.status(400).json({ message: "Cannot pin done applications" });
 
+    const newPinned = !app.isPinned;
+    app.isPinned = newPinned;
+    app.pinnedAt = newPinned ? new Date() : null;
+    await app.save();
+    res.json({ isPinned: app.isPinned, pinnedAt: app.pinnedAt });
+  } catch (error) {
+    res.status(400).json({ message: "Failed to toggle pin" });
+  }
+});
 
 module.exports = router;
 
