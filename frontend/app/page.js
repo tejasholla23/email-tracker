@@ -3,6 +3,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 let activeRefreshPromise = null;
 
 import React, { useEffect, useState } from "react";
+import OfflinePage from "./components/OfflinePage";
 
 export default function JobTrackerDashboard() {
   const [applications, setApplications] = useState([]);
@@ -12,6 +13,24 @@ export default function JobTrackerDashboard() {
   const [syncStatus, setSyncStatus] = useState("success");
   const [syncError, setSyncError] = useState(null);
   const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOffline(!navigator.onLine);
+
+      const handleOnline = () => setIsOffline(false);
+      const handleOffline = () => setIsOffline(true);
+
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    }
+  }, []);
 
   // Add Application Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -436,7 +455,15 @@ export default function JobTrackerDashboard() {
       options.headers["Authorization"] = `Bearer ${token}`;
     }
 
-    let response = await fetch(url, options);
+    let response;
+    try {
+      response = await fetch(url, options);
+    } catch (err) {
+      if (typeof window !== "undefined" && (!navigator.onLine || err.name === "TypeError")) {
+        setIsOffline(true);
+      }
+      throw err;
+    }
 
     if (response.status === 401) {
       console.warn("Access token expired, attempting refresh...");
@@ -2770,6 +2797,20 @@ export default function JobTrackerDashboard() {
           background-color: #dc2626;
         }
       `}} />
+      {isOffline ? (
+        <OfflinePage
+          lastSyncTime={lastSyncTime}
+          onRetry={async () => {
+            if (typeof window !== "undefined" && navigator.onLine) {
+              setIsOffline(false);
+              if (userEmail) {
+                await fetchApplications();
+                await fetchSyncStatus();
+              }
+            }
+          }}
+        />
+      ) : (
       <div className={`layout ${isDarkMode ? 'dark' : ''} ${!isSidebarCollapsed ? 'sidebar-expanded' : ''}`}>
         <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
 
@@ -4674,6 +4715,7 @@ export default function JobTrackerDashboard() {
             </form>
           </div>
         </div>
+      )}
       )}
     </>
   );
