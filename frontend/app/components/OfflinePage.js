@@ -481,61 +481,65 @@ export default function OfflinePage({ lastSyncTime, onRetry }) {
             <ellipse cx="220" cy="225" rx="12" ry="4" fill="#152032" opacity="0.4" />
 
             {/* ASTRONAUT (Left-Center sitting on Moon) */}
-            <g className="floating-astronaut" transform="translate(130, 115)">
-              {/* Legs */}
-              <rect x="0" y="38" width="12" height="14" rx="5" fill="#cbd5e1" transform="rotate(30)" />
-              <rect x="14" y="38" width="12" height="14" rx="5" fill="#94a3b8" transform="rotate(15)" />
-              <circle cx="10" cy="52" r="5" fill="#475569" />
-              <circle cx="24" cy="50" r="5" fill="#334155" />
+            <g transform="translate(90, 115)">
+              <g className="floating-astronaut">
+                {/* Legs */}
+                <rect x="0" y="38" width="12" height="14" rx="5" fill="#cbd5e1" transform="rotate(30)" />
+                <rect x="14" y="38" width="12" height="14" rx="5" fill="#94a3b8" transform="rotate(15)" />
+                <circle cx="10" cy="52" r="5" fill="#475569" />
+                <circle cx="24" cy="50" r="5" fill="#334155" />
 
-              {/* Body / Suit */}
-              <rect x="-4" y="18" width="28" height="26" rx="10" fill="#f8fafc" />
-              {/* Suit Details / Badge */}
-              <rect x="2" y="24" width="8" height="6" rx="2" fill="#14b8a6" />
-              <circle cx="16" cy="27" r="2.5" fill="#0ea5e9" />
+                {/* Body / Suit */}
+                <rect x="-4" y="18" width="28" height="26" rx="10" fill="#f8fafc" />
+                {/* Suit Details / Badge */}
+                <rect x="2" y="24" width="8" height="6" rx="2" fill="#14b8a6" />
+                <circle cx="16" cy="27" r="2.5" fill="#0ea5e9" />
 
-              {/* Arms */}
-              <rect x="-10" y="20" width="8" height="16" rx="4" fill="#e2e8f0" transform="rotate(15)" />
-              <rect x="22" y="20" width="8" height="16" rx="4" fill="#cbd5e1" transform="rotate(-20)" />
+                {/* Arms */}
+                <rect x="-10" y="20" width="8" height="16" rx="4" fill="#e2e8f0" transform="rotate(15)" />
+                <rect x="22" y="20" width="8" height="16" rx="4" fill="#cbd5e1" transform="rotate(-20)" />
 
-              {/* Helmet */}
-              <circle cx="10" cy="6" r="16" fill="#ffffff" />
-              {/* Visor */}
-              <ellipse cx="12" cy="6" rx="11" ry="9" fill="#0b0f19" />
-              {/* Visor Reflection */}
-              <path d="M 6 3 A 8 6 0 0 1 18 3" stroke="rgba(20, 184, 166, 0.6)" strokeWidth="2" strokeLinecap="round" fill="none" />
-              <circle cx="17" cy="4" r="1.5" fill="#ffffff" opacity="0.8" />
+                {/* Helmet */}
+                <circle cx="10" cy="6" r="16" fill="#ffffff" />
+                {/* Visor */}
+                <ellipse cx="12" cy="6" rx="11" ry="9" fill="#0b0f19" />
+                {/* Visor Reflection */}
+                <path d="M 6 3 A 8 6 0 0 1 18 3" stroke="rgba(20, 184, 166, 0.6)" strokeWidth="2" strokeLinecap="round" fill="none" />
+                <circle cx="17" cy="4" r="1.5" fill="#ffffff" opacity="0.8" />
+              </g>
             </g>
 
             {/* FLOATING EMAIL TRACKER ENVELOPE LOGO (Dead-Center Horizontally at X=200) */}
-            <g className="floating-envelope" transform="translate(160, 60)">
-              {/* Glow backdrop */}
-              <circle cx="40" cy="30" r="50" fill="url(#envGlow)" />
+            <g transform="translate(160, 60)">
+              <g className="floating-envelope">
+                {/* Glow backdrop */}
+                <circle cx="40" cy="30" r="50" fill="url(#envGlow)" />
 
-              {/* Outer Outline & Inner Body */}
-              <rect
-                x="5"
-                y="5"
-                width="70"
-                height="50"
-                rx="10"
-                fill="#0d1321"
-                stroke="#ffffff"
-                strokeWidth="3.5"
-              />
+                {/* Outer Outline & Inner Body */}
+                <rect
+                  x="5"
+                  y="5"
+                  width="70"
+                  height="50"
+                  rx="10"
+                  fill="#0d1321"
+                  stroke="#ffffff"
+                  strokeWidth="3.5"
+                />
 
-              {/* Envelope Flap Line (V-Shape) */}
-              <path
-                d="M 9 10 L 40 33 L 71 10"
-                fill="none"
-                stroke="#ffffff"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+                {/* Envelope Flap Line (V-Shape) */}
+                <path
+                  d="M 9 10 L 40 33 L 71 10"
+                  fill="none"
+                  stroke="#ffffff"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
 
-              {/* Teal Circular Notification Dot at Upper-Right */}
-              <circle cx="64" cy="10" r="8.5" fill="#14b8a6" stroke="#0d1321" strokeWidth="2.5" />
+                {/* Teal Circular Notification Dot at Upper-Right */}
+                <circle cx="64" cy="10" r="8.5" fill="#14b8a6" stroke="#0d1321" strokeWidth="2.5" />
+              </g>
             </g>
           </svg>
         </div>
