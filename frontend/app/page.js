@@ -734,6 +734,16 @@ export default function JobTrackerDashboard() {
     return formatted.replace("Last Synced: ", "");
   };
 
+  const getFormattedISTDate = () => {
+    return new Date().toLocaleDateString("en-US", {
+      timeZone: "Asia/Kolkata",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric"
+    });
+  };
+
   const handleSidebarMouseEnter = () => {
     if (collapseTimeoutRef.current) {
       clearTimeout(collapseTimeoutRef.current);
@@ -1899,9 +1909,38 @@ export default function JobTrackerDashboard() {
           padding-left: calc(32px + (280px - var(--sidebar-width)) * 0.5);
           padding-right: calc(32px + (280px - var(--sidebar-width)) * 0.5);
         }
-        .page-header { margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .page-header { margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; }
         .page-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 4px; }
         .page-subtitle { color: #64748b; font-size: 15px; }
+        .page-header-date-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 9px;
+          background: var(--surface-color);
+          border: 1px solid var(--border-color);
+          padding: 8px 16px;
+          border-radius: 12px;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: var(--text-primary);
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+          transition: all 0.2s ease;
+          user-select: none;
+          margin-bottom: 4px;
+        }
+        .page-header-date-badge:hover {
+          border-color: rgba(20, 184, 166, 0.35);
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+        }
+        .dark .page-header-date-badge {
+          background: #0d1321;
+          border-color: rgba(255, 255, 255, 0.09);
+          color: #f1f5f9;
+        }
+        .date-badge-icon {
+          color: #14b8a6;
+          flex-shrink: 0;
+        }
 
         /* Settings Page */
         .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 100%; margin: 0 auto; width: 100%; padding-bottom: 40px; }
@@ -3609,6 +3648,15 @@ export default function JobTrackerDashboard() {
                   <div>
                     <h2 className="page-title">Applications Overview</h2>
                     <p className="page-subtitle">Track and manage emails from placement@msrit.edu</p>
+                  </div>
+                  <div className="page-header-date-badge">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="date-badge-icon">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span>{getFormattedISTDate()}</span>
                   </div>
                 </div>
 
