@@ -507,10 +507,10 @@ export default function OfflinePage({ lastSyncTime, onRetry }) {
               <circle cx="17" cy="4" r="1.5" fill="#ffffff" opacity="0.8" />
             </g>
 
-            {/* FLOATING EMAIL TRACKER ENVELOPE LOGO (Center-Right) */}
-            <g className="floating-envelope" transform="translate(200, 70)">
+            {/* FLOATING EMAIL TRACKER ENVELOPE LOGO (Dead-Center Horizontally at X=200) */}
+            <g className="floating-envelope" transform="translate(160, 60)">
               {/* Glow backdrop */}
-              <circle cx="40" cy="30" r="45" fill="url(#envGlow)" />
+              <circle cx="40" cy="30" r="50" fill="url(#envGlow)" />
 
               {/* Outer Outline & Inner Body */}
               <rect
@@ -535,7 +535,7 @@ export default function OfflinePage({ lastSyncTime, onRetry }) {
               />
 
               {/* Teal Circular Notification Dot at Upper-Right */}
-              <circle cx="63" cy="11" r="7.5" fill="#14b8a6" stroke="#0d1321" strokeWidth="2" />
+              <circle cx="64" cy="10" r="8.5" fill="#14b8a6" stroke="#0d1321" strokeWidth="2.5" />
             </g>
           </svg>
         </div>
