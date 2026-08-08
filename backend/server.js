@@ -10,6 +10,7 @@ const { google } = require("googleapis");
 
 const Application = require("./models/Application");
 const Account = require("./models/Account");
+const LinkedGmailAccount = require("./models/LinkedGmailAccount");
 const applicationRoutes = require("./routes/applicationRoutes");
 const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmailWithLLM");
 const { getCompanyInfo } = require("./utils/companyInfoService");
@@ -19,6 +20,7 @@ const { advanceStatus, classificationToStatus } = require("./utils/statusMachine
 const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
+const { createLinkState, consumeLinkState } = require("./utils/linkStateStore");
 const { processCalendarSyncQueue, migrateAccountCalendar } = require("./utils/calendarService");
 const {
   authLimiter,
@@ -30,6 +32,17 @@ const {
 
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 const CURRENT_PARSER_VERSION = "v4";
+const MAX_LINKED_ACCOUNTS = 3;
+
+function getLinkRedirectUri() {
+  if (process.env.GOOGLE_LINK_REDIRECT_URI) {
+    return process.env.GOOGLE_LINK_REDIRECT_URI;
+  }
+  if (process.env.GOOGLE_REDIRECT_URI) {
+    return process.env.GOOGLE_REDIRECT_URI.replace("/auth/google/callback", "/auth/google/link/callback");
+  }
+  return "http://localhost:5000/auth/google/link/callback";
+}
 
 function getNextRetryDate(retryCount) {
   const now = new Date();
@@ -379,6 +392,180 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
   } catch (err) {
     console.error("Google Auth Callback Error:", err.message);
     res.status(500).send(`Auth failed: ${err.message}`);
+  }
+});
+
+// ==========================================
+// 🔗 LINK ADDITIONAL GMAIL ACCOUNT ROUTES
+// ==========================================
+
+// GET /auth/google/link - Initiate account linking flow (Authenticated)
+app.get("/auth/google/link", authLimiter, authenticate, (req, res) => {
+  try {
+    const stateToken = createLinkState(req.userId, req.userEmail);
+    const redirectUri = getLinkRedirectUri();
+
+    const localLinkClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+
+    const url = localLinkClient.generateAuthUrl({
+      access_type: "offline",
+      scope: [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ],
+      include_granted_scopes: true,
+      prompt: "select_account consent",
+      state: stateToken,
+    });
+
+    res.json({ url });
+  } catch (err) {
+    console.error("[LINK_INIT_ERR]", err.message);
+    res.status(500).json({ message: "Failed to generate account link URL" });
+  }
+});
+
+// GET /auth/google/link/callback - OAuth callback for linked accounts
+app.get("/auth/google/link/callback", authLimiter, async (req, res) => {
+  const { code, state } = req.query;
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+
+  const stateData = consumeLinkState(state);
+  if (!stateData) {
+    console.warn("[LINK_CALLBACK_DENIED] Invalid, expired, or replayed state token.");
+    return res.redirect(`${frontendUrl}?linked=error&reason=invalid_state`);
+  }
+
+  const { parentAccountId } = stateData;
+
+  try {
+    const parentAccount = await Account.findById(parentAccountId);
+    if (!parentAccount) {
+      console.warn(`[LINK_CALLBACK_DENIED] Parent account ${parentAccountId} not found.`);
+      return res.redirect(`${frontendUrl}?linked=error&reason=account_not_found`);
+    }
+
+    const redirectUri = getLinkRedirectUri();
+    const localCallbackClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+
+    const { tokens } = await localCallbackClient.getToken(code);
+    localCallbackClient.setCredentials(tokens);
+
+    const oauth2 = google.oauth2({ auth: localCallbackClient, version: "v2" });
+    const userInfo = await oauth2.userinfo.get();
+    const linkedEmail = (userInfo?.data?.email || "").toLowerCase().trim();
+
+    if (!linkedEmail) {
+      return res.redirect(`${frontendUrl}?linked=error&reason=missing_email`);
+    }
+
+    if (linkedEmail === parentAccount.email.toLowerCase().trim()) {
+      return res.redirect(`${frontendUrl}?linked=error&reason=same_as_primary`);
+    }
+
+    // Check count limit
+    const existingCount = await LinkedGmailAccount.countDocuments({
+      parentAccountId,
+      email: { $ne: linkedEmail }
+    });
+
+    if (existingCount >= MAX_LINKED_ACCOUNTS) {
+      return res.redirect(`${frontendUrl}?linked=error&reason=max_limit`);
+    }
+
+    // Preserve existing refresh token if re-authorizing and new tokens don't include one
+    const existingLinked = await LinkedGmailAccount.findOne({ parentAccountId, email: linkedEmail });
+    let mergedTokens = { ...tokens };
+    if (existingLinked && existingLinked.tokens && !mergedTokens.refresh_token) {
+      mergedTokens.refresh_token = existingLinked.tokens.refresh_token;
+    }
+
+    const linkedDoc = await LinkedGmailAccount.findOneAndUpdate(
+      { parentAccountId, email: linkedEmail },
+      {
+        $set: {
+          parentAccountId,
+          email: linkedEmail,
+          tokens: mergedTokens,
+          syncStatus: "idle",
+          syncError: null,
+          displayName: userInfo?.data?.name || "",
+        }
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+
+    console.log(`[LINKED_ACCOUNT_SUCCESS] ${linkedEmail} linked to user ${parentAccount.email}`);
+
+    // Trigger async non-blocking initial sync
+    fetchAndProcessEmails(parentAccountId).catch(err => {
+      console.error(`[LINKED_INITIAL_SYNC_ERR] ${linkedEmail}:`, err.message);
+    });
+
+    res.redirect(`${frontendUrl}?linked=success&email=${encodeURIComponent(linkedEmail)}`);
+  } catch (err) {
+    console.error("[LINKED_CALLBACK_ERR]", err.message);
+    res.redirect(`${frontendUrl}?linked=error&reason=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// GET /auth/linked-accounts - List linked Gmail accounts for current user
+app.get("/auth/linked-accounts", readLimiter, authenticate, async (req, res) => {
+  try {
+    const linkedAccounts = await LinkedGmailAccount.find({ parentAccountId: req.userId })
+      .select("-tokens")
+      .sort({ connectedAt: -1 });
+
+    res.json({ linkedAccounts });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /auth/linked-accounts/:id - Disconnect linked Gmail account
+app.delete("/auth/linked-accounts/:id", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const linkedDoc = await LinkedGmailAccount.findOne({
+      _id: req.params.id,
+      parentAccountId: req.userId
+    });
+
+    if (!linkedDoc) {
+      return res.status(404).json({ message: "Linked account not found" });
+    }
+
+    // Revoke OAuth access token with Google if available
+    try {
+      const tokenToRevoke = linkedDoc.tokens?.access_token || linkedDoc.tokens?.refresh_token;
+      if (tokenToRevoke) {
+        const redirectUri = getLinkRedirectUri();
+        const localClient = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET,
+          redirectUri
+        );
+        await localClient.revokeToken(tokenToRevoke);
+        console.log(`[LINKED_ACCOUNT_REVOKED] Revoked Google OAuth token for ${linkedDoc.email}`);
+      }
+    } catch (revokeErr) {
+      console.warn(`[LINKED_ACCOUNT_REVOKE_WARN] Token revocation warning for ${linkedDoc.email}:`, revokeErr.message);
+    }
+
+    // Remove document (does NOT touch existing applications per requirement 5)
+    await LinkedGmailAccount.findByIdAndDelete(req.params.id);
+    console.log(`[LINKED_ACCOUNT_DELETED] Removed linked account ${linkedDoc.email}`);
+
+    res.json({ success: true, message: "Account disconnected successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -1710,6 +1897,144 @@ async function fetchAndProcessEmails(targetUserId = null) {
         const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
         console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: ${messageIdsToProcess.length}\nInserted: ${accInserted}\nSkipped: ${accSkipped}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}`);
         accountsProcessed++;
+
+        // ── SYNC LINKED GMAIL ACCOUNTS FOR THIS USER ──
+        const linkedAccounts = await LinkedGmailAccount.find({ parentAccountId: acc._id });
+        if (linkedAccounts.length > 0) {
+          console.log(`[LINKED_SYNC_START] Found ${linkedAccounts.length} linked account(s) for user ${acc.email}`);
+          for (const linked of linkedAccounts) {
+            if (!linked.tokens) continue;
+            const linkedStartTime = Date.now();
+            console.log(`[LINKED_SYNC] Processing linked account: ${linked.email} (Parent: ${acc.email})`);
+            try {
+              await LinkedGmailAccount.findByIdAndUpdate(linked._id, { syncStatus: "pending" });
+
+              const linkedOauth = new google.auth.OAuth2(
+                process.env.GOOGLE_CLIENT_ID,
+                process.env.GOOGLE_CLIENT_SECRET,
+                getLinkRedirectUri()
+              );
+              linkedOauth.setCredentials(linked.tokens);
+
+              linkedOauth.on("tokens", async (newTokens) => {
+                try {
+                  const updatedTokens = { ...linked.tokens, ...newTokens };
+                  await LinkedGmailAccount.findByIdAndUpdate(linked._id, { tokens: updatedTokens });
+                  linked.tokens = updatedTokens;
+                } catch (e) {
+                  console.error(`[LINKED_TOKEN_SAVE_ERR] ${linked.email}:`, e.message);
+                }
+              });
+
+              const linkedGmail = google.gmail({ version: "v1", auth: linkedOauth });
+
+              let linkedMsgIds = [];
+              let linkedNewHistoryId = null;
+              let linkedSyncPath = "full";
+
+              if (linked.lastHistoryId) {
+                try {
+                  let pageToken = null;
+                  let allIds = [];
+                  let latestHId = null;
+                  do {
+                    const hParams = {
+                      userId: "me",
+                      startHistoryId: linked.lastHistoryId,
+                      historyTypes: ["messageAdded"]
+                    };
+                    if (pageToken) hParams.pageToken = pageToken;
+                    const hRes = await linkedGmail.users.history.list(hParams);
+                    latestHId = hRes.data.historyId;
+                    if (hRes.data.history) {
+                      for (const rec of hRes.data.history) {
+                        if (rec.messagesAdded) {
+                          for (const added of rec.messagesAdded) {
+                            allIds.push(added.message.id);
+                          }
+                        }
+                      }
+                    }
+                    pageToken = hRes.data.nextPageToken || null;
+                  } while (pageToken);
+
+                  linkedNewHistoryId = latestHId;
+                  if (allIds.length === 0) {
+                    await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
+                      lastHistoryId: linkedNewHistoryId,
+                      syncMode: "incremental",
+                      syncStatus: "success",
+                      syncError: null,
+                      lastSyncTime: new Date()
+                    });
+                    console.log(`[LINKED_SYNC] No new messages for linked account ${linked.email}`);
+                    continue;
+                  }
+                  linkedMsgIds = [...new Set(allIds)];
+                  linkedSyncPath = "incremental";
+                } catch (hErr) {
+                  if (hErr.code === 404 || hErr.response?.status === 404) {
+                    console.log(`[LINKED_SYNC_EXPIRED] historyId expired for ${linked.email}. Full sync fallback.`);
+                    linkedSyncPath = "full";
+                  } else {
+                    throw hErr;
+                  }
+                }
+              }
+
+              if (linkedSyncPath === "full") {
+                const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:90d`;
+                const listRes = await linkedGmail.users.messages.list({
+                  userId: "me",
+                  maxResults: 250,
+                  q: queryStr
+                });
+                linkedMsgIds = (listRes.data.messages || []).map(m => m.id);
+                try {
+                  const profRes = await linkedGmail.users.getProfile({ userId: "me" });
+                  linkedNewHistoryId = profRes.data.historyId;
+                } catch (pErr) {}
+              }
+
+              const knownDocsLinked = await batchLookupMessageIds(linkedMsgIds, acc._id);
+              let lInserted = 0;
+              let lSkipped = 0;
+              let lGeminiCount = 0;
+
+              for (const mId of linkedMsgIds) {
+                if (activeClearRequests.has(acc._id.toString())) break;
+                const existingFast = knownDocsLinked.get(mId) || null;
+                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, lGeminiCount);
+                if (res.action === "inserted") { lInserted++; insertedCount++; }
+                else { lSkipped++; skippedCount++; }
+                if (res.usedGemini) lGeminiCount++;
+                if (lGeminiCount >= config.MAX_EMAILS_PER_SYNC) break;
+              }
+
+              const linkedUpdate = {
+                syncStatus: "success",
+                syncError: null,
+                lastSyncTime: new Date()
+              };
+              if (linkedNewHistoryId) {
+                linkedUpdate.lastHistoryId = linkedNewHistoryId;
+                linkedUpdate.syncMode = "incremental";
+              }
+              await LinkedGmailAccount.findByIdAndUpdate(linked._id, linkedUpdate);
+              console.log(`[LINKED_SYNC_COMPLETE] ${linked.email} | Duration: ${((Date.now() - linkedStartTime)/1000).toFixed(1)}s | Fetched: ${linkedMsgIds.length} | Inserted: ${lInserted}`);
+            } catch (linkedErr) {
+              console.error(`[LINKED_SYNC_ERR] ${linked.email}:`, linkedErr.message);
+              let errText = linkedErr.message || "Sync failed";
+              if (linkedErr.code === 400 || linkedErr.code === 401) {
+                errText = "Authentication expired. Please reconnect this account.";
+              }
+              await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
+                syncStatus: "failed",
+                syncError: errText
+              });
+            }
+          }
+        }
 
       } catch (err) {
         const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);

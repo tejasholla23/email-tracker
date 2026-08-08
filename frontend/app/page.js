@@ -69,6 +69,71 @@ export default function JobTrackerDashboard() {
   const [companyProfile, setCompanyProfile] = useState(null);
   const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
 
+  // Linked Gmail Accounts State
+  const [linkedAccounts, setLinkedAccounts] = useState([]);
+  const [linkedAccountsLoading, setLinkedAccountsLoading] = useState(false);
+  const [showLinkConfirmModal, setShowLinkConfirmModal] = useState(false);
+  const [linkInitiating, setLinkInitiating] = useState(false);
+  const [disconnectingId, setDisconnectingId] = useState(null);
+  const [linkedToast, setLinkedToast] = useState(null);
+
+  const fetchLinkedAccounts = async () => {
+    setLinkedAccountsLoading(true);
+    try {
+      const res = await apiFetch(`${BASE_URL}/auth/linked-accounts`);
+      if (res.ok) {
+        const data = await res.json();
+        setLinkedAccounts(data.linkedAccounts || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch linked accounts:", err);
+    } finally {
+      setLinkedAccountsLoading(false);
+    }
+  };
+
+  const handleConfirmLinkAccount = async () => {
+    setLinkInitiating(true);
+    try {
+      const res = await apiFetch(`${BASE_URL}/auth/google/link`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.message || "Failed to initiate Google OAuth link.");
+      }
+    } catch (err) {
+      console.error("Link account error:", err);
+      alert("Failed to initiate account linking.");
+    } finally {
+      setLinkInitiating(false);
+      setShowLinkConfirmModal(false);
+    }
+  };
+
+  const handleDisconnectLinkedAccount = async (id) => {
+    if (!confirm("Are you sure you want to disconnect this Gmail account? Previously imported placement emails will remain safe in your dashboard.")) return;
+    setDisconnectingId(id);
+    try {
+      const res = await apiFetch(`${BASE_URL}/auth/linked-accounts/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setLinkedAccounts(prev => prev.filter(a => a._id !== id));
+        setLinkedToast({ type: "success", message: "Gmail account disconnected successfully." });
+      } else {
+        const errData = await res.json();
+        setLinkedToast({ type: "error", message: errData.message || "Failed to disconnect account." });
+      }
+    } catch (err) {
+      console.error("Disconnect error:", err);
+      setLinkedToast({ type: "error", message: "Failed to disconnect account." });
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
+
   const fetchCompanyProfile = async (companyName) => {
     if (!companyName) return;
     setCompanyProfileLoading(true);
@@ -3000,6 +3065,9 @@ export default function JobTrackerDashboard() {
 
                     {!showThemeSubmenu ? (
                       <>
+                        <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('linked-accounts'); setShowUserDropdown(false); fetchLinkedAccounts(); }}>
+                          Linked Gmail Accounts ❯
+                        </button>
                         <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setShowUserDropdown(false); }}>
                           Settings
                         </button>
@@ -3031,6 +3099,30 @@ export default function JobTrackerDashboard() {
           </header>
 
           <main className="content">
+            {linkedToast && (
+              <div style={{
+                margin: '0 0 16px 0',
+                padding: '12px 18px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: linkedToast.type === 'success' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                border: `1px solid ${linkedToast.type === 'success' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                color: linkedToast.type === 'success' ? '#22c55e' : '#ef4444'
+              }}>
+                <span>{linkedToast.type === 'success' ? '✅' : '⚠️'} {linkedToast.message}</span>
+                <button
+                  style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '16px' }}
+                  onClick={() => setLinkedToast(null)}
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+
             {syncStatus === "failed" && (
               <div className="sync-warning-banner">
                 <div className="sync-warning-content">
@@ -3342,6 +3434,24 @@ export default function JobTrackerDashboard() {
                     </div>
 
                     <div className="settings-grid-row">
+                      <div className="settings-card">
+                        <h3 className="settings-title">
+                          <span className="settings-title-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                          </span>
+                          <span>Inboxes & Accounts</span>
+                        </h3>
+                        <div className="settings-list">
+                          <button className="settings-item" onClick={() => { setSettingsSubView("linked-accounts"); fetchLinkedAccounts(); }}>
+                            <span className="settings-item-icon">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            </span>
+                            <span className="settings-item-label">Linked Gmail Accounts ({linkedAccounts.length})</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="settings-card">
                         <h3 className="settings-title">
                           <span className="settings-title-icon">
@@ -3661,6 +3771,133 @@ export default function JobTrackerDashboard() {
                         <strong>tejasholla23@gmail.com</strong>
                       </p>
                     </div>
+                  </div>
+                )}
+
+                {settingsSubView === "linked-accounts" && (
+                  <div className="settings-container" style={{ maxWidth: '680px', margin: '0 auto' }}>
+                    <div style={{ marginBottom: '20px' }}>
+                      <button
+                        className="btn-secondary"
+                        style={{ padding: '6px 14px', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => setSettingsSubView("main")}
+                      >
+                        ❮ Back to Settings
+                      </button>
+                    </div>
+
+                    <div className="settings-header" style={{ marginBottom: '24px' }}>
+                      <h1 className="settings-main-title">Linked Gmail Accounts</h1>
+                      <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.5' }}>
+                        Connect secondary Gmail inboxes to ensure placement follow-up emails, test links, and interview invites delivered to your personal address are automatically captured.
+                      </p>
+                    </div>
+
+                    {/* Primary Account Card */}
+                    <div className="settings-card" style={{ marginBottom: '16px', padding: '18px 20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                            🎓
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-heading, #0f172a)' }}>
+                              {userEmail}
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                              Primary College Account (MSRIT Identity)
+                            </div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '12px', background: 'rgba(20, 184, 166, 0.15)', color: '#14b8a6', border: '1px solid rgba(20, 184, 166, 0.3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          PRIMARY
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Secondary Linked Accounts */}
+                    {linkedAccountsLoading ? (
+                      <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                        Loading connected accounts...
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                        {linkedAccounts.map((acc) => {
+                          const isPending = acc.syncStatus === "pending";
+                          const isFailed = acc.syncStatus === "failed";
+                          return (
+                            <div key={acc._id} className="settings-card" style={{ padding: '18px 20px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                                    ✉️
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: '14.5px', fontWeight: '600', color: 'var(--text-heading)' }}>
+                                      {acc.email}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                      Connected {new Date(acc.connectedAt).toLocaleDateString()} {acc.lastSyncTime ? `• Last synced ${formatRelativeTime(acc.lastSyncTime)}` : ""}
+                                    </div>
+                                    {isFailed && (
+                                      <div style={{ fontSize: '11.5px', color: '#ef4444', marginTop: '4px' }}>
+                                        ⚠️ {acc.syncError || "Sync failed. Try reconnecting."}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                  <span style={{
+                                    fontSize: '11px',
+                                    fontWeight: '600',
+                                    padding: '3px 9px',
+                                    borderRadius: '10px',
+                                    background: isFailed ? 'rgba(239, 68, 68, 0.15)' : isPending ? 'rgba(234, 179, 8, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                                    color: isFailed ? '#ef4444' : isPending ? '#eab308' : '#22c55e',
+                                    border: `1px solid ${isFailed ? 'rgba(239, 68, 68, 0.3)' : isPending ? 'rgba(234, 179, 8, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`
+                                  }}>
+                                    ● {isFailed ? "ERROR" : isPending ? "SYNCING..." : "CONNECTED"}
+                                  </span>
+                                  <button
+                                    className="btn-secondary"
+                                    style={{ fontSize: '12px', padding: '5px 12px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                    disabled={disconnectingId === acc._id}
+                                    onClick={() => handleDisconnectLinkedAccount(acc._id)}
+                                  >
+                                    {disconnectingId === acc._id ? "Disconnecting..." : "Disconnect"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {linkedAccounts.length < 3 && (
+                          <button
+                            className="btn-secondary"
+                            style={{
+                              padding: '16px',
+                              borderRadius: '12px',
+                              border: '1.5px dashed var(--border-color)',
+                              background: 'transparent',
+                              fontSize: '13.5px',
+                              fontWeight: '600',
+                              color: '#3b82f6',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              marginTop: '8px'
+                            }}
+                            onClick={() => setShowLinkConfirmModal(true)}
+                          >
+                            <span>+</span> Connect Gmail Account
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -4735,6 +4972,47 @@ export default function JobTrackerDashboard() {
           </div>
         );
       })()}
+
+      {/* ── Connect Gmail Confirmation Explanation Modal ── */}
+      {showLinkConfirmModal && (
+        <div className="modal-overlay" onClick={() => setShowLinkConfirmModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <span>✉️</span> Connect Additional Gmail Account
+              </h3>
+              <button className="modal-close" onClick={() => setShowLinkConfirmModal(false)}>&times;</button>
+            </div>
+            <div style={{ padding: '20px', fontSize: '13.5px', lineHeight: '1.6', color: 'var(--text-primary)' }}>
+              <p style={{ marginTop: 0, marginBottom: '14px' }}>
+                Linking your personal Gmail allows Email Tracker to capture placement follow-ups, assessment links, and interview updates sent to your secondary address.
+              </p>
+              <div style={{
+                padding: '12px 14px',
+                background: 'rgba(20, 184, 166, 0.08)',
+                border: '1px solid rgba(20, 184, 166, 0.25)',
+                borderRadius: '8px',
+                fontSize: '12.5px',
+                color: 'var(--text-primary)',
+                marginBottom: '16px'
+              }}>
+                <strong>Privacy & Scope:</strong> Only placement-department emails (from <code>placement@msrit.edu</code>, <code>dean.tap@msrit.edu</code>) will be processed. Personal emails are never accessed or stored.
+              </div>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                You will be redirected to Google to choose a secondary account and grant read-only access for placement emails.
+              </p>
+            </div>
+            <div className="info-modal-footer" style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button className="btn-secondary" onClick={() => setShowLinkConfirmModal(false)} disabled={linkInitiating}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={handleConfirmLinkAccount} disabled={linkInitiating}>
+                {linkInitiating ? "Opening Google..." : "Continue to Google ↗"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {showDeleteModal && (
