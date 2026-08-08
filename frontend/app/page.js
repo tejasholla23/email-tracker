@@ -66,6 +66,24 @@ export default function JobTrackerDashboard() {
   // Company Info Modal State
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
+  const [companyProfile, setCompanyProfile] = useState(null);
+  const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
+
+  const fetchCompanyProfile = async (companyName) => {
+    if (!companyName) return;
+    setCompanyProfileLoading(true);
+    try {
+      const res = await apiFetch(`${BASE_URL}/applications/company-info/${encodeURIComponent(companyName)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCompanyProfile(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch fallback company profile:", err);
+    } finally {
+      setCompanyProfileLoading(false);
+    }
+  };
 
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -3833,6 +3851,16 @@ export default function JobTrackerDashboard() {
                           if (e.target.closest('.card-btn') || e.target.closest('.pin-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
                           setSelectedApp(app);
                           setShowInfoModal(true);
+                          if (app.companyInfo?.isEnriched) {
+                            setCompanyProfile(app.companyInfo);
+                            setCompanyProfileLoading(false);
+                          } else if (app.company) {
+                            setCompanyProfile(app.companyInfo || null);
+                            fetchCompanyProfile(app.company);
+                          } else {
+                            setCompanyProfile(null);
+                            setCompanyProfileLoading(false);
+                          }
                         }}
                       >
                         <div className="app-header">
@@ -4572,6 +4600,85 @@ export default function JobTrackerDashboard() {
 
               {/* ── Scrollable body ── */}
               <div className="info-modal-body">
+
+                {/* Company Overview Section */}
+                {companyProfileLoading ? (
+                  <div className="info-modal-section">
+                    <div className="info-modal-section-header">About {app.company}</div>
+                    <div className="info-modal-section-body">
+                      <div className="company-skeleton">
+                        <div className="skeleton-line" style={{ width: '92%' }}></div>
+                        <div className="skeleton-line" style={{ width: '80%' }}></div>
+                        <div className="skeleton-line" style={{ width: '65%' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (() => {
+                  const profile = companyProfile || app.companyInfo;
+                  if (!profile || (!profile.description && !profile.industry && !profile.companyType && (!profile.knownFor || profile.knownFor.length === 0))) return null;
+
+                  return (
+                    <div className="info-modal-section">
+                      <div className="info-modal-section-header">About {app.company}</div>
+                      <div className="info-modal-section-body">
+                        {profile.description && (
+                          <p className="company-description" style={{ marginBottom: '14px', lineHeight: '1.6', fontSize: '13.5px' }}>
+                            {profile.description}
+                          </p>
+                        )}
+                        
+                        <div className="company-info-grid" style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                          gap: '10px 14px',
+                          margin: '12px 0 14px',
+                          padding: '12px 14px',
+                          background: 'var(--bg-color, #f8fafc)',
+                          borderRadius: '10px',
+                          border: '1px solid var(--border-color, #e2e8f0)'
+                        }}>
+                          {profile.industry && (
+                            <div>
+                              <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Industry</div>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.industry}</div>
+                            </div>
+                          )}
+                          {profile.companyType && (
+                            <div>
+                              <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Type</div>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.companyType}</div>
+                            </div>
+                          )}
+                          {profile.headquarters && (
+                            <div>
+                              <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Headquarters</div>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.headquarters}</div>
+                            </div>
+                          )}
+                          {profile.website && (
+                            <div>
+                              <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Website</div>
+                              <a href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', fontWeight: '600', color: '#3b82f6', textDecoration: 'underline', marginTop: '2px', display: 'inline-block' }}>
+                                {profile.website.replace(/^https?:\/\//, '')} ↗
+                              </a>
+                            </div>
+                          )}
+                        </div>
+
+                        {Array.isArray(profile.knownFor) && profile.knownFor.length > 0 && (
+                          <div style={{ marginTop: '10px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Key Highlights</div>
+                            <ul className="known-for-list">
+                              {profile.knownFor.map((item, idx) => (
+                                <li key={idx}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Application Timeline — Only section in body */}
                 {app.events && app.events.length > 0 && (

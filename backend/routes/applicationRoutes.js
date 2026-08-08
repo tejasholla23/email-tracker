@@ -4,6 +4,7 @@ const Application = require("../models/Application");
 const CompanyInfo = require("../models/CompanyInfo");
 const Account = require("../models/Account");
 const { processCalendarSyncQueue } = require("../utils/calendarService");
+const { enrichCompanyProfile } = require("../utils/enrichCompanyProfile");
 
 const router = express.Router();
 
@@ -31,6 +32,35 @@ router.get("/sync-status", readLimiter, async (req, res) => {
   } catch (error) {
     console.error("Fetch sync status error:", error.message);
     res.status(500).json({ message: "Failed to fetch sync status" });
+  }
+});
+
+// GET /applications/company-info/:companyName - fetch cached or fallback enriched company profile
+router.get("/company-info/:companyName", readLimiter, async (req, res) => {
+  try {
+    const companyName = decodeURIComponent(req.params.companyName || "").trim();
+    if (!companyName) {
+      return res.status(400).json({ message: "Company name required" });
+    }
+
+    const cached = await CompanyInfo.findOne({ name: companyName });
+    if (cached && cached.isEnriched) {
+      return res.json(cached);
+    }
+
+    const enriched = await enrichCompanyProfile(companyName);
+    if (enriched) {
+      return res.json(enriched);
+    }
+
+    if (cached) {
+      return res.json(cached);
+    }
+
+    return res.status(444).json({ message: "Company info not found" });
+  } catch (error) {
+    console.error("Fetch company info error:", error.message);
+    res.status(500).json({ message: "Failed to fetch company info" });
   }
 });
 

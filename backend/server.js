@@ -13,6 +13,7 @@ const Account = require("./models/Account");
 const applicationRoutes = require("./routes/applicationRoutes");
 const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmailWithLLM");
 const { getCompanyInfo } = require("./utils/companyInfoService");
+const { enrichCompanyProfile } = require("./utils/enrichCompanyProfile");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
 const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
@@ -1214,6 +1215,11 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     const companyInfo = await getCompanyInfo(parsed.company, parsed.domain);
     if (!companyInfo) {
       console.log(`[COMPANY_INFO_MISSING] ${parsed.company}`);
+    } else if (!companyInfo.isEnriched) {
+      // Background non-blocking enrichment
+      enrichCompanyProfile(parsed.company).catch(err => {
+        console.warn(`[COMPANY_ENRICH_BG_WARN] ${parsed.company}:`, err.message);
+      });
     }
 
     let contentExists = null;
