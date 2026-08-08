@@ -4072,6 +4072,7 @@ export default function JobTrackerDashboard() {
           )}
         </div>
       </div>
+      )}
 
       {showAddModal && (
         <div className="modal-overlay">
@@ -4715,7 +4716,6 @@ export default function JobTrackerDashboard() {
             </form>
           </div>
         </div>
-      )}
       )}
     </>
   );
