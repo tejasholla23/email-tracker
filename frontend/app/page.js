@@ -2734,7 +2734,7 @@ export default function JobTrackerDashboard() {
           overflow: hidden;
         }
         .info-modal-header {
-          padding: 24px 28px 16px;
+          padding: 20px 24px 14px;
           border-bottom: 1px solid var(--border-color, #e2e8f0);
           flex-shrink: 0;
         }
@@ -2753,7 +2753,11 @@ export default function JobTrackerDashboard() {
         .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
         .meta-chip.status-done { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 
-        .info-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1; min-height: 0; max-height: calc(85vh - 210px); padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
+        .info-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; min-height: 0; max-height: none; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+        .info-modal-body::-webkit-scrollbar { width: 6px; }
+        .info-modal-body::-webkit-scrollbar-track { background: transparent; }
+        .info-modal-body::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 4px; }
+        .info-modal-body::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.7); }
         .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: hidden; }
         .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); }
         .info-modal-section-body { padding: 16px 18px; }
@@ -4586,11 +4590,6 @@ export default function JobTrackerDashboard() {
                   </span>
                   {app.type && app.type !== 'unknown' && app.type !== app.emailType && (
                     <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.type}</span>
-                  )}
-                  {app.deadlineText && (
-                    <span className={`meta-chip${isUrgent ? ' urgent' : ''}`}>
-                      {isUrgent ? '⚡ ' : '🗓 '}Deadline: {app.deadlineText}
-                    </span>
                   )}
                   {app.emailType && app.emailType !== 'job' && (
                     <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.emailType}</span>
