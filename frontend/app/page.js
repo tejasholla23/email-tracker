@@ -77,6 +77,38 @@ export default function JobTrackerDashboard() {
   const [disconnectingId, setDisconnectingId] = useState(null);
   const [linkedToast, setLinkedToast] = useState(null);
 
+  // Email Reparse State
+  const [reparsingId, setReparsingId] = useState(null);
+  const [reparseToast, setReparseToast] = useState(null);
+
+  const handleReparseEmail = async (appId) => {
+    if (!appId || reparsingId) return;
+    setReparsingId(appId);
+    setReparseToast(null);
+
+    try {
+      const res = await apiFetch(`${BASE_URL}/applications/${appId}/reparse`, {
+        method: "POST"
+      });
+
+      if (res.ok) {
+        const updatedApp = await res.json();
+        setSelectedApp(updatedApp);
+        setApplications(prev => prev.map(a => a._id === appId ? updatedApp : a));
+        setReparseToast({ type: "success", message: "✓ Email reparsed successfully" });
+        setTimeout(() => setReparseToast(null), 3500);
+      } else {
+        const errData = await res.json();
+        setReparseToast({ type: "error", message: errData.message || "Failed to reparse email. Please try again." });
+      }
+    } catch (err) {
+      console.error("Reparse error:", err);
+      setReparseToast({ type: "error", message: "Failed to reparse email. Please try again." });
+    } finally {
+      setReparsingId(null);
+    }
+  };
+
   const userDropdownRef = useRef(null);
 
   useEffect(() => {
@@ -4837,7 +4869,34 @@ export default function JobTrackerDashboard() {
                         onError={e => { e.currentTarget.style.display = 'none'; }} />
                     )}
                     <div>
-                      <h3 className="info-modal-company-name">{app.company}</h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <h3 className="info-modal-company-name" style={{ margin: 0 }}>{app.company}</h3>
+                        <button
+                          className="btn-reparse"
+                          title="Reparse email"
+                          disabled={reparsingId === app._id}
+                          onClick={() => handleReparseEmail(app._id)}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '6px',
+                            padding: '3px 8px',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            color: 'var(--text-secondary)',
+                            cursor: reparsingId === app._id ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.15s ease-out'
+                          }}
+                        >
+                          <span style={{ display: 'inline-block', transform: reparsingId === app._id ? 'rotate(360deg)' : 'none', transition: 'transform 0.8s linear' }}>
+                            ↻
+                          </span>
+                          {reparsingId === app._id ? "Reparsing..." : "Reparse"}
+                        </button>
+                      </div>
                       {app.subtitle && <p className="info-modal-subtitle">{app.subtitle}</p>}
                     </div>
                   </div>
@@ -4855,6 +4914,30 @@ export default function JobTrackerDashboard() {
                   )}
                 </div>
               </div>
+
+              {reparseToast && (
+                <div style={{
+                  margin: '12px 24px 0 24px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: reparseToast.type === 'success' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                  border: `1px solid ${reparseToast.type === 'success' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                  color: reparseToast.type === 'success' ? '#22c55e' : '#ef4444'
+                }}>
+                  <span>{reparseToast.message}</span>
+                  <button
+                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '14px' }}
+                    onClick={() => setReparseToast(null)}
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
 
               {/* ── Scrollable body ── */}
               <div className="info-modal-body">

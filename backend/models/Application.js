@@ -37,6 +37,7 @@ const applicationSchema = new mongoose.Schema(
     },
     isDeleted: { type: Boolean, default: false },
     rawText: { type: String },
+    accountEmail: { type: String, default: "" }, // Receiving inbox email (primary or linked)
     note: { type: String, default: "" },
     messageId: { type: String, sparse: true },
     classification: { type: String },
@@ -72,6 +73,7 @@ const applicationSchema = new mongoose.Schema(
       type: [
         {
           messageId: String,
+          accountEmail: String,
           date: Date,
           classification: String,
           title: String,

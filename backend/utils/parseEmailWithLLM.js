@@ -1,4 +1,5 @@
 const { OpenAI } = require("openai");
+const he = require("he");
 
 const nvidiaClient = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY || "dummy_key",
@@ -2224,6 +2225,67 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   }
 }
 
+function extractText(payload) {
+  if (!payload) return null;
+  if (payload.mimeType === "text/plain" && payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const text = extractText(part);
+      if (text) return text;
+    }
+  }
+  return null;
+}
+
+function extractHtml(payload) {
+  if (!payload) return null;
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    let html = Buffer.from(payload.body.data, "base64").toString("utf-8");
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    html = html.replace(/<!--[\s\S]*?-->/g, "");
+    html = html.replace(/<br\s*\/?>/gi, "\n");
+    html = html.replace(/<\/(p|div|tr|li|h[1-6]|thead|tbody|tfoot)>/gi, "\n");
+    html = html.replace(/<(p|div|tr|li|h[1-6]|thead|tbody|tfoot)[^>]*>/gi, "\n");
+    html = html.replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, (match, href, text) => {
+      const cleanText = text.replace(/<[^>]*>/g, "").trim();
+      if (!href || href.startsWith("javascript:") || href.startsWith("#")) {
+        return cleanText;
+      }
+      return cleanText ? `${cleanText} (${href})` : href;
+    });
+    html = html.replace(/<[^>]*>/g, "");
+    return html;
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const html = extractHtml(part);
+      if (html) return html;
+    }
+  }
+  return null;
+}
+
+function getFullBodyText(payload) {
+  if (!payload) return "";
+  const htmlRaw = extractHtml(payload);
+  const textRaw = extractText(payload);
+  
+  let text = "";
+  if (htmlRaw && textRaw) {
+    text = mergeAlternativeTexts(htmlRaw, textRaw);
+  } else {
+    text = htmlRaw || textRaw || "";
+  }
+  text = he.decode(text);
+  if (text.length > 20000) {
+    text = text.slice(-20000);
+  }
+  return text;
+}
+
 module.exports = {
   parseEmailWithLLM,
   extractFormLink,
@@ -2233,5 +2295,6 @@ module.exports = {
   cleanDisplayFieldValue,
   validateDisplayField,
   resolveDeadlineISO,
-  mergeAlternativeTexts
+  mergeAlternativeTexts,
+  getFullBodyText
 };

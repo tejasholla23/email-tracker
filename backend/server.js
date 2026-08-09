@@ -1028,7 +1028,7 @@ const MANUAL_SYNC_COOLDOWN_MS = 45 * 1000;
 let isMigrationV4Processing = false;
 
 function appendApplicationEvent(application, parsed, emailMetadata) {
-  const { messageId, date, subject } = emailMetadata;
+  const { messageId, date, subject, accountEmail } = emailMetadata;
   if (!application.events) application.events = [];
   
   const eventExists = application.events.some(e => e.messageId === messageId);
@@ -1039,6 +1039,7 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
   
   application.events.push({
     messageId,
+    accountEmail: accountEmail || application.accountEmail || "",
     date,
     classification: parsed.classification || "",
     title: parsed.title || "",
@@ -1059,8 +1060,9 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
 
 // --- Extracted per-message processing logic ---
 // Returns: { action: 'inserted' | 'skipped' | 'error', usedGemini: boolean }
-async function processMessage(gmail, acc, messageId, subject_unused, existingFast, geminiParsedCount) {
+async function processMessage(gmail, acc, messageId, subject_unused, existingFast, geminiParsedCount, receivingEmailOverride) {
   const id = messageId;
+  const receivingEmail = (receivingEmailOverride || acc.email || "").toLowerCase().trim();
   let usedGemini = false;
 
   try {
@@ -1141,6 +1143,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         if (!exists.events) exists.events = [];
         exists.events.push({
           messageId: id,
+          accountEmail: receivingEmail,
           date: exists.date,
           classification: exists.classification,
           title: exists.title,
@@ -1148,6 +1151,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           status: exists.status,
           link: exists.link
         });
+        if (!exists.accountEmail) exists.accountEmail = receivingEmail;
         exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
         console.log(`[EVENT_ADDED] ${id}`);
         eventAdded = true;
@@ -1422,6 +1426,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             messageId: id,
             source: "Gmail",
             email: acc.email,
+            accountEmail: receivingEmail,
             date: new Date(parseInt(email.data.internalDate)),
             parserVersion: "v1",
             status: "pending",
@@ -1455,6 +1460,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           messageId: id,
           source: "Gmail",
           email: acc.email,
+          accountEmail: receivingEmail,
           date: new Date(parseInt(email.data.internalDate)),
           parserVersion: parserVer,
           isDeleted: true
@@ -1543,9 +1549,11 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       const emailDate = new Date(parseInt(email.data.internalDate));
       const eventAdded = appendApplicationEvent(contentExists, parsed, {
         messageId: id,
+        accountEmail: receivingEmail,
         date: emailDate,
         subject: subject
       });
+      if (!contentExists.accountEmail) contentExists.accountEmail = receivingEmail;
       
       if (eventAdded) {
         updatePayload.events = contentExists.events;
@@ -1608,6 +1616,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       parseMeta: parsed.parseMeta || {},
       events: [{
         messageId: id,
+        accountEmail: receivingEmail,
         date: new Date(parseInt(email.data.internalDate)),
         classification: parsed.classification || "",
         title: parsed.timelineTitle || parsed.title || "",
@@ -1620,6 +1629,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       messageId: id,
       source: "Gmail",
       email: acc.email,
+      accountEmail: receivingEmail,
       date: new Date(parseInt(email.data.internalDate)),
       parserVersion: parserVer,
     });
@@ -2080,7 +2090,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
               for (const mId of linkedMsgIds) {
                 if (activeClearRequests.has(acc._id.toString())) break;
                 const existingFast = knownDocsLinked.get(mId) || null;
-                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, lGeminiCount);
+                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, lGeminiCount, linked.email);
                 if (res.action === "inserted") { lInserted++; insertedCount++; }
                 else { lSkipped++; skippedCount++; }
                 if (res.usedGemini) lGeminiCount++;
