@@ -3437,24 +3437,6 @@ export default function JobTrackerDashboard() {
                       <div className="settings-card">
                         <h3 className="settings-title">
                           <span className="settings-title-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-                          </span>
-                          <span>Inboxes & Accounts</span>
-                        </h3>
-                        <div className="settings-list">
-                          <button className="settings-item" onClick={() => { setSettingsSubView("linked-accounts"); fetchLinkedAccounts(); }}>
-                            <span className="settings-item-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                            </span>
-                            <span className="settings-item-label">Linked Gmail Accounts ({linkedAccounts.length})</span>
-                            <span className="settings-item-arrow">❯</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="settings-card">
-                        <h3 className="settings-title">
-                          <span className="settings-title-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><circle cx="12" cy="11" r="3" /></svg>
                           </span>
                           <span>Legal & Support</span>
@@ -3779,10 +3761,10 @@ export default function JobTrackerDashboard() {
                     <div style={{ marginBottom: '20px' }}>
                       <button
                         className="btn-secondary"
-                        style={{ padding: '6px 14px', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                        onClick={() => setSettingsSubView("main")}
+                        style={{ padding: '6px 14px', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                        onClick={() => setActiveFilter("all")}
                       >
-                        ❮ Back to Settings
+                        ❮ Back to Dashboard
                       </button>
                     </div>
 
@@ -3797,8 +3779,11 @@ export default function JobTrackerDashboard() {
                     <div className="settings-card" style={{ marginBottom: '16px', padding: '18px 20px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                            🎓
+                          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                              <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                            </svg>
                           </div>
                           <div>
                             <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-heading, #0f172a)' }}>
@@ -3829,8 +3814,11 @@ export default function JobTrackerDashboard() {
                             <div key={acc._id} className="settings-card" style={{ padding: '18px 20px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                                    ✉️
+                                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                                    </svg>
                                   </div>
                                   <div>
                                     <div style={{ fontSize: '14.5px', fontWeight: '600', color: 'var(--text-heading)' }}>
@@ -4978,15 +4966,13 @@ export default function JobTrackerDashboard() {
         <div className="modal-overlay" onClick={() => setShowLinkConfirmModal(false)}>
           <div className="modal-content" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <span>✉️</span> Connect Additional Gmail Account
+              <h3 className="modal-title" style={{ margin: 0 }}>
+                Connect Additional Gmail Account
               </h3>
               <button className="modal-close" onClick={() => setShowLinkConfirmModal(false)}>&times;</button>
             </div>
-            <div style={{ padding: '20px', fontSize: '13.5px', lineHeight: '1.6', color: 'var(--text-primary)' }}>
+            <div style={{ padding: '20px 0 0 0', fontSize: '13.5px', lineHeight: '1.6', color: 'var(--text-primary)' }}>
               <p style={{ marginTop: 0, marginBottom: '14px' }}>
-                Linking your personal Gmail allows Email Tracker to capture placement follow-ups, assessment links, and interview updates sent to your secondary address.
-              </p>
               <div style={{
                 padding: '12px 14px',
                 background: 'rgba(20, 184, 166, 0.08)',
@@ -5002,11 +4988,11 @@ export default function JobTrackerDashboard() {
                 You will be redirected to Google to choose a secondary account and grant read-only access for placement emails.
               </p>
             </div>
-            <div className="info-modal-footer" style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button className="btn-secondary" onClick={() => setShowLinkConfirmModal(false)} disabled={linkInitiating}>
+            <div className="modal-actions" style={{ marginTop: '24px' }}>
+              <button className="btn-cancel" onClick={() => setShowLinkConfirmModal(false)} disabled={linkInitiating}>
                 Cancel
               </button>
-              <button className="btn-primary" onClick={handleConfirmLinkAccount} disabled={linkInitiating}>
+              <button className="btn-submit" onClick={handleConfirmLinkAccount} disabled={linkInitiating}>
                 {linkInitiating ? "Opening Google..." : "Continue to Google ↗"}
               </button>
             </div>
