@@ -3090,11 +3090,11 @@ export default function JobTrackerDashboard() {
 
                     {!showThemeSubmenu ? (
                       <>
-                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
-                          Theme ❯
-                        </button>
                         <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('linked-accounts'); setShowUserDropdown(false); fetchLinkedAccounts(); }}>
                           Linked Gmail Accounts ❯
+                        </button>
+                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
+                          Theme
                         </button>
                         <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setShowUserDropdown(false); }}>
                           Settings
@@ -3873,8 +3873,17 @@ export default function JobTrackerDashboard() {
                                     ● {isFailed ? "ERROR" : isPending ? "SYNCING..." : "CONNECTED"}
                                   </span>
                                   <button
-                                    className="btn-secondary"
-                                    style={{ fontSize: '12px', padding: '5px 12px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                    style={{
+                                      fontSize: '12.5px',
+                                      fontWeight: '500',
+                                      padding: '6px 14px',
+                                      color: '#ef4444',
+                                      background: 'rgba(239, 68, 68, 0.08)',
+                                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease-out'
+                                    }}
                                     disabled={disconnectingId === acc._id}
                                     onClick={() => handleDisconnectLinkedAccount(acc._id)}
                                   >
