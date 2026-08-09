@@ -3760,8 +3760,8 @@ export default function JobTrackerDashboard() {
                   <div className="settings-container" style={{ maxWidth: '680px', margin: '0 auto' }}>
                     <div style={{ marginBottom: '20px' }}>
                       <button
-                        className="btn-secondary"
-                        style={{ padding: '6px 14px', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                        className="btn-outline-primary"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                         onClick={() => setActiveFilter("all")}
                       >
                         ❮ Back to Dashboard
@@ -4965,13 +4965,13 @@ export default function JobTrackerDashboard() {
       {showLinkConfirmModal && (
         <div className="modal-overlay" onClick={() => setShowLinkConfirmModal(false)}>
           <div className="modal-content" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+            <div className="modal-header" style={{ marginBottom: '12px' }}>
               <h3 className="modal-title" style={{ margin: 0 }}>
                 Connect Additional Gmail Account
               </h3>
               <button className="modal-close" onClick={() => setShowLinkConfirmModal(false)}>&times;</button>
             </div>
-            <div style={{ padding: '20px 0 0 0', fontSize: '13.5px', lineHeight: '1.6', color: 'var(--text-primary)' }}>
+            <div style={{ padding: '6px 0 0 0', fontSize: '13.5px', lineHeight: '1.6', color: 'var(--text-primary)' }}>
               <div style={{
                 padding: '12px 14px',
                 background: 'rgba(20, 184, 166, 0.08)',
@@ -4979,7 +4979,7 @@ export default function JobTrackerDashboard() {
                 borderRadius: '8px',
                 fontSize: '12.5px',
                 color: 'var(--text-primary)',
-                marginBottom: '16px'
+                marginBottom: '14px'
               }}>
                 <strong>Privacy & Scope:</strong> Only placement-department emails (from <code>placement@msrit.edu</code>, <code>dean.tap@msrit.edu</code>) will be processed. Personal emails are never accessed or stored.
               </div>
@@ -4987,8 +4987,13 @@ export default function JobTrackerDashboard() {
                 You will be redirected to Google to choose a secondary account and grant read-only access for placement emails.
               </p>
             </div>
-            <div className="modal-actions" style={{ marginTop: '24px' }}>
-              <button className="btn-cancel" onClick={() => setShowLinkConfirmModal(false)} disabled={linkInitiating}>
+            <div className="modal-actions" style={{ marginTop: '20px' }}>
+              <button
+                className="btn-cancel"
+                style={{ border: '1.5px solid #ef4444', color: '#ef4444', background: 'transparent' }}
+                onClick={() => setShowLinkConfirmModal(false)}
+                disabled={linkInitiating}
+              >
                 Cancel
               </button>
               <button className="btn-submit" onClick={handleConfirmLinkAccount} disabled={linkInitiating}>
