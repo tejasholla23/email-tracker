@@ -1138,13 +1138,14 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         return { action: 'skipped', usedGemini: false };
       }
       
+      const emailDate = email.data?.internalDate ? new Date(parseInt(email.data.internalDate)) : (exists.date || new Date());
       let eventAdded = false;
       if (!exists.events || !exists.events.some(e => e.messageId === id)) {
         if (!exists.events) exists.events = [];
         exists.events.push({
           messageId: id,
           accountEmail: receivingEmail,
-          date: exists.date,
+          date: emailDate,
           classification: exists.classification,
           title: exists.title,
           subject: subject,
@@ -1153,6 +1154,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         });
         if (!exists.accountEmail) exists.accountEmail = receivingEmail;
         exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+        if (!exists.date || emailDate > new Date(exists.date)) {
+          exists.date = emailDate;
+        }
         console.log(`[EVENT_ADDED] ${id}`);
         eventAdded = true;
       }
