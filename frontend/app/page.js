@@ -4972,7 +4972,6 @@ export default function JobTrackerDashboard() {
               <button className="modal-close" onClick={() => setShowLinkConfirmModal(false)}>&times;</button>
             </div>
             <div style={{ padding: '20px 0 0 0', fontSize: '13.5px', lineHeight: '1.6', color: 'var(--text-primary)' }}>
-              <p style={{ marginTop: 0, marginBottom: '14px' }}>
               <div style={{
                 padding: '12px 14px',
                 background: 'rgba(20, 184, 166, 0.08)',
