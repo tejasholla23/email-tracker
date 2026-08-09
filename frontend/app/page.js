@@ -2,7 +2,7 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 let activeRefreshPromise = null;
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import OfflinePage from "./components/OfflinePage";
 
 export default function JobTrackerDashboard() {
@@ -76,6 +76,21 @@ export default function JobTrackerDashboard() {
   const [linkInitiating, setLinkInitiating] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState(null);
   const [linkedToast, setLinkedToast] = useState(null);
+
+  const userDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        setShowUserDropdown(false);
+        setShowThemeSubmenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const fetchLinkedAccounts = async () => {
     setLinkedAccountsLoading(true);
@@ -1959,10 +1974,20 @@ export default function JobTrackerDashboard() {
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: #ffffff; }
         .search-container input::placeholder { color: var(--text-secondary); }
         .topbar-actions { display: flex; align-items: center; gap: 16px; }
+        @keyframes dropdownPopup {
+          0% {
+            opacity: 0;
+            transform: translateY(-8px) scale(0.94);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
         .user-dropdown-container { position: relative; }
         .user-avatar-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-primary); color: white; border: none; font-weight: 600; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease-out; }
         .user-avatar-btn:hover { filter: brightness(1.1); transform: scale(1.05); }
-        .user-dropdown-menu { position: absolute; top: 100%; right: 0; margin-top: 8px; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); width: 200px; overflow: hidden; z-index: 100; animation: scaleUp 0.15s ease-out; }
+        .user-dropdown-menu { position: absolute; top: 100%; right: 0; margin-top: 8px; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.25), 0 6px 12px -2px rgba(0, 0, 0, 0.12); width: 220px; overflow: hidden; z-index: 100; transform-origin: top right; animation: dropdownPopup 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
         .user-dropdown-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); font-size: 13px; color: var(--text-secondary); word-break: break-all; }
         .user-dropdown-item { width: 100%; text-align: left; padding: 10px 16px; background: transparent; border: none; font-size: 13px; color: var(--text-primary); cursor: pointer; transition: background-color 0.15s ease-out; }
         .user-dropdown-item:hover { background: var(--bg-color); }
@@ -3050,7 +3075,7 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
             <div className="topbar-actions">
-              <div className="user-dropdown-container">
+              <div className="user-dropdown-container" ref={userDropdownRef}>
                 <button
                   className="user-avatar-btn"
                   onClick={() => { setShowUserDropdown(!showUserDropdown); setShowThemeSubmenu(false); }}
@@ -3065,14 +3090,14 @@ export default function JobTrackerDashboard() {
 
                     {!showThemeSubmenu ? (
                       <>
+                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
+                          Theme ❯
+                        </button>
                         <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('linked-accounts'); setShowUserDropdown(false); fetchLinkedAccounts(); }}>
                           Linked Gmail Accounts ❯
                         </button>
                         <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setShowUserDropdown(false); }}>
                           Settings
-                        </button>
-                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
-                          Theme ❯
                         </button>
                         <div style={{ borderBottom: '1px solid var(--border-color)', margin: '4px 0' }} />
                         <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>

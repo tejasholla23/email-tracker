@@ -38,10 +38,7 @@ function getLinkRedirectUri() {
   if (process.env.GOOGLE_LINK_REDIRECT_URI) {
     return process.env.GOOGLE_LINK_REDIRECT_URI;
   }
-  if (process.env.GOOGLE_REDIRECT_URI) {
-    return process.env.GOOGLE_REDIRECT_URI.replace("/auth/google/callback", "/auth/google/link/callback");
-  }
-  return "http://localhost:5000/auth/google/link/callback";
+  return process.env.GOOGLE_REDIRECT_URI || "http://localhost:5000/auth/google/callback";
 }
 
 function getNextRetryDate(retryCount) {
@@ -304,11 +301,90 @@ app.get("/auth/google/calendar", authLimiter, (req, res) => {
 });
 
 app.get("/auth/google/callback", authLimiter, async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
+  // Check if state belongs to an account linking flow
+  const linkStateData = consumeLinkState(state);
+  if (linkStateData) {
+    const { parentAccountId } = linkStateData;
+
+    try {
+      const parentAccount = await Account.findById(parentAccountId);
+      if (!parentAccount) {
+        console.warn(`[LINK_CALLBACK_DENIED] Parent account ${parentAccountId} not found.`);
+        return res.redirect(`${frontendUrl}?linked=error&reason=account_not_found`);
+      }
+
+      const redirectUri = getLinkRedirectUri();
+      const localCallbackClient = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        redirectUri
+      );
+
+      const { tokens } = await localCallbackClient.getToken(code);
+      localCallbackClient.setCredentials(tokens);
+
+      const oauth2 = google.oauth2({ auth: localCallbackClient, version: "v2" });
+      const userInfo = await oauth2.userinfo.get();
+      const linkedEmail = (userInfo?.data?.email || "").toLowerCase().trim();
+
+      if (!linkedEmail) {
+        return res.redirect(`${frontendUrl}?linked=error&reason=missing_email`);
+      }
+
+      if (linkedEmail === parentAccount.email.toLowerCase().trim()) {
+        return res.redirect(`${frontendUrl}?linked=error&reason=same_as_primary`);
+      }
+
+      // Check count limit
+      const existingCount = await LinkedGmailAccount.countDocuments({
+        parentAccountId,
+        email: { $ne: linkedEmail }
+      });
+
+      if (existingCount >= MAX_LINKED_ACCOUNTS) {
+        return res.redirect(`${frontendUrl}?linked=error&reason=max_limit`);
+      }
+
+      // Preserve existing refresh token if re-authorizing
+      const existingLinked = await LinkedGmailAccount.findOne({ parentAccountId, email: linkedEmail });
+      let mergedTokens = { ...tokens };
+      if (existingLinked && existingLinked.tokens && !mergedTokens.refresh_token) {
+        mergedTokens.refresh_token = existingLinked.tokens.refresh_token;
+      }
+
+      await LinkedGmailAccount.findOneAndUpdate(
+        { parentAccountId, email: linkedEmail },
+        {
+          $set: {
+            parentAccountId,
+            email: linkedEmail,
+            tokens: mergedTokens,
+            syncStatus: "idle",
+            syncError: null,
+            displayName: userInfo?.data?.name || "",
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+
+      console.log(`[LINKED_ACCOUNT_SUCCESS] ${linkedEmail} linked to user ${parentAccount.email}`);
+
+      fetchAndProcessEmails(parentAccountId).catch(err => {
+        console.error(`[LINKED_INITIAL_SYNC_ERR] ${linkedEmail}:`, err.message);
+      });
+
+      return res.redirect(`${frontendUrl}?linked=success&email=${encodeURIComponent(linkedEmail)}`);
+    } catch (err) {
+      console.error("[LINKED_CALLBACK_ERR]", err.message);
+      return res.redirect(`${frontendUrl}?linked=error&reason=${encodeURIComponent(err.message)}`);
+    }
+  }
+
   try {
-    // Fix 6: Use per-request OAuth client to prevent race conditions on shared global instance
+    // Standard Login Callback Flow
     const localCallbackClient = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
