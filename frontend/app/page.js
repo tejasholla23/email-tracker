@@ -4869,29 +4869,36 @@ export default function JobTrackerDashboard() {
                         onError={e => { e.currentTarget.style.display = 'none'; }} />
                     )}
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                         <h3 className="info-modal-company-name" style={{ margin: 0 }}>{app.company}</h3>
                         <button
                           className="btn-reparse"
-                          title="Reparse email"
+                          title="Reparse email with AI"
                           disabled={reparsingId === app._id}
                           onClick={() => handleReparseEmail(app._id)}
                           style={{
-                            background: 'transparent',
-                            border: '1px solid var(--border-color)',
+                            background: 'rgba(37, 99, 235, 0.1)',
+                            border: '1.5px solid rgba(37, 99, 235, 0.4)',
                             borderRadius: '6px',
-                            padding: '3px 8px',
+                            padding: '3px 10px',
                             fontSize: '12px',
-                            fontWeight: '500',
-                            color: 'var(--text-secondary)',
+                            fontWeight: '600',
+                            color: '#2563eb',
                             cursor: reparsingId === app._id ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px',
+                            flexShrink: 0,
+                            boxShadow: '0 1px 2px rgba(37, 99, 235, 0.1)',
                             transition: 'all 0.15s ease-out'
                           }}
                         >
-                          <span style={{ display: 'inline-block', transform: reparsingId === app._id ? 'rotate(360deg)' : 'none', transition: 'transform 0.8s linear' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            fontSize: '13px',
+                            transform: reparsingId === app._id ? 'rotate(360deg)' : 'none',
+                            transition: reparsingId === app._id ? 'transform 1s linear infinite' : 'none'
+                          }}>
                             ↻
                           </span>
                           {reparsingId === app._id ? "Reparsing..." : "Reparse"}
