@@ -2073,10 +2073,14 @@ async function fetchAndProcessEmails(targetUserId = null) {
               }
 
               if (linkedSyncPath === "full") {
-                const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:90d`;
+                // Linked accounts: limit first-time full sync to recent emails only
+                const linkedMaxResults = linked.lastHistoryId ? 250 : 20;
+                const linkedRecency = linked.lastHistoryId ? "90d" : "30d";
+                const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:${linkedRecency}`;
+                console.log(`[LINKED_FULL_SYNC] ${linked.email} | maxResults: ${linkedMaxResults} | recency: ${linkedRecency}`);
                 const listRes = await linkedGmail.users.messages.list({
                   userId: "me",
-                  maxResults: 250,
+                  maxResults: linkedMaxResults,
                   q: queryStr
                 });
                 linkedMsgIds = (listRes.data.messages || []).map(m => m.id);

@@ -2132,146 +2132,84 @@ export default function JobTrackerDashboard() {
         /* Stats Section */
         .stats-grid { 
           display: grid; 
-          grid-template-columns: repeat(3, 1fr); 
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
           gap: 20px; 
           margin-bottom: 32px; 
         }
-        @media (max-width: 1024px) {
-          .stats-grid { grid-template-columns: 1fr; }
-        }
         .stat-card { 
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
-          border-radius: 18px; 
-          padding: 20px 22px; 
+          background: var(--surface-color); 
+          border: 1px solid var(--border-color); 
+          border-radius: var(--radius-card); 
+          padding: 20px; 
           display: flex; 
           align-items: center; 
-          justify-content: space-between;
+          gap: 16px;
+          transition: all 0.2s ease-out;
           position: relative;
           overflow: hidden;
-          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .stat-card.total {
-          border: 1.5px solid rgba(20, 184, 166, 0.35);
-        }
-        .stat-card.urgent {
-          border: 1.5px solid rgba(239, 68, 68, 0.35);
-        }
-        .stat-card.unmarked {
-          border: 1.5px solid rgba(245, 158, 11, 0.35);
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
         }
         .stat-card:hover {
-          transform: translateY(-2px);
-        }
-        .stat-card.total:hover {
-          box-shadow: 0 8px 24px rgba(20, 184, 166, 0.15);
-          border-color: rgba(20, 184, 166, 0.6);
-        }
-        .stat-card.urgent:hover {
-          box-shadow: 0 8px 24px rgba(239, 68, 68, 0.15);
-          border-color: rgba(239, 68, 68, 0.6);
-        }
-        .stat-card.unmarked:hover {
-          box-shadow: 0 8px 24px rgba(245, 158, 11, 0.15);
-          border-color: rgba(245, 158, 11, 0.6);
-        }
-        .stat-card-left {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          z-index: 2;
+          border-color: #cbd5e1;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
         }
         .stat-icon {
-          width: 52px;
-          height: 52px;
-          border-radius: 14px;
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
+          font-size: 20px;
           flex-shrink: 0;
         }
         .stat-card.total .stat-icon { 
-          background: rgba(20, 184, 166, 0.14); 
-          border: 1px solid rgba(20, 184, 166, 0.3);
-          color: #0d9488; 
+          background: rgba(16,185,129,0.10); 
+          color: #10B981; 
         }
         .stat-card.urgent .stat-icon { 
-          background: rgba(239, 68, 68, 0.14); 
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          color: #dc2626; 
+          background: rgba(245,158,11,0.10); 
+          color: #F59E0B; 
         }
         .stat-card.unmarked .stat-icon { 
-          background: rgba(245, 158, 11, 0.14); 
-          border: 1px solid rgba(245, 158, 11, 0.3);
-          color: #d97706; 
+          background: rgba(99,102,241,0.10); 
+          color: #6366F1; 
         }
         .stat-content {
           display: flex;
           flex-direction: column;
-          gap: 6px;
         }
         .stat-label { 
-          font-size: 11px; 
-          font-weight: 700; 
+          font-size: 12px; 
+          font-weight: 600; 
           color: #64748b; 
           text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.025em;
+          margin-bottom: 2px;
         }
         .stat-main {
           display: flex;
-          align-items: center;
-          gap: 10px;
+          align-items: baseline;
+          gap: 8px;
         }
         .stat-value { 
-          font-size: 30px; 
-          font-weight: 800; 
-          color: #0f172a; 
+          font-size: 28px; 
+          font-weight: 700; 
+          color: #1e293b; 
           line-height: 1;
-          font-family: 'Manrope', sans-serif;
         }
-        .stat-pill {
-          font-size: 11.5px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-          white-space: nowrap;
+        .stat-subtext {
+          font-size: 12px;
+          font-weight: 500;
+          color: #94a3b8;
         }
-        .trend-pill {
-          background: rgba(20, 184, 166, 0.15);
-          border: 1px solid rgba(20, 184, 166, 0.3);
-          color: #0f766e;
-        }
-        .urgent-pill {
-          background: rgba(148, 163, 184, 0.12);
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          color: #64748b;
-        }
-        .urgent-pill.has-urgent {
-          background: rgba(239, 68, 68, 0.15);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          color: #dc2626;
-        }
-        .unmarked-pill {
-          background: rgba(245, 158, 11, 0.15);
-          border: 1px solid rgba(245, 158, 11, 0.3);
-          color: #b45309;
-        }
-        .stat-card-right {
-          position: absolute;
-          right: 0;
-          top: 0;
-          bottom: 0;
-          width: 140px;
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          pointer-events: none;
-          z-index: 1;
-          opacity: 0.8;
-        }
-        .stat-card-graphic {
-          width: 100%;
-          height: 100%;
+        .stat-trend {
+          font-size: 11px;
+          font-weight: 700;
+          padding: 2px 6px;
+          border-radius: 6px;
+          background: #f0fdf4;
+          color: #16a34a;
         }
         
         /* Filters */
@@ -2754,27 +2692,20 @@ export default function JobTrackerDashboard() {
         .dark .page-title { color: #f8fafc; }
         .dark .page-subtitle { color: #cbd5e1; }
         
-        .dark .stat-card.total { 
-          background: linear-gradient(135deg, rgba(20, 184, 166, 0.18) 0%, rgba(13, 19, 33, 0.92) 60%, rgba(13, 19, 33, 0.95) 100%);
-          border-color: rgba(20, 184, 166, 0.4);
+        .dark .stat-card { 
+          background: var(--surface-color); 
+          border-color: var(--border-color); 
         }
-        .dark .stat-card.urgent { 
-          background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(120, 30, 60, 0.12) 40%, rgba(13, 19, 33, 0.92) 100%);
-          border-color: rgba(239, 68, 68, 0.35);
-        }
-        .dark .stat-card.unmarked { 
-          background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(120, 80, 10, 0.1) 40%, rgba(13, 19, 33, 0.92) 100%);
-          border-color: rgba(245, 158, 11, 0.4);
+        .dark .stat-card:hover {
+          border-color: #3f3f46;
         }
         .dark .stat-label { color: #94a3b8; }
         .dark .stat-value { color: #f8fafc; }
-        .dark .stat-card.total .stat-icon { background: rgba(20, 184, 166, 0.18); border-color: rgba(20, 184, 166, 0.4); color: #2dd4bf; }
-        .dark .stat-card.urgent .stat-icon { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.4); color: #f87171; }
-        .dark .stat-card.unmarked .stat-icon { background: rgba(245, 158, 11, 0.18); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
-        .dark .trend-pill { background: rgba(20, 184, 166, 0.2); border-color: rgba(20, 184, 166, 0.4); color: #2dd4bf; }
-        .dark .urgent-pill { background: rgba(148, 163, 184, 0.15); border-color: rgba(148, 163, 184, 0.3); color: #94a3b8; }
-        .dark .urgent-pill.has-urgent { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #f87171; }
-        .dark .unmarked-pill { background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
+        .dark .stat-card.total .stat-icon { background: #064e3b; color: #2dd4bf; }
+        .dark .stat-card.urgent .stat-icon { background: #450a0a; color: #fca5a5; }
+        .dark .stat-card.unmarked .stat-icon { background: #451a03; color: #fbbf24; }
+        .dark .stat-trend { background: #064e3b; color: #4ade80; }
+        .dark .stat-subtext { color: #64748b; }
         
         .dark .filters { background: var(--surface-color); border-color: var(--border-color); }
         .dark .filter-btn { color: var(--text-secondary); }
@@ -4046,124 +3977,52 @@ export default function JobTrackerDashboard() {
                 </div>
 
                 <div className="stats-grid">
-                  {/* Card 1: TOTAL APPLICATIONS */}
                   <div className="stat-card total">
-                    <div className="stat-card-left">
-                      <div className="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="20" x2="18" y2="10"></line>
-                          <line x1="12" y1="20" x2="12" y2="4"></line>
-                          <line x1="6" y1="20" x2="6" y2="14"></line>
-                        </svg>
-                      </div>
-                      <div className="stat-content">
-                        <span className="stat-label">Total Applications</span>
-                        <div className="stat-main">
-                          <span className="stat-value">{total}</span>
-                          <span className="stat-pill trend-pill">
-                            {newThisWeek > 0 ? `+${newThisWeek} this week` : "Active"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 140 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M 0 65 Q 25 60, 50 45 Q 75 30, 95 20 T 140 5" stroke="url(#teal-grad)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                        <path d="M 0 65 Q 25 60, 50 45 Q 75 30, 95 20 T 140 5 L 140 80 L 0 80 Z" fill="url(#teal-fill)" />
-                        <circle cx="138" cy="6" r="4" fill="#2dd4bf" filter="drop-shadow(0 0 6px #2dd4bf)" />
-                        <defs>
-                          <linearGradient id="teal-grad" x1="0" y1="0" x2="1" y2="0">
-                            <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.1" />
-                            <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.9" />
-                          </linearGradient>
-                          <linearGradient id="teal-fill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#2dd4bf" stopOpacity="0.35" />
-                            <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.02" />
-                          </linearGradient>
-                        </defs>
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
                       </svg>
+                    </div>
+                    <div className="stat-content">
+                      <span className="stat-label">Total Applications</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{total}</span>
+                        {newThisWeek > 0 && <span className="stat-trend">+{newThisWeek} this week</span>}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Card 2: DEADLINES TODAY */}
                   <div className="stat-card urgent">
-                    <div className="stat-card-left">
-                      <div className="stat-icon" style={{ position: 'relative' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                        </svg>
-                        <span className="bell-dot" style={{
-                          position: 'absolute',
-                          top: '10px',
-                          right: '10px',
-                          width: '7px',
-                          height: '7px',
-                          borderRadius: '50%',
-                          background: '#ef4444',
-                          boxShadow: '0 0 6px #ef4444'
-                        }} />
-                      </div>
-                      <div className="stat-content">
-                        <span className="stat-label">Deadlines Today</span>
-                        <div className="stat-main">
-                          <span className="stat-value">{urgentDeadlines}</span>
-                          <span className={`stat-pill urgent-pill ${urgentDeadlines > 0 ? "has-urgent" : ""}`}>
-                            {urgentDeadlines === 0 ? "All clear" : "Requires attention"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 100 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="10" y="15" width="80" height="58" rx="8" stroke="#f87171" strokeWidth="1.5" fill="rgba(239,68,68,0.04)" />
-                        <line x1="10" y1="30" x2="90" y2="30" stroke="#f87171" strokeWidth="1" />
-                        <line x1="30" y1="8" x2="30" y2="18" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" />
-                        <line x1="70" y1="8" x2="70" y2="18" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" />
-                        <rect x="20" y="36" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
-                        <rect x="44" y="36" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
-                        <rect x="68" y="36" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
-                        <rect x="20" y="51" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
-                        <rect x="44" y="51" width="12" height="9" rx="2" fill="#ef4444" filter="drop-shadow(0 0 6px #ef4444)" />
-                        <rect x="68" y="51" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                       </svg>
+                    </div>
+                    <div className="stat-content">
+                      <span className="stat-label">Deadlines Today</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{urgentDeadlines}</span>
+                        <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Card 3: UNMARKED */}
                   <div className="stat-card unmarked">
-                    <div className="stat-card-left">
-                      <div className="stat-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path>
-                        </svg>
-                      </div>
-                      <div className="stat-content">
-                        <span className="stat-label">Unmarked</span>
-                        <div className="stat-main">
-                          <span className="stat-value">{unmarkedCount}</span>
-                          <span className="stat-pill unmarked-pill">
-                            {unmarkedCount === 0 ? "All reviewed" : "Needs review"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 110 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <g transform="rotate(-8 55 40)">
-                          <rect x="12" y="16" width="70" height="45" rx="7" stroke="#f59e0b" strokeWidth="1.2" fill="rgba(245,158,11,0.05)" />
-                          <line x1="22" y1="28" x2="42" y2="28" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
-                          <line x1="22" y1="38" x2="62" y2="38" stroke="#f59e0b" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
-                          <circle cx="74" cy="20" r="3" fill="#fbbf24" filter="drop-shadow(0 0 5px #fbbf24)" />
-                        </g>
-                        <g transform="rotate(5 55 45)">
-                          <rect x="18" y="22" width="74" height="48" rx="7" stroke="#fbbf24" strokeWidth="1.2" fill="rgba(245,158,11,0.1)" />
-                          <line x1="28" y1="34" x2="48" y2="34" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" />
-                          <line x1="28" y1="44" x2="68" y2="44" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-                          <line x1="28" y1="53" x2="58" y2="53" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.4" />
-                        </g>
+                    <div className="stat-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path>
                       </svg>
+                    </div>
+                    <div className="stat-content">
+                      <span className="stat-label">Unmarked</span>
+                      <div className="stat-main">
+                        <span className="stat-value">{unmarkedCount}</span>
+                        <span className="stat-subtext">Needs review</span>
+                      </div>
                     </div>
                   </div>
                 </div>
