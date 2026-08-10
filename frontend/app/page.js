@@ -2273,56 +2273,21 @@ export default function JobTrackerDashboard() {
         }
         .stat-card-right {
           position: absolute;
-          right: 0;
-          top: 0;
-          bottom: 0;
-          width: 130px;
+          right: 8px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 110px;
+          height: 65px;
           display: flex;
           align-items: center;
-          justify-content: flex-end;
+          justify-content: center;
           pointer-events: none;
           z-index: 1;
+          opacity: 0.6;
         }
         .stat-card-graphic {
           width: 100%;
           height: 100%;
-          object-fit: contain;
-        }
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-        }
-        .stat-label { 
-          font-size: 12px; 
-          font-weight: 600; 
-          color: #64748b; 
-          text-transform: uppercase;
-          letter-spacing: 0.025em;
-          margin-bottom: 2px;
-        }
-        .stat-main {
-          display: flex;
-          align-items: baseline;
-          gap: 8px;
-        }
-        .stat-value { 
-          font-size: 28px; 
-          font-weight: 700; 
-          color: #1e293b; 
-          line-height: 1;
-        }
-        .stat-subtext {
-          font-size: 12px;
-          font-weight: 500;
-          color: #94a3b8;
-        }
-        .stat-trend {
-          font-size: 11px;
-          font-weight: 700;
-          padding: 2px 6px;
-          border-radius: 6px;
-          background: #f0fdf4;
-          color: #16a34a;
         }
         
         /* Filters */
@@ -4122,17 +4087,17 @@ export default function JobTrackerDashboard() {
                       </div>
                     </div>
                     <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 140 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M 10 60 Q 45 55, 70 35 T 130 10" stroke="url(#teal-grad)" strokeWidth="3" strokeLinecap="round" fill="none" />
-                        <path d="M 10 60 Q 45 55, 70 35 T 130 10 L 130 65 L 10 65 Z" fill="url(#teal-fill)" opacity="0.3" />
-                        <circle cx="130" cy="10" r="4.5" fill="#2dd4bf" filter="drop-shadow(0 0 6px #2dd4bf)" />
+                      <svg className="stat-card-graphic" viewBox="0 0 120 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M 5 50 Q 30 48, 55 30 T 115 8" stroke="url(#teal-grad)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                        <path d="M 5 50 Q 30 48, 55 30 T 115 8 L 115 55 L 5 55 Z" fill="url(#teal-fill)" opacity="0.25" />
+                        <circle cx="115" cy="8" r="3.5" fill="#2dd4bf" filter="drop-shadow(0 0 5px #2dd4bf)" />
                         <defs>
                           <linearGradient id="teal-grad" x1="0" y1="0" x2="1" y2="0">
-                            <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.2" />
+                            <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.15" />
                             <stop offset="100%" stopColor="#2dd4bf" />
                           </linearGradient>
                           <linearGradient id="teal-fill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#2dd4bf" stopOpacity="0.4" />
+                            <stop offset="0%" stopColor="#2dd4bf" stopOpacity="0.35" />
                             <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0" />
                           </linearGradient>
                         </defs>
@@ -4173,17 +4138,17 @@ export default function JobTrackerDashboard() {
                       </div>
                     </div>
                     <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 100 80" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.45">
-                        <rect x="10" y="15" width="80" height="60" rx="10" stroke="#f87171" strokeWidth="2" fill="rgba(239,68,68,0.05)" />
-                        <line x1="10" y1="30" x2="90" y2="30" stroke="#f87171" strokeWidth="1.5" />
-                        <line x1="30" y1="8" x2="30" y2="18" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" />
-                        <line x1="70" y1="8" x2="70" y2="18" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" />
-                        <rect x="22" y="38" width="10" height="8" rx="2" fill="rgba(248,113,113,0.3)" />
-                        <rect x="45" y="38" width="10" height="8" rx="2" fill="rgba(248,113,113,0.3)" />
-                        <rect x="68" y="38" width="10" height="8" rx="2" fill="rgba(248,113,113,0.3)" />
-                        <rect x="22" y="52" width="10" height="8" rx="2" fill="rgba(248,113,113,0.3)" />
-                        <rect x="45" y="52" width="10" height="8" rx="2" fill="#ef4444" filter="drop-shadow(0 0 8px #ef4444)" />
-                        <rect x="68" y="52" width="10" height="8" rx="2" fill="rgba(248,113,113,0.3)" />
+                      <svg className="stat-card-graphic" viewBox="0 0 80 65" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="8" y="14" width="64" height="46" rx="7" stroke="#f87171" strokeWidth="1.5" fill="rgba(239,68,68,0.04)" />
+                        <line x1="8" y1="26" x2="72" y2="26" stroke="#f87171" strokeWidth="1" />
+                        <line x1="24" y1="8" x2="24" y2="16" stroke="#f87171" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="56" y1="8" x2="56" y2="16" stroke="#f87171" strokeWidth="2" strokeLinecap="round" />
+                        <rect x="17" y="31" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
+                        <rect x="36" y="31" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
+                        <rect x="55" y="31" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
+                        <rect x="17" y="42" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
+                        <rect x="36" y="42" width="8" height="6" rx="1.5" fill="#ef4444" filter="drop-shadow(0 0 5px #ef4444)" />
+                        <rect x="55" y="42" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
                       </svg>
                     </div>
                   </div>
@@ -4211,18 +4176,18 @@ export default function JobTrackerDashboard() {
                       </div>
                     </div>
                     <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 110 80" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.5">
-                        <g transform="rotate(-8 55 40)">
-                          <rect x="15" y="20" width="75" height="45" rx="8" stroke="#f59e0b" strokeWidth="1.5" fill="rgba(245,158,11,0.06)" />
-                          <line x1="25" y1="32" x2="45" y2="32" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
-                          <line x1="25" y1="42" x2="65" y2="42" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
-                          <circle cx="80" cy="24" r="3.5" fill="#fbbf24" filter="drop-shadow(0 0 6px #fbbf24)" />
+                      <svg className="stat-card-graphic" viewBox="0 0 90 65" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="rotate(-10 45 32)">
+                          <rect x="10" y="14" width="55" height="35" rx="6" stroke="#f59e0b" strokeWidth="1.2" fill="rgba(245,158,11,0.05)" />
+                          <line x1="18" y1="24" x2="35" y2="24" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
+                          <line x1="18" y1="32" x2="50" y2="32" stroke="#f59e0b" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+                          <circle cx="58" cy="17" r="2.5" fill="#fbbf24" filter="drop-shadow(0 0 4px #fbbf24)" />
                         </g>
-                        <g transform="rotate(4 55 45)">
-                          <rect x="20" y="25" width="75" height="45" rx="8" stroke="#fbbf24" strokeWidth="1.5" fill="rgba(245,158,11,0.12)" />
-                          <line x1="30" y1="37" x2="50" y2="37" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
-                          <line x1="30" y1="47" x2="70" y2="47" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-                          <line x1="30" y1="55" x2="60" y2="55" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+                        <g transform="rotate(5 45 38)">
+                          <rect x="15" y="20" width="60" height="38" rx="6" stroke="#fbbf24" strokeWidth="1.2" fill="rgba(245,158,11,0.1)" />
+                          <line x1="23" y1="30" x2="40" y2="30" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" />
+                          <line x1="23" y1="38" x2="55" y2="38" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+                          <line x1="23" y1="45" x2="48" y2="45" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.4" />
                         </g>
                       </svg>
                     </div>
