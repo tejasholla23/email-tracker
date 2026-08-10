@@ -2210,27 +2210,12 @@ export default function JobTrackerDashboard() {
           flex-direction: column;
           gap: 6px;
         }
-        .stat-label-row {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
         .stat-label { 
           font-size: 11px; 
           font-weight: 700; 
           color: #64748b; 
           text-transform: uppercase;
           letter-spacing: 0.05em;
-        }
-        .stat-info-icon {
-          font-size: 11px;
-          color: #94a3b8;
-          cursor: help;
-          user-select: none;
-          transition: color 0.15s ease;
-        }
-        .stat-info-icon:hover {
-          color: #64748b;
         }
         .stat-main {
           display: flex;
@@ -2273,17 +2258,16 @@ export default function JobTrackerDashboard() {
         }
         .stat-card-right {
           position: absolute;
-          right: 8px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 110px;
-          height: 65px;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          width: 140px;
           display: flex;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-end;
           pointer-events: none;
           z-index: 1;
-          opacity: 0.6;
+          opacity: 0.8;
         }
         .stat-card-graphic {
           width: 100%;
@@ -2771,20 +2755,19 @@ export default function JobTrackerDashboard() {
         .dark .page-subtitle { color: #cbd5e1; }
         
         .dark .stat-card.total { 
-          background: linear-gradient(135deg, rgba(20, 184, 166, 0.12) 0%, rgba(13, 19, 33, 0.85) 100%);
-          border-color: rgba(20, 184, 166, 0.35);
+          background: linear-gradient(135deg, rgba(20, 184, 166, 0.18) 0%, rgba(13, 19, 33, 0.92) 60%, rgba(13, 19, 33, 0.95) 100%);
+          border-color: rgba(20, 184, 166, 0.4);
         }
         .dark .stat-card.urgent { 
-          background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(13, 19, 33, 0.85) 100%);
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(120, 30, 60, 0.12) 40%, rgba(13, 19, 33, 0.92) 100%);
           border-color: rgba(239, 68, 68, 0.35);
         }
         .dark .stat-card.unmarked { 
-          background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(13, 19, 33, 0.85) 100%);
-          border-color: rgba(245, 158, 11, 0.35);
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(120, 80, 10, 0.1) 40%, rgba(13, 19, 33, 0.92) 100%);
+          border-color: rgba(245, 158, 11, 0.4);
         }
         .dark .stat-label { color: #94a3b8; }
         .dark .stat-value { color: #f8fafc; }
-        .dark .stat-info-icon { color: #64748b; }
         .dark .stat-card.total .stat-icon { background: rgba(20, 184, 166, 0.18); border-color: rgba(20, 184, 166, 0.4); color: #2dd4bf; }
         .dark .stat-card.urgent .stat-icon { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.4); color: #f87171; }
         .dark .stat-card.unmarked .stat-icon { background: rgba(245, 158, 11, 0.18); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
@@ -4074,31 +4057,28 @@ export default function JobTrackerDashboard() {
                         </svg>
                       </div>
                       <div className="stat-content">
-                        <div className="stat-label-row">
-                          <span className="stat-label">Total Applications</span>
-                          <span className="stat-info-icon" title="Total number of placement emails tracked">ⓘ</span>
-                        </div>
+                        <span className="stat-label">Total Applications</span>
                         <div className="stat-main">
                           <span className="stat-value">{total}</span>
                           <span className="stat-pill trend-pill">
-                            ↑ {newThisWeek > 0 ? `+${newThisWeek} this week` : "Active"}
+                            {newThisWeek > 0 ? `+${newThisWeek} this week` : "Active"}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 120 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M 5 50 Q 30 48, 55 30 T 115 8" stroke="url(#teal-grad)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                        <path d="M 5 50 Q 30 48, 55 30 T 115 8 L 115 55 L 5 55 Z" fill="url(#teal-fill)" opacity="0.25" />
-                        <circle cx="115" cy="8" r="3.5" fill="#2dd4bf" filter="drop-shadow(0 0 5px #2dd4bf)" />
+                      <svg className="stat-card-graphic" viewBox="0 0 140 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M 0 65 Q 25 60, 50 45 Q 75 30, 95 20 T 140 5" stroke="url(#teal-grad)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                        <path d="M 0 65 Q 25 60, 50 45 Q 75 30, 95 20 T 140 5 L 140 80 L 0 80 Z" fill="url(#teal-fill)" />
+                        <circle cx="138" cy="6" r="4" fill="#2dd4bf" filter="drop-shadow(0 0 6px #2dd4bf)" />
                         <defs>
                           <linearGradient id="teal-grad" x1="0" y1="0" x2="1" y2="0">
-                            <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.15" />
-                            <stop offset="100%" stopColor="#2dd4bf" />
+                            <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.1" />
+                            <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.9" />
                           </linearGradient>
                           <linearGradient id="teal-fill" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#2dd4bf" stopOpacity="0.35" />
-                            <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0" />
+                            <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.02" />
                           </linearGradient>
                         </defs>
                       </svg>
@@ -4125,30 +4105,27 @@ export default function JobTrackerDashboard() {
                         }} />
                       </div>
                       <div className="stat-content">
-                        <div className="stat-label-row">
-                          <span className="stat-label">Deadlines Today</span>
-                          <span className="stat-info-icon" title="Applications with deadlines due today">ⓘ</span>
-                        </div>
+                        <span className="stat-label">Deadlines Today</span>
                         <div className="stat-main">
                           <span className="stat-value">{urgentDeadlines}</span>
                           <span className={`stat-pill urgent-pill ${urgentDeadlines > 0 ? "has-urgent" : ""}`}>
-                            {urgentDeadlines === 0 ? "✓ All clear" : "⚠️ Requires attention"}
+                            {urgentDeadlines === 0 ? "All clear" : "Requires attention"}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 80 65" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="8" y="14" width="64" height="46" rx="7" stroke="#f87171" strokeWidth="1.5" fill="rgba(239,68,68,0.04)" />
-                        <line x1="8" y1="26" x2="72" y2="26" stroke="#f87171" strokeWidth="1" />
-                        <line x1="24" y1="8" x2="24" y2="16" stroke="#f87171" strokeWidth="2" strokeLinecap="round" />
-                        <line x1="56" y1="8" x2="56" y2="16" stroke="#f87171" strokeWidth="2" strokeLinecap="round" />
-                        <rect x="17" y="31" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
-                        <rect x="36" y="31" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
-                        <rect x="55" y="31" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
-                        <rect x="17" y="42" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
-                        <rect x="36" y="42" width="8" height="6" rx="1.5" fill="#ef4444" filter="drop-shadow(0 0 5px #ef4444)" />
-                        <rect x="55" y="42" width="8" height="6" rx="1.5" fill="rgba(248,113,113,0.25)" />
+                      <svg className="stat-card-graphic" viewBox="0 0 100 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="10" y="15" width="80" height="58" rx="8" stroke="#f87171" strokeWidth="1.5" fill="rgba(239,68,68,0.04)" />
+                        <line x1="10" y1="30" x2="90" y2="30" stroke="#f87171" strokeWidth="1" />
+                        <line x1="30" y1="8" x2="30" y2="18" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" />
+                        <line x1="70" y1="8" x2="70" y2="18" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" />
+                        <rect x="20" y="36" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
+                        <rect x="44" y="36" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
+                        <rect x="68" y="36" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
+                        <rect x="20" y="51" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
+                        <rect x="44" y="51" width="12" height="9" rx="2" fill="#ef4444" filter="drop-shadow(0 0 6px #ef4444)" />
+                        <rect x="68" y="51" width="12" height="9" rx="2" fill="rgba(248,113,113,0.2)" />
                       </svg>
                     </div>
                   </div>
@@ -4163,31 +4140,28 @@ export default function JobTrackerDashboard() {
                         </svg>
                       </div>
                       <div className="stat-content">
-                        <div className="stat-label-row">
-                          <span className="stat-label">Unmarked</span>
-                          <span className="stat-info-icon" title="Applications needing user status review">ⓘ</span>
-                        </div>
+                        <span className="stat-label">Unmarked</span>
                         <div className="stat-main">
                           <span className="stat-value">{unmarkedCount}</span>
                           <span className="stat-pill unmarked-pill">
-                            ● {unmarkedCount === 0 ? "All reviewed" : "Needs review"}
+                            {unmarkedCount === 0 ? "All reviewed" : "Needs review"}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="stat-card-right">
-                      <svg className="stat-card-graphic" viewBox="0 0 90 65" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <g transform="rotate(-10 45 32)">
-                          <rect x="10" y="14" width="55" height="35" rx="6" stroke="#f59e0b" strokeWidth="1.2" fill="rgba(245,158,11,0.05)" />
-                          <line x1="18" y1="24" x2="35" y2="24" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
-                          <line x1="18" y1="32" x2="50" y2="32" stroke="#f59e0b" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
-                          <circle cx="58" cy="17" r="2.5" fill="#fbbf24" filter="drop-shadow(0 0 4px #fbbf24)" />
+                      <svg className="stat-card-graphic" viewBox="0 0 110 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="rotate(-8 55 40)">
+                          <rect x="12" y="16" width="70" height="45" rx="7" stroke="#f59e0b" strokeWidth="1.2" fill="rgba(245,158,11,0.05)" />
+                          <line x1="22" y1="28" x2="42" y2="28" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
+                          <line x1="22" y1="38" x2="62" y2="38" stroke="#f59e0b" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+                          <circle cx="74" cy="20" r="3" fill="#fbbf24" filter="drop-shadow(0 0 5px #fbbf24)" />
                         </g>
-                        <g transform="rotate(5 45 38)">
-                          <rect x="15" y="20" width="60" height="38" rx="6" stroke="#fbbf24" strokeWidth="1.2" fill="rgba(245,158,11,0.1)" />
-                          <line x1="23" y1="30" x2="40" y2="30" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" />
-                          <line x1="23" y1="38" x2="55" y2="38" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-                          <line x1="23" y1="45" x2="48" y2="45" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.4" />
+                        <g transform="rotate(5 55 45)">
+                          <rect x="18" y="22" width="74" height="48" rx="7" stroke="#fbbf24" strokeWidth="1.2" fill="rgba(245,158,11,0.1)" />
+                          <line x1="28" y1="34" x2="48" y2="34" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" />
+                          <line x1="28" y1="44" x2="68" y2="44" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+                          <line x1="28" y1="53" x2="58" y2="53" stroke="#fbbf24" strokeWidth="1" strokeLinecap="round" opacity="0.4" />
                         </g>
                       </svg>
                     </div>
