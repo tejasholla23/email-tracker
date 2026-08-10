@@ -2315,6 +2315,7 @@ export default function JobTrackerDashboard() {
         .status-new { background: #eff6ff; border-color: rgba(59, 130, 246, 0.25); color: #1d4ed8; }
         .status-unmarked { background: #fffbeb; border-color: rgba(245, 158, 11, 0.25); color: #b45309; }
         .status-applied { background: #f0fdfa; border-color: rgba(20, 184, 166, 0.25); color: #0f766e; }
+        .status-no_response, .status-no-response { background: #fff7ed; border-color: rgba(249, 115, 22, 0.35); color: #ea580c; }
         .status-done { background: #f0fdf4; border-color: rgba(34, 197, 94, 0.25); color: #15803d; }
         .app-card.is-urgent { border-color: #dc2626; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18); }
         
@@ -2738,6 +2739,7 @@ export default function JobTrackerDashboard() {
         .dark .status-new { background: rgba(37, 99, 235, 0.08); color: #3b82f6; border-color: #1d4ed8; }
         .dark .status-unmarked { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: #d97706; }
         .dark .status-applied { background: rgba(20, 184, 166, 0.08); color: #14b8a6; border-color: #0d9488; }
+        .dark .status-no_response, .dark .status-no-response { background: rgba(249, 115, 22, 0.12); color: #f97316; border-color: #ea580c; }
         .dark .status-done { background: rgba(34, 197, 94, 0.08); color: #22c55e; border-color: #16a34a; }
         .dark .app-footer { border-color: #334155; color: #94a3b8; }
         
@@ -2870,6 +2872,7 @@ export default function JobTrackerDashboard() {
         .meta-chip.urgent { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
         .meta-chip.status-new { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
         .meta-chip.status-applied { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .meta-chip.status-no_response, .meta-chip.status-no-response { background: #fff7ed; border-color: #ffedd5; color: #ea580c; }
         .meta-chip.status-interview { background: #fefce8; border-color: #fde68a; color: #92400e; }
         .meta-chip.status-offer { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
         .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
@@ -4084,6 +4087,11 @@ export default function JobTrackerDashboard() {
                         if (ageInMs > 24 * 60 * 60 * 1000) {
                           derivedStatus = "unmarked";
                         }
+                      } else if (derivedStatus === "applied") {
+                        const ageInMs = Date.now() - latestEmailTime;
+                        if (ageInMs >= 20 * 24 * 60 * 60 * 1000) {
+                          derivedStatus = "no_response";
+                        }
                       }
                       return { ...app, derivedStatus, latestEmailTime };
                     })
@@ -4100,7 +4108,8 @@ export default function JobTrackerDashboard() {
                       const matchesFilter =
                         activeFilter === "all" ||
                         (activeFilter === "deadlines" && isDeadlineToday) ||
-                        activeFilter === app.derivedStatus;
+                        activeFilter === app.derivedStatus ||
+                        (activeFilter === "applied" && (app.derivedStatus === "applied" || app.derivedStatus === "no_response"));
 
                       return matchesSearch && matchesFilter;
                     })
@@ -4207,7 +4216,7 @@ export default function JobTrackerDashboard() {
                           )}
                           <div className="status-badge-container">
                             <span className={`status-badge status-${app.derivedStatus}`}>
-                              {app.derivedStatus}
+                              {app.derivedStatus === "no_response" ? "No response" : app.derivedStatus}
                             </span>
                           </div>
                         </div>
@@ -4910,8 +4919,8 @@ export default function JobTrackerDashboard() {
                   <button className="modal-close" onClick={closeInfoModal}>&times;</button>
                 </div>
                 <div className="info-modal-meta-chips">
-                  <span className={`meta-chip status-${statusKey}`} style={{ textTransform: 'capitalize' }}>
-                    {app.status || 'New'}
+                  <span className={`meta-chip status-${app.derivedStatus || statusKey}`} style={{ textTransform: 'capitalize' }}>
+                    {app.derivedStatus === 'no_response' ? 'No response' : (app.status || 'New')}
                   </span>
                   {app.type && app.type !== 'unknown' && app.type !== app.emailType && (
                     <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.type}</span>
