@@ -1483,11 +1483,11 @@ function generateSubtitleFallback(subject = "", body = "", category = "") {
 
 
 // ---------------------------------------------------------------------------
-// Gemini structured call â€” primary LLM integration
+// LLM structured call — primary LLM integration (NVIDIA / Llama 3.1 70B)
 // ---------------------------------------------------------------------------
 
 /**
- * Valid email types returned by Gemini.
+ * Valid email types returned by LLM.
  */
 const VALID_EMAIL_TYPES = ["job", "event", "nonRecruitment"];
 
@@ -1521,10 +1521,10 @@ const VALID_CLASSIFICATIONS = [
 ];
 
 /**
- * Validate and sanitize the raw JSON object returned by Gemini.
+ * Validate and sanitize the raw JSON object returned by LLM.
  * Returns a clean, schema-conformant object, or null if fatally invalid.
  */
-function validateGeminiResponse(raw) {
+function validateLLMResponse(raw) {
   if (!raw || typeof raw !== "object") return null;
 
   // emailType â€” must be one of the allowed values
@@ -1599,12 +1599,14 @@ function validateGeminiResponse(raw) {
 }
 
 
+const validateGeminiResponse = validateLLMResponse;
+
 /**
- * Call Gemini with a structured prompt that returns company, classification,
+ * Call LLM (Llama 3.1 70B) with a structured prompt that returns company, classification,
  * subtitle, and a flexible displayFields array of {label, value} pairs.
  * Falls back to null on any error.
  */
-async function callGeminiStructured({ subject = "", sender = "", body = "", opportunityType = "JOB_APPLICATION" }) {
+async function callLLMStructured({ subject = "", sender = "", body = "", opportunityType = "JOB_APPLICATION" }) {
   const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
 
   const prompt = `You are a smart placement-email parser for a college student dashboard. Analyze the email and return ONLY valid JSON — no markdown, no explanation.
@@ -1702,7 +1704,7 @@ Body: ${truncatedBody}`;
 
       console.log("[LLM_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
       
-      const validated = validateGeminiResponse(rawParsed);
+      const validated = validateLLMResponse(rawParsed);
 
       if (!validated) {
         console.warn("[LLM_STRUCTURED] Response failed schema validation, discarding.");
@@ -1713,8 +1715,8 @@ Body: ${truncatedBody}`;
       
       // Preserve geminiUsed key so we don't break existing UI checks for LLM parsing success
       validated.parseMeta = {
-        geminiUsed: true,
         llmUsed: true,
+        geminiUsed: true,
         model: MODEL_NAME
       };
 
@@ -1745,8 +1747,10 @@ Body: ${truncatedBody}`;
   return { status: "transport_error" };
 }
 
+const callGeminiStructured = callLLMStructured;
+
 /**
- * Deterministic fallback to extract displayFields when Gemini fails (e.g. rate limits).
+ * Deterministic fallback to extract displayFields when LLM fails (e.g. rate limits).
  * Uses lightweight regexes to pull out standard slots if present.
  */
 function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION") {
@@ -1831,12 +1835,12 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   const forwarded = parseForwardedEmail(body);
   const sourceBody    = forwarded.body || body;
   const sourceSubject = (forwarded.subject || subject || "").trim();
-  // Footer-stripped body passed to Gemini â€” prevents placement-dept footers
-  // from polluting Gemini's understanding of location/company/fields.
+  // Footer-stripped body passed to LLM — prevents placement-dept footers
+  // from polluting LLM's understanding of location/company/fields.
   const footerStrippedBody = stripForwardingFooter(sourceBody);
   const linkInfo = extractFormLink(sourceBody);
 
-  // â”€â”€ Step 1: Deterministic classification (PRIMARY) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Step 1: Deterministic classification (PRIMARY) ─────────────────────────
   const detClassification = classifyEmail({
     subject: sourceSubject,
     body: sourceBody,
@@ -1844,21 +1848,22 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     hasLink: !!linkInfo.primary,
   });
 
-  // â”€â”€ Step 2: Gemini LLM Extraction â”€â”€â”€â”€â”€â”€â”€â”€
-  const geminiResult = await callGeminiStructured({
+  // ── Step 2: LLM Extraction (Llama 3.1 70B) ─────────────────────────
+  const llmResult = await callLLMStructured({
     subject: sourceSubject,
     sender,
     body: footerStrippedBody || sourceBody,
     opportunityType: detClassification.opportunityType || "JOB_APPLICATION",
   });
 
-  const gemini = geminiResult.status === "success" ? geminiResult.data : null;
-  const shouldRetry = geminiResult.status === "transport_error";
+  const llmData = llmResult.status === "success" ? llmResult.data : null;
+  const gemini = llmData; // alias for internal references
+  const shouldRetry = llmResult.status === "transport_error";
 
-  // â”€â”€ Step 3: Three-tier company resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  //   Tier 1 (1.0)  â€” known alias from sender domain
-  //   Tier 2 (0.85) â€” Gemini company
-  //   Tier 3 (var.) â€” deterministic fallback
+  // ── Step 3: Three-tier company resolution ──────────────────────────────────
+  //   Tier 1 (1.0)  — known alias from sender domain
+  //   Tier 2 (0.85) — LLM company
+  //   Tier 3 (var.) — deterministic fallback
   const candidateSenders = [forwarded.from, sender].filter(Boolean);
   let senderAliasCompany = "";
   for (const snd of candidateSenders) {
@@ -1881,8 +1886,8 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   let company, companySource, companyConfidence;
   if (senderAliasCompany) {
     company = senderAliasCompany; companySource = "sender_alias"; companyConfidence = 1.0;
-  } else if (gemini?.company && sanitizeCompany(gemini.company)) {
-    company = sanitizeCompany(gemini.company); companySource = "gemini"; companyConfidence = 0.85;
+  } else if (llmData?.company && sanitizeCompany(llmData.company)) {
+    company = sanitizeCompany(llmData.company); companySource = "llm"; companyConfidence = 0.85;
   } else {
     company = detCompanyObj.company; companySource = detCompanyObj.source; companyConfidence = detCompanyObj.confidence;
   }
@@ -2182,10 +2187,13 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       hasLink:              !!linkInfo.primary,
       shouldRetry,
       llmProvider:          MODEL_NAME,
-      llmStatus:            geminiResult.status,
-      geminiUsed:           geminiResult.status === "success",
-      geminiEmailType:      gemini?.emailType      ?? null,
-      geminiClassification: gemini?.classification ?? null,
+      llmStatus:            llmResult.status,
+      llmUsed:              llmResult.status === "success",
+      geminiUsed:           llmResult.status === "success",
+      llmEmailType:         llmData?.emailType      ?? null,
+      llmClassification:    llmData?.classification ?? null,
+      geminiEmailType:      llmData?.emailType      ?? null,
+      geminiClassification: llmData?.classification ?? null,
       ...(parseTrace ? { trace: parseTrace } : {}),
     },
   };

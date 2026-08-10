@@ -1059,11 +1059,11 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
 // ==========================
 
 // --- Extracted per-message processing logic ---
-// Returns: { action: 'inserted' | 'skipped' | 'error', usedGemini: boolean }
-async function processMessage(gmail, acc, messageId, subject_unused, existingFast, geminiParsedCount, receivingEmailOverride) {
+// Returns: { action: 'inserted' | 'skipped' | 'error', usedLLM: boolean }
+async function processMessage(gmail, acc, messageId, subject_unused, existingFast, llmParsedCount, receivingEmailOverride) {
   const id = messageId;
   const receivingEmail = (receivingEmailOverride || acc.email || "").toLowerCase().trim();
-  let usedGemini = false;
+  let usedLLM = false;
 
   try {
     // ── FAST PATH: already fully parsed ──
@@ -1074,13 +1074,13 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         } else {
           console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (${CURRENT_PARSER_VERSION})`);
         }
-        return { action: 'skipped', usedGemini: false };
+        return { action: 'skipped', usedLLM: false, usedGemini: false };
       } else {
         // Check if backoff retry window has elapsed
         const nextRetry = existingFast.parseMeta?.nextRetryAt ? new Date(existingFast.parseMeta.nextRetryAt) : null;
         if (nextRetry && new Date() < nextRetry) {
           console.log(`[SKIP_FAST] ${id} | Reason: Backoff active (retry deferred until ${nextRetry.toISOString()})`);
-          return { action: 'skipped', usedGemini: false };
+          return { action: 'skipped', usedLLM: false, usedGemini: false };
         }
       }
     }
@@ -1135,7 +1135,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       // Skip if this messageId was already marked as deleted (and is a normal application)
       if (exists.isDeleted) {
         console.log(`[SKIP] ${id} | Reason: Message already deleted by user`);
-        return { action: 'skipped', usedGemini: false };
+        return { action: 'skipped' };
       }
       
       const emailDate = email.data?.internalDate ? new Date(parseInt(email.data.internalDate)) : (exists.date || new Date());
@@ -1182,7 +1182,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
               status: cachedApp.status,
               confidenceScore: cachedApp.confidenceScore,
               timelineTitle: cachedApp.title,
-              timelineSummary: cachedApp.parseMeta?.trace?.gemini?.timelineSummary || "",
+              timelineSummary: cachedApp.parseMeta?.trace?.llm?.timelineSummary || "",
               company: cachedApp.company,
               domain: cachedApp.domain,
               subtitle: cachedApp.subtitle,
@@ -1216,9 +1216,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
         if (!parsed) {
           parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-          // Sleep to safely respect Gemini RPM free tier limit
-          await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
-          usedGemini = true;
+          // Sleep to safely respect LLM RPM limits
+          await new Promise(r => setTimeout(r, config.LLM_DELAY_MS));
+          usedLLM = true;
           if (parsed && parsed.parseMeta) {
             parsed.parseMeta.internetMessageId = internetMessageId;
           }
@@ -1250,9 +1250,6 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
                 summary: parsed.timelineSummary || parsed.summary || ""
               });
               exists.events.sort((a, b) => new Date(a.date) - new Date(b.date));
-              if (!ov.includes("date") && retryDate && new Date(retryDate) > new Date(exists.date || 0)) {
-                updatePayload.date = retryDate;
-              }
             }
             exists.markModified('events');
             eventAdded = true; // Force eventAdded so updatePayload.events is saved!
@@ -1343,7 +1340,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       }
 
       console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
-      return { action: 'skipped', usedGemini };
+      return { action: 'skipped' };
     }
 
     // ── NEW EMAIL: parse and save ──
@@ -1365,7 +1362,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           status: cachedApp.status,
           confidenceScore: cachedApp.confidenceScore,
           timelineTitle: cachedApp.title,
-          timelineSummary: cachedApp.parseMeta?.trace?.gemini?.timelineSummary || "",
+          timelineSummary: cachedApp.parseMeta?.trace?.llm?.timelineSummary || "",
           company: cachedApp.company,
           domain: cachedApp.domain,
           subtitle: cachedApp.subtitle,
@@ -1400,9 +1397,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     if (!parsed) {
       console.log(`[PARSE_START] ${id}`);
       parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
-      // Sleep to safely respect Gemini RPM free tier limit
-      await new Promise(r => setTimeout(r, config.GEMINI_DELAY_MS));
-      usedGemini = true;
+      // Sleep to safely respect LLM RPM limits
+      await new Promise(r => setTimeout(r, config.LLM_DELAY_MS));
+      usedLLM = true;
       if (parsed && parsed.parseMeta) {
         parsed.parseMeta.internetMessageId = internetMessageId;
       }
@@ -1440,7 +1437,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
               retryCount: 1,
               lastRetryAt: new Date(),
               nextRetryAt: nextRetry,
-              llmProvider: parsed?.parseMeta?.llmProvider || "gemini-3.5-flash",
+              llmProvider: parsed?.parseMeta?.llmProvider || "meta/llama-3.1-70b-instruct",
               llmStatus: parsed?.parseMeta?.llmStatus || "transport_error"
             }
           });
@@ -1450,7 +1447,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             console.error(`[PENDING_SAVE_ERROR] ${id}`, e.message);
           }
         }
-        return { action: 'skipped', usedGemini };
+        return { action: 'skipped', usedLLM };
       }
       
       const parserVer = CURRENT_PARSER_VERSION;
@@ -1476,7 +1473,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         }
       }
 
-      return { action: 'skipped', usedGemini };
+      return { action: 'skipped' };
     }
 
     const finalRole = parsed.role || "Unknown Role";
@@ -1546,10 +1543,6 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
       if (!ov.includes("skills") && (!contentExists.skills || contentExists.skills.length === 0) && parsed.skills?.length) updatePayload.skills = parsed.skills;
 
-      if (!ov.includes("status")) {
-        // Status is now strictly time/action-based. We do not advance status based on classification anymore.
-      }
-
       const emailDate = new Date(parseInt(email.data.internalDate));
       const eventAdded = appendApplicationEvent(contentExists, parsed, {
         messageId: id,
@@ -1576,7 +1569,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       }
 
       console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
-      return { action: 'skipped', usedGemini };
+      return { action: 'skipped', usedLLM };
     }
 
     // Enforce all new emails to start strictly as "new"
@@ -1649,14 +1642,14 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       console.error(`[PUSH_ERROR] ${id}:`, pushErr.message);
     }
 
-    return { action: 'inserted', usedGemini };
+    return { action: 'inserted', usedLLM };
   } catch (error) {
     if (error.code === 11000) {
       console.log(`[SKIP] ${id} | Reason: Duplicate key error (E11000)`);
     } else {
       console.log(`[ERROR] ${id}`, error.message);
     }
-    return { action: 'error', usedGemini: false };
+    return { action: 'error', usedLLM: false };
   }
 }
 
@@ -1938,7 +1931,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
 
         let accInserted = 0;
         let accSkipped = 0;
-        let geminiParsedCount = 0;
+        let llmParsedCount = 0;
 
         for (const msgId of messageIdsToProcess) {
           // Abort the loop immediately if a Clear All was requested for this account while sync was running
@@ -1948,7 +1941,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
           }
 
           const existingFast = knownDocs.get(msgId) || null;
-          const result = await processMessage(gmail, acc, msgId, null, existingFast, geminiParsedCount);
+          const result = await processMessage(gmail, acc, msgId, null, existingFast, llmParsedCount);
 
           if (result.action === 'inserted') {
             accInserted++;
@@ -1958,10 +1951,10 @@ async function fetchAndProcessEmails(targetUserId = null) {
             skippedCount++;
           }
 
-          if (result.usedGemini) geminiParsedCount++;
+          if (result.usedLLM || result.usedGemini) llmParsedCount++;
 
-          if (geminiParsedCount >= config.MAX_EMAILS_PER_SYNC) {
-            console.log(`[SYNC_PROGRESSIVE] Reached limit of ${config.MAX_EMAILS_PER_SYNC} Gemini parses. Stopping sync to preserve quota.`);
+          if (llmParsedCount >= config.MAX_EMAILS_PER_SYNC) {
+            console.log(`[SYNC_PROGRESSIVE] Reached limit of ${config.MAX_EMAILS_PER_SYNC} LLM parses. Stopping sync to preserve quota.`);
             break;
           }
         }
@@ -2093,16 +2086,16 @@ async function fetchAndProcessEmails(targetUserId = null) {
               const knownDocsLinked = await batchLookupMessageIds(linkedMsgIds, acc._id);
               let lInserted = 0;
               let lSkipped = 0;
-              let lGeminiCount = 0;
+              let lLlmCount = 0;
 
               for (const mId of linkedMsgIds) {
                 if (activeClearRequests.has(acc._id.toString())) break;
                 const existingFast = knownDocsLinked.get(mId) || null;
-                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, lGeminiCount, linked.email);
+                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, lLlmCount, linked.email);
                 if (res.action === "inserted") { lInserted++; insertedCount++; }
                 else { lSkipped++; skippedCount++; }
-                if (res.usedGemini) lGeminiCount++;
-                if (lGeminiCount >= config.MAX_EMAILS_PER_SYNC) break;
+                if (res.usedLLM || res.usedGemini) lLlmCount++;
+                if (lLlmCount >= config.MAX_EMAILS_PER_SYNC) break;
               }
 
               const linkedUpdate = {

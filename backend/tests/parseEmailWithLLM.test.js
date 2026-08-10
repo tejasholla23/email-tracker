@@ -43,23 +43,33 @@ test('extractFormLink should remove duplicates', () => {
 // Delete existing parseEmailWithLLM from cache so we can reload it with mocked SDK
 delete require.cache[require.resolve('../utils/parseEmailWithLLM')];
 
-// Setup Mock for @google/genai
+// Setup Mock for openai
 let mockResponseText = "";
 let mockShouldThrow = null;
 
-const mockGenerateContent = async ({ model, contents }) => {
+const mockChatCompletionsCreate = async ({ model, messages }) => {
   if (mockShouldThrow) {
     throw mockShouldThrow;
   }
-  return { text: mockResponseText };
+  return {
+    choices: [
+      {
+        message: {
+          content: mockResponseText
+        }
+      }
+    ]
+  };
 };
 
-require.cache[require.resolve('@google/genai')] = {
+require.cache[require.resolve('openai')] = {
   exports: {
-    GoogleGenAI: class {
+    OpenAI: class {
       constructor() {
-        this.models = {
-          generateContent: mockGenerateContent
+        this.chat = {
+          completions: {
+            create: mockChatCompletionsCreate
+          }
         };
       }
     }

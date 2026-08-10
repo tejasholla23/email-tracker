@@ -7,13 +7,13 @@ const applicationSchema = new mongoose.Schema(
     subtitle: { type: String, default: "" },
     // Legacy: old string-array field display list. Kept for backward compat with pre-redesign records.
     fieldsToDisplay: { type: [String], default: [] },
-    // New: flexible [{label, value}] display fields returned by Gemini.
+    // New: flexible [{label, value}] display fields returned by LLM.
     // Frontend checks this first; falls back to fieldsToDisplay for legacy records.
     displayFields: {
       type: [{ label: { type: String }, value: { type: String } }],
       default: [],
     },
-    // Skills extracted from email body by Gemini (e.g. ["Python", "Machine Learning"])
+    // Skills extracted from email body by LLM (e.g. ["Python", "Machine Learning"])
     skills: { type: [String], default: [] },
     companyKey: { type: String, default: "" }, // normalized key for company-level dedup
     role: { type: String, default: "Unknown Role" }, // Derived from displayFields — kept for search indexing and backward compatibility

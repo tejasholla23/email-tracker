@@ -13,7 +13,7 @@ const companyInfoSchema = new mongoose.Schema(
     description: { type: String, default: "" },   // 2-3 sentence summary
     website: { type: String, default: "" },
     knownFor: [{ type: String }],                 // short bullet points
-    isEnriched: { type: Boolean, default: false }, // true once Gemini profile has been generated
+    isEnriched: { type: Boolean, default: false }, // true once LLM profile has been generated
     isEnriching: { type: Boolean, default: false }, // in-flight lock to prevent concurrent enrichment
     lastEnriched: { type: Date, default: null },
   },
