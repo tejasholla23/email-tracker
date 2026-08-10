@@ -2448,10 +2448,10 @@ export default function JobTrackerDashboard() {
         .pinned-section {
           margin-bottom: 36px;
           padding-bottom: 28px;
-          border-bottom: 1px solid var(--border-color);
+          border-bottom: 1.5px solid rgba(20, 184, 166, 0.35);
         }
         .dark .pinned-section {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          border-bottom: 1.5px solid rgba(20, 184, 166, 0.3);
         }
         .pinned-section-header {
           display: flex;
