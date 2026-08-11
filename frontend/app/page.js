@@ -2323,6 +2323,7 @@ export default function JobTrackerDashboard() {
         .email-info { display: flex; align-items: center; gap: 6px; }
         
         /* Modal Styles */
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleUp { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
         
@@ -3456,7 +3457,26 @@ export default function JobTrackerDashboard() {
                               disabled={syncingCalendar}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px' }}
                             >
-                              🔄 {syncingCalendar ? "Syncing..." : "Re-sync All Calendar Events"}
+                              <svg 
+                                width="15" 
+                                height="15" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                strokeWidth="2.2" 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round"
+                                style={{
+                                  animation: syncingCalendar ? 'spin 1s linear infinite' : 'none',
+                                  flexShrink: 0
+                                }}
+                              >
+                                <path d="M21.5 2v6h-6"/>
+                                <path d="M2.5 22v-6h6"/>
+                                <path d="M2 11.5a10 10 0 0 1 18.8-4.3"/>
+                                <path d="M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                              </svg>
+                              <span>{syncingCalendar ? "Syncing..." : "Re-sync All Calendar Events"}</span>
                             </button>
                           </div>
                         )}
