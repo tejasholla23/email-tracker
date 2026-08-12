@@ -90,7 +90,7 @@ Return ONLY valid raw JSON. No markdown code blocks, no preamble, no extra text.
           lastEnriched: new Date(),
         },
       },
-      { new: true, upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
 
     console.log(`[COMPANY_ENRICH_SUCCESS] ${normalizedName} profile saved.`);

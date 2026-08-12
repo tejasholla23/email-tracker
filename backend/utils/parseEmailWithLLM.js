@@ -1945,29 +1945,29 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
                   detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
       finalType = detClassification.type;
-      classificationReason = `deterministic preserved: "${detClassification.classification}" (det=${detConf.toFixed(2)}) is primary-tier and proportionally stronger than gemini="${gemini.classification}" (gem=${geminiClassConf.toFixed(2)})`;
+      classificationReason = `deterministic preserved: "${detClassification.classification}" (det=${detConf.toFixed(2)}) is primary-tier and proportionally stronger than llm="${gemini.classification}" (llm=${geminiClassConf.toFixed(2)})`;
     } else {
-      // Gemini is stronger, similar, or deterministic is not primary — prefer Gemini semantics
+      // LLM is stronger, similar, or deterministic is not primary — prefer LLM semantics
       finalClassification = gemini.classification;
       emailType = gemini.emailType;
       finalType = gemini.type ?? detClassification.type;
       classificationReason = geminiProportionallyStronger
-        ? `gemini override: "${gemini.classification}" (gem=${geminiClassConf.toFixed(2)}) proportionally stronger than det="${detClassification.classification}" (det=${detConf.toFixed(2)})`
-        : `gemini preferred: "${gemini.classification}" (gem=${geminiClassConf.toFixed(2)}) vs det="${detClassification.classification}" (det=${detConf.toFixed(2)}) — similar confidence, preferring semantic richness`;
+        ? `llm override: "${gemini.classification}" (llm=${geminiClassConf.toFixed(2)}) proportionally stronger than det="${detClassification.classification}" (det=${detConf.toFixed(2)})`
+        : `llm preferred: "${gemini.classification}" (llm=${geminiClassConf.toFixed(2)}) vs det="${detClassification.classification}" (det=${detConf.toFixed(2)}) — similar confidence, preferring semantic richness`;
     }
   } else if (gemini?.classification) {
-    // Gemini available but no confidence score — still prefer Gemini
+    // LLM available but no confidence score — still prefer LLM
     finalClassification = gemini.classification;
     emailType = gemini.emailType ?? (detClassification.category === "hackathonEvent" ? "event" : "job");
     finalType = gemini.type ?? detClassification.type;
-    classificationReason = `gemini only (no confidence score): "${gemini.classification}"`;
+    classificationReason = `llm only (no confidence score): "${gemini.classification}"`;
   } else {
-    // Gemini failed — use deterministic
+    // LLM failed — use deterministic
     finalClassification = detClassification.classification;
     emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
                 detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
     finalType = detClassification.type;
-    classificationReason = `deterministic fallback (gemini unavailable): "${detClassification.classification}" (det=${detConf.toFixed(2)})`;
+    classificationReason = `deterministic fallback (llm unavailable): "${detClassification.classification}" (det=${detConf.toFixed(2)})`;
   }
 
   // opportunityType consistency: ensure it matches the chosen classification
@@ -1993,7 +1993,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   let subtitle, subtitleSource;
   if (gemini?.subtitle) {
     subtitle = gemini.subtitle;
-    subtitleSource = "gemini";
+    subtitleSource = "llm";
   } else {
     const fallback = generateSubtitleFallback(sourceSubject, sourceBody, detClassification.category);
     if (fallback) {

@@ -764,7 +764,10 @@ app.get("/auth/calendar/status", readLimiter, authenticate, async (req, res) => 
 app.get("/auth/calendar/list", readLimiter, authenticate, async (req, res) => {
   try {
     const account = await Account.findById(req.userId);
-    if (!account || !account.tokens) return res.status(404).json({ message: "Account not connected" });
+    const hasCalendarScope = account.tokens?.scope && account.tokens.scope.includes("auth/calendar.events");
+    if (!hasCalendarScope) {
+      return res.json({ calendars: [] });
+    }
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -1311,7 +1314,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
             if (eventAdded) updatePayload.events = exists.events;
 
-            await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
+            await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
             console.log(`[UPDATED] ${id} | Existing application enriched & locked (${CURRENT_PARSER_VERSION})`);
           } else {
             const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
@@ -1329,7 +1332,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             if (eventAdded) {
               updateObj.events = exists.events;
             }
-            await Application.findByIdAndUpdate(exists._id, updateObj, { new: true });
+            await Application.findByIdAndUpdate(exists._id, updateObj, { returnDocument: 'after' });
             console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
           }
         } else {
@@ -1343,11 +1346,11 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             updatePayload.isDeleted = true;
           }
           
-          await Application.findByIdAndUpdate(exists._id, updatePayload, { new: true });
+          await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
           console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to ${CURRENT_PARSER_VERSION}`);
         }
       } else if (eventAdded) {
-        await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { new: true });
+        await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { returnDocument: 'after' });
       }
 
       console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
@@ -1580,7 +1583,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       }
 
       if (Object.keys(updatePayload).length > 0) {
-        await Application.findByIdAndUpdate(contentExists._id, updatePayload, { new: true });
+        await Application.findByIdAndUpdate(contentExists._id, updatePayload, { returnDocument: 'after' });
         console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data, date update, and/or event history`);
       }
 
