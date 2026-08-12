@@ -654,6 +654,25 @@ export default function JobTrackerDashboard() {
         return;
       }
 
+      const linkedParam = params.get("linked");
+      if (linkedParam === "success") {
+        const email = params.get("email") || "Gmail account";
+        setLinkedToast({ type: "success", message: `Successfully connected ${email}` });
+        window.history.replaceState({}, document.title, "/");
+      } else if (linkedParam === "error") {
+        const reason = params.get("reason");
+        let msg = "Failed to connect Gmail account.";
+        if (reason === "insufficient_scopes") {
+          msg = "Access Denied: Gmail reading permission was not granted. Please reconnect and check the checkbox to allow email access.";
+        } else if (reason === "same_as_primary") {
+          msg = "Cannot link your primary college account as a secondary account.";
+        } else if (reason === "max_limit") {
+          msg = "Maximum limit of 3 linked Gmail accounts reached.";
+        }
+        setLinkedToast({ type: "error", message: msg });
+        window.history.replaceState({}, document.title, "/");
+      }
+
       if (authCode) {
         if (exchangeInProgress.current) return;
         exchangeInProgress.current = true;

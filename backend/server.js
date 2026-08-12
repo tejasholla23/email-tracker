@@ -338,6 +338,12 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
         return res.redirect(`${frontendUrl}?linked=error&reason=same_as_primary`);
       }
 
+      // Validate required gmail.readonly scope is granted
+      if (!tokens.scope || !tokens.scope.includes("https://www.googleapis.com/auth/gmail.readonly")) {
+        console.warn(`[LINKED_CALLBACK_DENIED] ${linkedEmail} missing gmail.readonly scope. Scopes returned: ${tokens.scope}`);
+        return res.redirect(`${frontendUrl}?linked=error&reason=insufficient_scopes`);
+      }
+
       // Check count limit
       const existingCount = await LinkedGmailAccount.countDocuments({
         parentAccountId,
