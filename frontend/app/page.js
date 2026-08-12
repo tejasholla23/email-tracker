@@ -875,7 +875,7 @@ export default function JobTrackerDashboard() {
     if (diffHours === 1) return "Last Synced: 1 hour ago";
     if (diffHours < 24) return `Last Synced: ${diffHours} hours ago`;
 
-    return `Last Synced: ${date.toLocaleDateString()}`;
+    return `Last Synced: ${date.toLocaleDateString('en-GB')}`;
   };
 
   const getCompactRelativeTime = (dateString) => {
@@ -3924,7 +3924,7 @@ export default function JobTrackerDashboard() {
                                       {acc.email}
                                     </div>
                                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                      Connected {new Date(acc.connectedAt).toLocaleDateString()} {acc.lastSyncTime ? `• Last synced ${formatRelativeTime(acc.lastSyncTime)}` : ""}
+                                      Connected {new Date(acc.connectedAt).toLocaleDateString('en-GB')} {acc.lastSyncTime ? `• Last synced ${formatRelativeTime(acc.lastSyncTime)}` : ""}
                                     </div>
                                     {isFailed && (
                                       <div style={{ fontSize: '11.5px', color: '#ef4444', marginTop: '4px' }}>
