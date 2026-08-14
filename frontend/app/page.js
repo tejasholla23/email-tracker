@@ -4283,35 +4283,7 @@ export default function JobTrackerDashboard() {
                               </div>
                             </div>
                             <div className="role-company">
-                              <div className="role-title">
-                                <span>{app.company || "Unknown Company"}</span>
-                                {app.accountEmail && userEmail && app.accountEmail.toLowerCase() !== userEmail.toLowerCase() && (
-                                  <span
-                                    className="source-inbox-badge"
-                                    title={`Received on ${app.accountEmail}`}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '3px',
-                                      marginLeft: '8px',
-                                      fontSize: '10.5px',
-                                      fontWeight: '500',
-                                      padding: '2px 7px',
-                                      borderRadius: '6px',
-                                      background: 'rgba(59, 130, 246, 0.09)',
-                                      color: '#3b82f6',
-                                      border: '1px solid rgba(59, 130, 246, 0.25)',
-                                      verticalAlign: 'middle'
-                                    }}
-                                  >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <rect x="2" y="4" width="20" height="16" rx="2"/>
-                                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                                    </svg>
-                                    {app.accountEmail}
-                                  </span>
-                                )}
-                              </div>
+                              <div className="role-title">{app.company || "Unknown Company"}</div>
                               {(() => {
                                 const sub = app.subtitle
                                   || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");
@@ -4401,9 +4373,17 @@ export default function JobTrackerDashboard() {
                                     )}
 
                                   <div className="app-footer">
-                                    <div className="email-info">
-                                      <span style={{ fontSize: 16 }}>✉️</span>
-                                      <span>{app.email || "user@gmail.com"}</span>
+                                    <div className="email-info" title={`Received on ${app.accountEmail || app.email || "Gmail"}`}>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', flexShrink: 0 }}>
+                                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                                      </svg>
+                                      <span>{app.accountEmail || app.email || "user@gmail.com"}</span>
+                                      {app.accountEmail && userEmail && app.accountEmail.toLowerCase() !== userEmail.toLowerCase() && (
+                                        <span style={{ fontSize: '10px', fontWeight: '600', padding: '1px 5px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', marginLeft: '6px', border: '1px solid rgba(59, 130, 246, 0.25)', display: 'inline-flex', alignItems: 'center' }}>
+                                          Linked
+                                        </span>
+                                      )}
                                     </div>
                                     <span>{formattedDate}</span>
                                   </div>
