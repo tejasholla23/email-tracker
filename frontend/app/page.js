@@ -178,6 +178,10 @@ export default function JobTrackerDashboard() {
       console.error("Disconnect error:", err);
       setLinkedToast({ type: "error", message: "Failed to disconnect account." });
     } finally {
+      setDisconnectingId(null);
+    }
+  };
+
   const handleSyncLinkedAccount = async (id) => {
     if (!id || manualSyncingId) return;
     setManualSyncingId(id);
