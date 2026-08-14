@@ -75,6 +75,7 @@ export default function JobTrackerDashboard() {
   const [showLinkConfirmModal, setShowLinkConfirmModal] = useState(false);
   const [linkInitiating, setLinkInitiating] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState(null);
+  const [manualSyncingId, setManualSyncingId] = useState(null);
   const [linkedToast, setLinkedToast] = useState(null);
 
   // Email Reparse State
@@ -177,7 +178,23 @@ export default function JobTrackerDashboard() {
       console.error("Disconnect error:", err);
       setLinkedToast({ type: "error", message: "Failed to disconnect account." });
     } finally {
-      setDisconnectingId(null);
+  const handleSyncLinkedAccount = async (id) => {
+    if (!id || manualSyncingId) return;
+    setManualSyncingId(id);
+    try {
+      const res = await apiFetch(`${BASE_URL}/auth/linked-accounts/${id}/sync`, { method: "POST" });
+      if (res.ok) {
+        setLinkedToast({ type: "success", message: "Sync initiated. Fetching latest emails..." });
+        setTimeout(() => fetchLinkedAccounts(), 2500);
+      } else {
+        const errData = await res.json();
+        setLinkedToast({ type: "error", message: errData.message || "Failed to trigger sync." });
+      }
+    } catch (err) {
+      console.error("Manual sync error:", err);
+      setLinkedToast({ type: "error", message: "Failed to trigger sync." });
+    } finally {
+      setManualSyncingId(null);
     }
   };
 
@@ -658,6 +675,7 @@ export default function JobTrackerDashboard() {
       if (linkedParam === "success") {
         const email = params.get("email") || "Gmail account";
         setLinkedToast({ type: "success", message: `Successfully connected ${email}` });
+        fetchLinkedAccounts();
         window.history.replaceState({}, document.title, "/");
       } else if (linkedParam === "error") {
         const reason = params.get("reason");
@@ -670,6 +688,7 @@ export default function JobTrackerDashboard() {
           msg = "Maximum limit of 3 linked Gmail accounts reached.";
         }
         setLinkedToast({ type: "error", message: msg });
+        fetchLinkedAccounts();
         window.history.replaceState({}, document.title, "/");
       }
 
@@ -3133,9 +3152,13 @@ export default function JobTrackerDashboard() {
               <div className="user-dropdown-container" ref={userDropdownRef}>
                 <button
                   className="user-avatar-btn"
+                  style={{ position: 'relative' }}
                   onClick={() => { setShowUserDropdown(!showUserDropdown); setShowThemeSubmenu(false); }}
                 >
                   U
+                  {linkedAccounts.some(a => a.syncStatus === "failed") && (
+                    <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '9px', height: '9px', borderRadius: '50%', background: '#ef4444', border: '1.5px solid var(--bg-primary)' }} title="Linked account sync issue" />
+                  )}
                 </button>
                 {showUserDropdown && (
                   <div className="user-dropdown-menu">
@@ -3146,7 +3169,7 @@ export default function JobTrackerDashboard() {
                     {!showThemeSubmenu ? (
                       <>
                         <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('linked-accounts'); setShowUserDropdown(false); fetchLinkedAccounts(); }}>
-                          Linked Gmail Accounts ❯
+                          Linked Gmail Accounts {linkedAccounts.some(a => a.syncStatus === "failed") ? "⚠️" : ""} ❯
                         </button>
                         <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
                           Theme
@@ -3910,10 +3933,10 @@ export default function JobTrackerDashboard() {
                           const isPending = acc.syncStatus === "pending";
                           const isFailed = acc.syncStatus === "failed";
                           return (
-                            <div key={acc._id} className="settings-card" style={{ padding: '18px 20px' }}>
+                            <div key={acc._id} className="settings-card" style={{ padding: '18px 20px', border: isFailed ? '1px solid rgba(239, 68, 68, 0.45)' : '1px solid var(--border-color)', background: isFailed ? 'rgba(239, 68, 68, 0.03)' : 'var(--bg-secondary)' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: isFailed ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.06)', color: isFailed ? '#ef4444' : 'var(--text-heading)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <rect x="2" y="4" width="20" height="16" rx="2"/>
                                       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
@@ -3927,14 +3950,14 @@ export default function JobTrackerDashboard() {
                                       Connected {new Date(acc.connectedAt).toLocaleDateString('en-GB')} {acc.lastSyncTime ? `• Last synced ${formatRelativeTime(acc.lastSyncTime)}` : ""}
                                     </div>
                                     {isFailed && (
-                                      <div style={{ fontSize: '11.5px', color: '#ef4444', marginTop: '4px' }}>
-                                        ⚠️ {acc.syncError || "Sync failed. Try reconnecting."}
+                                      <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '6px', fontWeight: '500' }}>
+                                        ⚠️ {acc.syncError || "Authentication expired or permissions revoked. Click Reconnect to restore sync."}
                                       </div>
                                     )}
                                   </div>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <span style={{
                                     fontSize: '11px',
                                     fontWeight: '600',
@@ -3946,6 +3969,28 @@ export default function JobTrackerDashboard() {
                                   }}>
                                     ● {isFailed ? "ERROR" : isPending ? "SYNCING..." : "CONNECTED"}
                                   </span>
+                                  {!isFailed && (
+                                    <button
+                                      className="btn-outline-primary"
+                                      style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                      disabled={manualSyncingId === acc._id}
+                                      onClick={() => handleSyncLinkedAccount(acc._id)}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: manualSyncingId === acc._id ? 'spin 1s linear infinite' : 'none' }}>
+                                        <path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3"/><path d="M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                                      </svg>
+                                      <span>{manualSyncingId === acc._id ? "Syncing..." : "Sync"}</span>
+                                    </button>
+                                  )}
+                                  {isFailed && (
+                                    <button
+                                      className="btn-submit"
+                                      style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px' }}
+                                      onClick={() => setShowLinkConfirmModal(true)}
+                                    >
+                                      Reconnect
+                                    </button>
+                                  )}
                                   <button
                                     style={{
                                       fontSize: '12.5px',
@@ -4234,7 +4279,35 @@ export default function JobTrackerDashboard() {
                               </div>
                             </div>
                             <div className="role-company">
-                              <div className="role-title">{app.company || "Unknown Company"}</div>
+                              <div className="role-title">
+                                <span>{app.company || "Unknown Company"}</span>
+                                {app.accountEmail && userEmail && app.accountEmail.toLowerCase() !== userEmail.toLowerCase() && (
+                                  <span
+                                    className="source-inbox-badge"
+                                    title={`Received on ${app.accountEmail}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px',
+                                      marginLeft: '8px',
+                                      fontSize: '10.5px',
+                                      fontWeight: '500',
+                                      padding: '2px 7px',
+                                      borderRadius: '6px',
+                                      background: 'rgba(59, 130, 246, 0.09)',
+                                      color: '#3b82f6',
+                                      border: '1px solid rgba(59, 130, 246, 0.25)',
+                                      verticalAlign: 'middle'
+                                    }}
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                                    </svg>
+                                    {app.accountEmail}
+                                  </span>
+                                )}
+                              </div>
                               {(() => {
                                 const sub = app.subtitle
                                   || (app.role && app.role.toLowerCase() !== "unknown role" && app.role.toLowerCase() !== "event" ? app.role : "");

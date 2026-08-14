@@ -511,91 +511,25 @@ app.get("/auth/google/link", authLimiter, authenticate, (req, res) => {
   }
 });
 
-// GET /auth/google/link/callback - OAuth callback for linked accounts
-app.get("/auth/google/link/callback", authLimiter, async (req, res) => {
-  const { code, state } = req.query;
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-
-  const stateData = consumeLinkState(state);
-  if (!stateData) {
-    console.warn("[LINK_CALLBACK_DENIED] Invalid, expired, or replayed state token.");
-    return res.redirect(`${frontendUrl}?linked=error&reason=invalid_state`);
-  }
-
-  const { parentAccountId } = stateData;
-
+// POST /auth/linked-accounts/:id/sync - Manually trigger sync for a specific linked account
+app.post("/auth/linked-accounts/:id/sync", writeLimiter, authenticate, async (req, res) => {
   try {
-    const parentAccount = await Account.findById(parentAccountId);
-    if (!parentAccount) {
-      console.warn(`[LINK_CALLBACK_DENIED] Parent account ${parentAccountId} not found.`);
-      return res.redirect(`${frontendUrl}?linked=error&reason=account_not_found`);
-    }
-
-    const redirectUri = getLinkRedirectUri();
-    const localCallbackClient = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      redirectUri
-    );
-
-    const { tokens } = await localCallbackClient.getToken(code);
-    localCallbackClient.setCredentials(tokens);
-
-    const oauth2 = google.oauth2({ auth: localCallbackClient, version: "v2" });
-    const userInfo = await oauth2.userinfo.get();
-    const linkedEmail = (userInfo?.data?.email || "").toLowerCase().trim();
-
-    if (!linkedEmail) {
-      return res.redirect(`${frontendUrl}?linked=error&reason=missing_email`);
-    }
-
-    if (linkedEmail === parentAccount.email.toLowerCase().trim()) {
-      return res.redirect(`${frontendUrl}?linked=error&reason=same_as_primary`);
-    }
-
-    // Check count limit
-    const existingCount = await LinkedGmailAccount.countDocuments({
-      parentAccountId,
-      email: { $ne: linkedEmail }
+    const linkedDoc = await LinkedGmailAccount.findOne({
+      _id: req.params.id,
+      parentAccountId: req.userId
     });
 
-    if (existingCount >= MAX_LINKED_ACCOUNTS) {
-      return res.redirect(`${frontendUrl}?linked=error&reason=max_limit`);
+    if (!linkedDoc) {
+      return res.status(404).json({ message: "Linked account not found" });
     }
 
-    // Preserve existing refresh token if re-authorizing and new tokens don't include one
-    const existingLinked = await LinkedGmailAccount.findOne({ parentAccountId, email: linkedEmail });
-    let mergedTokens = { ...tokens };
-    if (existingLinked && existingLinked.tokens && !mergedTokens.refresh_token) {
-      mergedTokens.refresh_token = existingLinked.tokens.refresh_token;
-    }
-
-    const linkedDoc = await LinkedGmailAccount.findOneAndUpdate(
-      { parentAccountId, email: linkedEmail },
-      {
-        $set: {
-          parentAccountId,
-          email: linkedEmail,
-          tokens: mergedTokens,
-          syncStatus: "idle",
-          syncError: null,
-          displayName: userInfo?.data?.name || "",
-        }
-      },
-      { upsert: true, returnDocument: 'after' }
-    );
-
-    console.log(`[LINKED_ACCOUNT_SUCCESS] ${linkedEmail} linked to user ${parentAccount.email}`);
-
-    // Trigger async non-blocking initial sync
-    fetchAndProcessEmails(parentAccountId).catch(err => {
-      console.error(`[LINKED_INITIAL_SYNC_ERR] ${linkedEmail}:`, err.message);
+    fetchAndProcessEmails(req.userId).catch(err => {
+      console.error(`[LINKED_MANUAL_SYNC_ERR] ${linkedDoc.email}:`, err.message);
     });
 
-    res.redirect(`${frontendUrl}?linked=success&email=${encodeURIComponent(linkedEmail)}`);
+    res.json({ success: true, message: `Sync initiated for ${linkedDoc.email}` });
   } catch (err) {
-    console.error("[LINKED_CALLBACK_ERR]", err.message);
-    res.redirect(`${frontendUrl}?linked=error&reason=${encodeURIComponent(err.message)}`);
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -1083,13 +1017,13 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         } else {
           console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (${CURRENT_PARSER_VERSION})`);
         }
-        return { action: 'skipped', usedLLM: false, usedGemini: false };
+        return { action: 'skipped', usedLLM: false };
       } else {
         // Check if backoff retry window has elapsed
         const nextRetry = existingFast.parseMeta?.nextRetryAt ? new Date(existingFast.parseMeta.nextRetryAt) : null;
         if (nextRetry && new Date() < nextRetry) {
           console.log(`[SKIP_FAST] ${id} | Reason: Backoff active (retry deferred until ${nextRetry.toISOString()})`);
-          return { action: 'skipped', usedLLM: false, usedGemini: false };
+          return { action: 'skipped', usedLLM: false };
         }
       }
     }
@@ -1127,7 +1061,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     );
     if (!isAllowedSender) {
       console.log(`[SKIP] ${id} | Reason: Sender not in allowed list (${fromHeader})`);
-      return { action: 'skipped', usedGemini: false };
+      return { action: 'skipped', usedLLM: false };
     }
 
     const snippet = email.data.snippet || "";
@@ -1970,7 +1904,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
             skippedCount++;
           }
 
-          if (result.usedLLM || result.usedGemini) llmParsedCount++;
+          if (result.usedLLM) llmParsedCount++;
 
           if (llmParsedCount >= config.MAX_EMAILS_PER_SYNC) {
             console.log(`[SYNC_PROGRESSIVE] Reached limit of ${config.MAX_EMAILS_PER_SYNC} LLM parses. Stopping sync to preserve quota.`);
@@ -2077,6 +2011,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
                 } catch (hErr) {
                   if (hErr.code === 404 || hErr.response?.status === 404) {
                     console.log(`[LINKED_SYNC_EXPIRED] historyId expired for ${linked.email}. Full sync fallback.`);
+                    linked.lastHistoryId = null; // Clear stale historyId so fallback uses first-time sync limits (20 maxResults, 30d recency)
                     linkedSyncPath = "full";
                   } else {
                     throw hErr;
@@ -2105,16 +2040,41 @@ async function fetchAndProcessEmails(targetUserId = null) {
               const knownDocsLinked = await batchLookupMessageIds(linkedMsgIds, acc._id);
               let lInserted = 0;
               let lSkipped = 0;
-              let lLlmCount = 0;
 
               for (const mId of linkedMsgIds) {
                 if (activeClearRequests.has(acc._id.toString())) break;
+                if (llmParsedCount >= config.MAX_EMAILS_PER_SYNC) {
+                  console.log(`[LINKED_SYNC_PROGRESSIVE] Reached global limit of ${config.MAX_EMAILS_PER_SYNC} LLM parses. Stopping linked sync for ${linked.email}.`);
+                  break;
+                }
+
                 const existingFast = knownDocsLinked.get(mId) || null;
-                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, lLlmCount, linked.email);
+
+                // Lightweight metadata pre-filter for unknown messages in linked incremental sync
+                if (linkedSyncPath === "incremental" && !existingFast) {
+                  try {
+                    const metaRes = await linkedGmail.users.messages.get({
+                      userId: "me",
+                      id: mId,
+                      format: "metadata",
+                      metadataHeaders: ["From"]
+                    });
+                    const fromVal = (metaRes.data?.payload?.headers || []).find(h => h.name === "From")?.value || "";
+                    const isAllowed = ALLOWED_SENDERS.some(s => fromVal.toLowerCase().includes(s.toLowerCase()));
+                    if (!isAllowed) {
+                      console.log(`[SKIP_LINKED_META] ${mId} | Reason: Sender not in allowed list (${fromVal})`);
+                      lSkipped++;
+                      continue;
+                    }
+                  } catch (metaErr) {
+                    // Non-fatal metadata fetch error — fall through to normal processMessage
+                  }
+                }
+
+                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, llmParsedCount, linked.email);
                 if (res.action === "inserted") { lInserted++; insertedCount++; }
                 else { lSkipped++; skippedCount++; }
-                if (res.usedLLM || res.usedGemini) lLlmCount++;
-                if (lLlmCount >= config.MAX_EMAILS_PER_SYNC) break;
+                if (res.usedLLM) llmParsedCount++;
               }
 
               const linkedUpdate = {

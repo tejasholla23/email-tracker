@@ -18,7 +18,6 @@ const config = Object.freeze({
     ? process.env.ALLOWED_SENDERS.split(",").map(s => s.trim().toLowerCase())
     : ["placement@msrit.edu", "dean.tap@msrit.edu"],
   LLM_DELAY_MS: Number(process.env.LLM_DELAY_MS ?? process.env.GEMINI_DELAY_MS ?? 6500),
-  GEMINI_DELAY_MS: Number(process.env.LLM_DELAY_MS ?? process.env.GEMINI_DELAY_MS ?? 6500),
   MAX_EMAILS_PER_SYNC: Number(process.env.MAX_EMAILS_PER_SYNC ?? 10),
 });
 
