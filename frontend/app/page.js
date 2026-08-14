@@ -3671,14 +3671,27 @@ export default function JobTrackerDashboard() {
                           <span className="settings-title-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                           </span>
-                          <span>Delete</span>
+                          <span>Accounts & Delete</span>
                         </h3>
                         <div className="settings-list">
+                          <button className="settings-item" onClick={() => { setSettingsSubView("linked-accounts"); fetchLinkedAccounts(); }}>
+                            <span className="settings-item-icon" style={{ color: 'var(--text-primary)' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                              </svg>
+                            </span>
+                            <span className="settings-item-label">
+                              Linked Gmail Accounts {linkedAccounts.some(a => a.syncStatus === "failed") ? "⚠️" : ""}
+                            </span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
+
                           <button className="settings-item" onClick={() => { setShowClearModal(true); setClearConfirmText(""); setClearError(""); }}>
                             <span className="settings-item-icon" style={{ color: '#ef4444' }}>
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                             </span>
-                            <span className="settings-item-label">Clear Workspace</span>
+                            <span className="settings-item-label">Clear Dashboard</span>
                             <span className="settings-item-arrow">❯</span>
                           </button>
                           <button className="settings-item" onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(""); setDeleteError(""); }}>
@@ -3916,7 +3929,7 @@ export default function JobTrackerDashboard() {
                               {userEmail}
                             </div>
                             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                              Primary College Account (MSRIT Identity)
+                              Primary College Account
                             </div>
                           </div>
                         </div>
@@ -3938,20 +3951,21 @@ export default function JobTrackerDashboard() {
                           const isFailed = acc.syncStatus === "failed";
                           return (
                             <div key={acc._id} className="settings-card" style={{ padding: '18px 20px', border: isFailed ? '1px solid rgba(239, 68, 68, 0.45)' : '1px solid var(--border-color)', background: isFailed ? 'rgba(239, 68, 68, 0.03)' : 'var(--bg-secondary)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                              {/* Header Row: Info on Left, Status Badge on Right */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: isFailed ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.06)', color: isFailed ? '#ef4444' : 'var(--text-heading)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: isFailed ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.06)', color: isFailed ? '#ef4444' : 'var(--text-heading)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <rect x="2" y="4" width="20" height="16" rx="2"/>
                                       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                                     </svg>
                                   </div>
                                   <div>
-                                    <div style={{ fontSize: '14.5px', fontWeight: '600', color: 'var(--text-heading)' }}>
+                                    <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-heading)' }}>
                                       {acc.email}
                                     </div>
                                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                      Connected {new Date(acc.connectedAt).toLocaleDateString('en-GB')} {acc.lastSyncTime ? `• Last synced ${formatRelativeTime(acc.lastSyncTime)}` : ""}
+                                      Connected {new Date(acc.connectedAt).toLocaleDateString('en-GB')} {acc.lastSyncTime ? `• Last synced ${getCompactRelativeTime(acc.lastSyncTime)}` : ""}
                                     </div>
                                     {isFailed && (
                                       <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '6px', fontWeight: '500' }}>
@@ -3961,35 +3975,47 @@ export default function JobTrackerDashboard() {
                                   </div>
                                 </div>
 
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: '700',
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  background: isFailed ? 'rgba(239, 68, 68, 0.15)' : isPending ? 'rgba(234, 179, 8, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                                  color: isFailed ? '#ef4444' : isPending ? '#eab308' : '#3b82f6',
+                                  border: `1px solid ${isFailed ? 'rgba(239, 68, 68, 0.3)' : isPending ? 'rgba(234, 179, 8, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.04em',
+                                  flexShrink: 0
+                                }}>
+                                  {isFailed ? "ERROR" : isPending ? "SYNCING" : "LINKED"}
+                                </span>
+                              </div>
+
+                              {/* Action Footer Row */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '500', color: isFailed ? '#ef4444' : isPending ? '#eab308' : '#22c55e' }}>
+                                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: isFailed ? '#ef4444' : isPending ? '#eab308' : '#22c55e', display: 'inline-block' }} />
+                                  <span>{isFailed ? "Sync Paused" : isPending ? "Syncing emails..." : "Active & Auto-Syncing"}</span>
+                                </div>
+
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <span style={{
-                                    fontSize: '11px',
-                                    fontWeight: '600',
-                                    padding: '3px 9px',
-                                    borderRadius: '10px',
-                                    background: isFailed ? 'rgba(239, 68, 68, 0.15)' : isPending ? 'rgba(234, 179, 8, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                                    color: isFailed ? '#ef4444' : isPending ? '#eab308' : '#22c55e',
-                                    border: `1px solid ${isFailed ? 'rgba(239, 68, 68, 0.3)' : isPending ? 'rgba(234, 179, 8, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`
-                                  }}>
-                                    ● {isFailed ? "ERROR" : isPending ? "SYNCING..." : "CONNECTED"}
-                                  </span>
                                   {!isFailed && (
                                     <button
                                       className="btn-outline-primary"
-                                      style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                      style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: '500' }}
                                       disabled={manualSyncingId === acc._id}
                                       onClick={() => handleSyncLinkedAccount(acc._id)}
                                     >
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: manualSyncingId === acc._id ? 'spin 1s linear infinite' : 'none' }}>
                                         <path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3"/><path d="M22 12.5a10 10 0 0 1-18.8 4.2"/>
                                       </svg>
-                                      <span>{manualSyncingId === acc._id ? "Syncing..." : "Sync"}</span>
+                                      <span>{manualSyncingId === acc._id ? "Syncing..." : "Sync Now"}</span>
                                     </button>
                                   )}
                                   {isFailed && (
                                     <button
                                       className="btn-submit"
-                                      style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px' }}
+                                      style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', fontWeight: '600' }}
                                       onClick={() => setShowLinkConfirmModal(true)}
                                     >
                                       Reconnect
@@ -3997,7 +4023,7 @@ export default function JobTrackerDashboard() {
                                   )}
                                   <button
                                     style={{
-                                      fontSize: '12.5px',
+                                      fontSize: '12px',
                                       fontWeight: '500',
                                       padding: '6px 14px',
                                       color: '#ef4444',
@@ -4379,11 +4405,6 @@ export default function JobTrackerDashboard() {
                                         <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                                       </svg>
                                       <span>{app.accountEmail || app.email || "user@gmail.com"}</span>
-                                      {app.accountEmail && userEmail && app.accountEmail.toLowerCase() !== userEmail.toLowerCase() && (
-                                        <span style={{ fontSize: '10px', fontWeight: '600', padding: '1px 5px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', marginLeft: '6px', border: '1px solid rgba(59, 130, 246, 0.25)', display: 'inline-flex', alignItems: 'center' }}>
-                                          Linked
-                                        </span>
-                                      )}
                                     </div>
                                     <span>{formattedDate}</span>
                                   </div>
@@ -5310,7 +5331,7 @@ export default function JobTrackerDashboard() {
         <div className="modal-overlay" onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>
           <div className="modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title" style={{ color: '#ef4444' }}>Clear Workspace</h3>
+              <h3 className="modal-title" style={{ color: '#ef4444' }}>Clear Dashboard</h3>
               <button className="modal-close" onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>&times;</button>
             </div>
 
@@ -5361,7 +5382,7 @@ export default function JobTrackerDashboard() {
                   style={{ backgroundColor: clearConfirmText === "CLEAR" ? '#ef4444' : '#f87171', opacity: clearConfirmText === "CLEAR" ? 1 : 0.6 }}
                   disabled={clearing || clearConfirmText !== "CLEAR"}
                 >
-                  {clearing ? "Clearing..." : "Clear Workspace"}
+                  {clearing ? "Clearing..." : "Clear Dashboard"}
                 </button>
               </div>
             </form>
