@@ -917,6 +917,7 @@ export default function JobTrackerDashboard() {
   };
 
   const handleSidebarMouseEnter = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) return;
     if (collapseTimeoutRef.current) {
       clearTimeout(collapseTimeoutRef.current);
       collapseTimeoutRef.current = null;
@@ -925,6 +926,7 @@ export default function JobTrackerDashboard() {
   };
 
   const handleSidebarMouseLeave = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) return;
     if (collapseTimeoutRef.current) {
       clearTimeout(collapseTimeoutRef.current);
     }
@@ -935,6 +937,7 @@ export default function JobTrackerDashboard() {
   };
 
   const handleSidebarClick = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) return;
     setIsClickedToKeepOpen(true);
   };
 
@@ -1602,20 +1605,26 @@ export default function JobTrackerDashboard() {
             @media (max-width: 480px) {
               .login-container {
                 padding: 0 16px;
-                justify-content: center;
+                justify-content: flex-start !important;
               }
               .login-card {
-                padding: 36px 20px 28px 20px;
-                border-radius: 20px;
-                border-top: 1px solid #1f2937;
-                margin: auto 0;
+                padding: 48px 24px 36px 24px;
+                border-top: none !important;
+                border-top-left-radius: 0 !important;
+                border-top-right-radius: 0 !important;
+                border-bottom-left-radius: 24px !important;
+                border-bottom-right-radius: 24px !important;
+                margin-top: 0 !important;
+                margin-bottom: auto !important;
+                width: 100% !important;
+                max-width: 420px;
               }
               .login-title {
-                font-size: 24px;
+                font-size: 26px;
               }
               .login-subtitle {
                 font-size: 13.5px;
-                margin-bottom: 24px;
+                margin-bottom: 28px;
               }
               .login-btn {
                 padding: 13px 20px;
@@ -2571,6 +2580,70 @@ export default function JobTrackerDashboard() {
           gap: 16px;
         }
 
+        .linked-card-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 16px;
+          padding-top: 14px;
+          border-top: 1px solid var(--border-color);
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .linked-card-status {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          font-weight: 500;
+        }
+        .linked-card-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .linked-action-btn {
+          font-size: 12px;
+          padding: 6px 14px;
+          border-radius: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s ease-out;
+        }
+        .btn-danger-outline {
+          color: #ef4444;
+          background: rgba(239, 68, 68, 0.08);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .calendar-manual-input-container {
+          display: flex;
+          gap: 10px;
+          flex: 1;
+          width: 100%;
+        }
+        .calendar-target-input {
+          padding: 10px 14px;
+          border-radius: 8px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          color: var(--text-primary);
+          font-size: 14px;
+          flex: 1;
+          min-width: 0;
+          outline: none;
+        }
+        .calendar-target-btn {
+          padding: 10px 18px;
+          border-radius: 8px;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
         /* Touch Device Pin Button Support */
         @media (hover: none), (max-width: 768px) {
           .pin-btn {
@@ -2612,17 +2685,25 @@ export default function JobTrackerDashboard() {
             justify-content: flex-start !important;
             padding: 0 4px !important;
           }
-          .logo-text-wrapper {
+          /* Fix Issue 3: Force full mobile drawer title/subtitle expansion */
+          .sidebar.open .logo-text-wrapper,
+          .layout:not(.sidebar-expanded) .sidebar.open .logo-text-wrapper {
             opacity: 1 !important;
+            max-width: 220px !important;
             pointer-events: auto !important;
+            display: flex !important;
           }
-          .logo-title-text {
+          .sidebar.open .logo-title-text,
+          .layout:not(.sidebar-expanded) .sidebar.open .logo-title-text {
             transform: none !important;
             opacity: 1 !important;
+            display: block !important;
           }
-          .logo-subtitle-text {
+          .sidebar.open .logo-subtitle-text,
+          .layout:not(.sidebar-expanded) .sidebar.open .logo-subtitle-text {
             transform: none !important;
             opacity: 1 !important;
+            display: block !important;
           }
           .sidebar-divider {
             width: 100% !important;
@@ -2634,11 +2715,13 @@ export default function JobTrackerDashboard() {
             justify-content: flex-start !important;
             margin-bottom: 8px !important;
           }
-          .nav-text {
+          .sidebar.open .nav-text,
+          .layout:not(.sidebar-expanded) .sidebar.open .nav-text {
             opacity: 1 !important;
-            max-width: 150px !important;
+            max-width: 160px !important;
             transform: none !important;
             overflow: visible !important;
+            display: block !important;
           }
           .sidebar-bottom {
             align-items: stretch !important;
@@ -2721,12 +2804,6 @@ export default function JobTrackerDashboard() {
           .content {
             padding: 16px 14px !important;
           }
-          .page-title {
-            font-size: 22px !important;
-          }
-          .page-subtitle {
-            font-size: 13.5px !important;
-          }
           .stats-grid {
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
             gap: 12px !important;
@@ -2742,6 +2819,80 @@ export default function JobTrackerDashboard() {
         }
 
         @media (max-width: 640px) {
+          /* Fix Issue 1: Applications Overview Top Header Center Alignment */
+          .page-header {
+            flex-direction: column !important;
+            align-items: center !important;
+            text-align: center !important;
+            gap: 8px !important;
+            margin-bottom: 20px !important;
+            width: 100% !important;
+          }
+          .page-title {
+            text-align: center !important;
+            font-size: 24px !important;
+            width: 100% !important;
+          }
+          .page-subtitle {
+            text-align: center !important;
+            font-size: 13.5px !important;
+            width: 100% !important;
+          }
+          .page-header-date-badge {
+            width: auto !important;
+            max-width: 100% !important;
+            margin: 4px auto 0 auto !important;
+            display: inline-flex !important;
+            justify-content: center !important;
+            padding: 7px 16px !important;
+            font-size: 12.5px !important;
+            border-radius: 12px !important;
+          }
+
+          /* Fix Issue 2: Filter tabs sleek horizontal scrollable pills */
+          .filter-tabs-container {
+            display: flex !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            gap: 8px !important;
+            padding: 4px 6px 12px 6px !important;
+            margin-top: 18px !important;
+            margin-bottom: 18px !important;
+            border-bottom: 1px solid var(--border-color) !important;
+            justify-content: flex-start !important;
+          }
+          .filter-tabs-container::-webkit-scrollbar {
+            display: none !important;
+          }
+          .filter-tab {
+            flex: 0 0 auto !important;
+            padding: 7px 15px !important;
+            font-size: 13px !important;
+            white-space: nowrap !important;
+            border-radius: 999px !important;
+            background: var(--surface-color) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-secondary) !important;
+            height: auto !important;
+            line-height: 1.4 !important;
+            transition: all 0.2s ease !important;
+          }
+          .filter-tab.active {
+            background: rgba(20, 184, 166, 0.14) !important;
+            border-color: rgba(20, 184, 166, 0.45) !important;
+            color: #0f766e !important;
+            font-weight: 600 !important;
+          }
+          .dark .filter-tab.active {
+            background: rgba(45, 212, 191, 0.16) !important;
+            border-color: rgba(45, 212, 191, 0.45) !important;
+            color: #2dd4bf !important;
+          }
+          .filter-tab::after {
+            display: none !important;
+          }
+
           .stats-grid {
             grid-template-columns: 1fr !important;
             gap: 10px !important;
@@ -2798,28 +2949,95 @@ export default function JobTrackerDashboard() {
             width: 52px !important;
             height: 52px !important;
           }
-          .page-header {
+
+          /* Settings & Linked Accounts on Mobile */
+          .settings-header {
+            text-align: center !important;
+            display: flex !important;
             flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 10px !important;
-            margin-bottom: 18px !important;
+            align-items: center !important;
+            gap: 8px !important;
           }
-          .page-header-date-badge {
-            width: 100% !important;
+          .settings-main-title {
+            text-align: center !important;
+            font-size: 24px !important;
+          }
+          .settings-main-subtitle {
+            text-align: center !important;
+            font-size: 13.5px !important;
+          }
+          .settings-card {
+            padding: 20px 16px !important;
+          }
+          .settings-grid-row {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+          }
+
+          /* Fix Issue 4: Linked Accounts symmetrical action footer */
+          .linked-card-footer {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+          }
+          .linked-card-status {
             justify-content: center !important;
-            padding: 7px 12px !important;
-            font-size: 12.5px !important;
-            border-radius: 10px !important;
+            width: 100% !important;
           }
-          .filters {
-            padding: 6px 8px !important;
-            gap: 6px !important;
-            margin-bottom: 16px !important;
-            border-radius: 12px !important;
+          .linked-card-actions {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            width: 100% !important;
+            gap: 8px !important;
           }
-          .filter-btn {
-            padding: 6px 12px !important;
-            font-size: 12.5px !important;
+          .linked-action-btn {
+            width: 100% !important;
+            height: 40px !important;
+            font-size: 13px !important;
+          }
+
+          /* Fix Issue 5: Google Calendar page alignment and container overflow */
+          .calendar-header-wrapper {
+            flex-direction: column !important;
+            align-items: center !important;
+            text-align: center !important;
+            gap: 12px !important;
+          }
+          .calendar-header-wrapper .btn-primary {
+            width: 100% !important;
+            max-width: 280px !important;
+            margin: 0 auto !important;
+          }
+          .calendar-status-box {
+            flex-direction: column !important;
+            text-align: center !important;
+            align-items: center !important;
+            padding: 16px !important;
+          }
+          .calendar-status-box > div {
+            min-width: 0 !important;
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+          }
+          .calendar-status-box button {
+            width: 100% !important;
+            margin-top: 12px !important;
+          }
+          .calendar-card-panel {
+            padding: 16px !important;
+          }
+          .calendar-manual-input-container {
+            flex-direction: column !important;
+            gap: 10px !important;
+            width: 100% !important;
+          }
+          .calendar-target-input,
+          .calendar-target-btn {
+            width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
           }
 
           /* Bottom Sheet Mobile Modals */
@@ -2837,6 +3055,36 @@ export default function JobTrackerDashboard() {
             padding: 20px 18px calc(20px + env(safe-area-inset-bottom)) !important;
             margin: 0 !important;
             animation: modalSlideUpMobile 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+          }
+          .info-modal-content {
+            padding: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            height: 88vh !important;
+            max-height: 88vh !important;
+            overflow: hidden !important;
+          }
+          .info-modal-header {
+            padding: 16px 18px 12px !important;
+            flex-shrink: 0 !important;
+          }
+          .info-modal-body {
+            flex: 1 1 auto !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            padding: 16px 18px !important;
+            min-height: 0 !important;
+            touch-action: pan-y !important;
+            overscroll-behavior: contain !important;
+          }
+          .info-modal-footer {
+            padding: 12px 18px calc(12px + env(safe-area-inset-bottom)) !important;
+            flex-shrink: 0 !important;
+          }
+          .info-modal-footer button {
+            width: 100% !important;
+            height: 42px !important;
+            font-size: 14px !important;
           }
           @keyframes modalSlideUpMobile {
             from { transform: translateY(100%); }
@@ -3458,7 +3706,7 @@ export default function JobTrackerDashboard() {
 
             {activeFilter === "calendar" ? (
               <div className="settings-container">
-                <div className="settings-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                <div className="settings-header calendar-header-wrapper" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                   <h1 className="settings-main-title" style={{ margin: 0 }}>Google Calendar Integration</h1>
                   <a
                     href={userEmail ? `https://calendar.google.com/calendar/r?authuser=${encodeURIComponent(userEmail)}` : "https://calendar.google.com"}
@@ -3631,27 +3879,18 @@ export default function JobTrackerDashboard() {
                                   </div>
                                 </div>
                               ) : (
-                                <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '260px' }}>
+                                <div className="calendar-manual-input-container">
                                   <input
                                     type="text"
                                     placeholder="Calendar ID (leave blank for Primary)"
                                     value={calendarTargetId}
                                     onChange={(e) => setCalendarTargetId(e.target.value)}
-                                    style={{
-                                      padding: '10px 14px',
-                                      borderRadius: '8px',
-                                      background: 'var(--bg-secondary)',
-                                      border: '1px solid var(--border-color)',
-                                      color: 'var(--text-primary)',
-                                      fontSize: '14px',
-                                      flex: 1
-                                    }}
+                                    className="calendar-target-input"
                                   />
                                   <button
-                                    className="btn-primary"
+                                    className="btn-primary calendar-target-btn"
                                     onClick={() => handleSaveCalendarTarget(calendarTargetId)}
                                     disabled={savingTargetCalendar}
-                                    style={{ padding: '10px 18px', borderRadius: '8px', whiteSpace: 'nowrap' }}
                                   >
                                     {savingTargetCalendar ? "Saving..." : "Save & Migrate"}
                                   </button>
@@ -4177,17 +4416,16 @@ export default function JobTrackerDashboard() {
                               </div>
 
                               {/* Action Footer Row */}
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '10px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '500', color: isFailed ? '#ef4444' : isPending ? '#eab308' : '#22c55e' }}>
+                              <div className="linked-card-footer">
+                                <div className="linked-card-status" style={{ color: isFailed ? '#ef4444' : isPending ? '#eab308' : '#22c55e' }}>
                                   <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: isFailed ? '#ef4444' : isPending ? '#eab308' : '#22c55e', display: 'inline-block' }} />
                                   <span>{isFailed ? "Sync Paused" : isPending ? "Syncing emails..." : "Active & Auto-Syncing"}</span>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div className="linked-card-actions">
                                   {!isFailed && (
                                     <button
-                                      className="btn-outline-primary"
-                                      style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: '500' }}
+                                      className="btn-outline-primary linked-action-btn"
                                       disabled={manualSyncingId === acc._id}
                                       onClick={() => handleSyncLinkedAccount(acc._id)}
                                     >
@@ -4199,25 +4437,14 @@ export default function JobTrackerDashboard() {
                                   )}
                                   {isFailed && (
                                     <button
-                                      className="btn-submit"
-                                      style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', fontWeight: '600' }}
+                                      className="btn-submit linked-action-btn"
                                       onClick={() => setShowLinkConfirmModal(true)}
                                     >
                                       Reconnect
                                     </button>
                                   )}
                                   <button
-                                    style={{
-                                      fontSize: '12px',
-                                      fontWeight: '500',
-                                      padding: '6px 14px',
-                                      color: '#ef4444',
-                                      background: 'rgba(239, 68, 68, 0.08)',
-                                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                                      borderRadius: '8px',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.15s ease-out'
-                                    }}
+                                    className="btn-danger-outline linked-action-btn"
                                     disabled={disconnectingId === acc._id}
                                     onClick={() => handleDisconnectLinkedAccount(acc._id)}
                                   >
