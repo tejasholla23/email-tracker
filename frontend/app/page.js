@@ -2077,15 +2077,23 @@ export default function JobTrackerDashboard() {
           position: sticky;
           top: 0;
           z-index: 40;
+          gap: 24px;
           transition: padding-left 0.4s cubic-bezier(0.25, 1, 0.5, 1), padding-right 0.4s cubic-bezier(0.25, 1, 0.5, 1);
           padding-left: calc(32px + (280px - var(--sidebar-width)) * 0.5);
           padding-right: calc(32px + (280px - var(--sidebar-width)) * 0.5);
+        }
+        .topbar-search-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          flex: 1;
+          margin-right: 28px;
         }
         .search-container { flex: 1; width: 100%; position: relative; }
         .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: #f1f5f9 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 100%; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: #ffffff; }
         .search-container input::placeholder { color: var(--text-secondary); }
-        .topbar-actions { display: flex; align-items: center; gap: 16px; }
+        .topbar-actions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
         @keyframes dropdownPopup {
           0% {
             opacity: 0;
@@ -2785,6 +2793,7 @@ export default function JobTrackerDashboard() {
             gap: 10px !important;
             flex: 1 !important;
             min-width: 0 !important;
+            margin-right: 0 !important;
           }
           .search-container {
             flex: 1 !important;
@@ -3383,12 +3392,14 @@ export default function JobTrackerDashboard() {
         }
 
         .info-modal-content {
-          max-width: 620px;
+          max-width: 640px;
+          width: 100%;
           max-height: 85vh;
           display: flex;
           flex-direction: column;
           padding: 0 !important;
           overflow: hidden;
+          border-radius: 18px;
         }
         .info-modal-header {
           padding: 20px 24px 14px;
@@ -3411,13 +3422,25 @@ export default function JobTrackerDashboard() {
         .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
         .meta-chip.status-done { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 
-        .info-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; min-height: 0; max-height: none; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
-        .info-modal-body::-webkit-scrollbar { width: 6px; }
+        .info-modal-body {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          flex: 1 1 auto;
+          min-height: 0;
+          max-height: none;
+          padding: 20px 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          overscroll-behavior: contain;
+        }
+        .info-modal-body::-webkit-scrollbar { width: 8px; }
         .info-modal-body::-webkit-scrollbar-track { background: transparent; }
-        .info-modal-body::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 4px; }
+        .info-modal-body::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 6px; }
         .info-modal-body::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.7); }
-        .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: hidden; }
-        .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); }
+        .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: visible; }
+        .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); border-top-left-radius: 13px; border-top-right-radius: 13px; }
         .info-modal-section-body { padding: 16px 18px; }
 
         .info-detail-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color, #f1f5f9); }
@@ -3763,8 +3786,13 @@ export default function JobTrackerDashboard() {
 
             {activeFilter === "calendar" ? (
               <div className="settings-container">
-                <div className="settings-header calendar-header-wrapper" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                  <h1 className="settings-main-title" style={{ margin: 0 }}>Google Calendar Integration</h1>
+                <div className="settings-header calendar-header-wrapper" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+                  <div>
+                    <h1 className="settings-main-title" style={{ margin: 0 }}>Google Calendar Integration</h1>
+                    <p style={{ margin: '6px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                      Automatically sync form deadlines, interviews, online assessments, and webinars directly with Google Calendar.
+                    </p>
+                  </div>
                   <a
                     href={userEmail ? `https://calendar.google.com/calendar/r?authuser=${encodeURIComponent(userEmail)}` : "https://calendar.google.com"}
                     target="_blank"
@@ -3787,15 +3815,6 @@ export default function JobTrackerDashboard() {
                 </div>
 
                 <div className="settings-card" style={{ padding: '32px' }}>
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 className="settings-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span>Google Calendar Integration</span>
-                    </h3>
-                    <p style={{ margin: '6px 0 0 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                      Automatically add form deadlines, interviews, online assessments, and webinars directly to your configured Google Calendar.
-                    </p>
-                  </div>
-
                     {calendarSuccessMsg && (
                       <div className="success-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(46, 213, 115, 0.1)', border: '1px solid rgba(46, 213, 115, 0.3)', color: '#2ed573', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
                         <span>✅</span>
