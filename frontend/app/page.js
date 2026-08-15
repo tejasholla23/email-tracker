@@ -1598,6 +1598,30 @@ export default function JobTrackerDashboard() {
             .login-footer-link:hover {
               color: #94a3b8;
             }
+
+            @media (max-width: 480px) {
+              .login-container {
+                padding: 0 16px;
+                justify-content: center;
+              }
+              .login-card {
+                padding: 36px 20px 28px 20px;
+                border-radius: 20px;
+                border-top: 1px solid #1f2937;
+                margin: auto 0;
+              }
+              .login-title {
+                font-size: 24px;
+              }
+              .login-subtitle {
+                font-size: 13.5px;
+                margin-bottom: 24px;
+              }
+              .login-btn {
+                padding: 13px 20px;
+                font-size: 14.5px;
+              }
+            }
           `
         }} />
 
@@ -1679,6 +1703,7 @@ export default function JobTrackerDashboard() {
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        button, input, select, textarea, a { touch-action: manipulation; }
         body { font-family: var(--font-geist); background-color: var(--bg-color); color: var(--text-primary); transition: background-color 0.25s ease-out, color 0.25s ease-out; }
         
         .layout {
@@ -2533,7 +2558,12 @@ export default function JobTrackerDashboard() {
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 45; backdrop-filter: blur(2px); }
 
         .filters::-webkit-scrollbar { display: none; }
-        .filters { -ms-overflow-style: none; scrollbar-width: none; }
+        .filters {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+          scroll-behavior: smooth;
+        }
 
         .modal-grid-2col {
           display: grid;
@@ -2541,10 +2571,33 @@ export default function JobTrackerDashboard() {
           gap: 16px;
         }
 
+        /* Touch Device Pin Button Support */
+        @media (hover: none), (max-width: 768px) {
+          .pin-btn {
+            opacity: 0.8 !important;
+            pointer-events: auto !important;
+            transform: translateX(-50%) translateY(0) scale(1) !important;
+            width: 32px !important;
+            height: 32px !important;
+            background: var(--surface-color) !important;
+            border: 1px solid var(--border-color) !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+          }
+          .dark .pin-btn {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+          }
+          .pin-btn.is-pinned {
+            opacity: 1 !important;
+            background: rgba(20, 184, 166, 0.18) !important;
+            border-color: rgba(20, 184, 166, 0.45) !important;
+          }
+        }
+
         @media (max-width: 768px) {
           .sidebar {
             transform: translateX(-100%);
-            transition: transform 0.3s ease;
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
             width: 280px !important;
             padding: 24px 16px !important;
             align-items: stretch !important;
@@ -2577,7 +2630,7 @@ export default function JobTrackerDashboard() {
           .nav-item {
             width: 100% !important;
             height: 48px !important;
-            padding: 4px !important;
+            padding: 4px 10px !important;
             justify-content: flex-start !important;
             margin-bottom: 8px !important;
           }
@@ -2592,7 +2645,7 @@ export default function JobTrackerDashboard() {
           }
           .sync-btn {
             width: 100% !important;
-            height: 40px !important;
+            height: 42px !important;
             border-radius: var(--radius-btn) !important;
             padding: 0 12px !important;
             gap: 8px !important;
@@ -2611,72 +2664,204 @@ export default function JobTrackerDashboard() {
             margin-left: 0 !important;
           }
           .hamburger {
-            display: block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: var(--surface-color);
+            color: #0d9488;
+            cursor: pointer;
+            flex-shrink: 0;
+            padding: 0;
+          }
+          .dark .hamburger {
+            color: #2dd4bf;
+            background: rgba(45, 212, 191, 0.08);
+            border-color: rgba(45, 212, 191, 0.25);
           }
           .topbar {
-            padding-left: 16px !important;
-            padding-right: 16px !important;
+            padding: 10px 16px !important;
+            gap: 12px !important;
+            align-items: center !important;
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 40 !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+          }
+          .topbar-search-wrapper {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            flex: 1 !important;
+            min-width: 0 !important;
           }
           .search-container {
-            flex: 1;
-            max-width: none;
+            flex: 1 !important;
+            min-width: 0 !important;
+            max-width: none !important;
           }
           .search-container input {
-            width: 100%;
+            width: 100% !important;
+            height: 38px !important;
+            font-size: 13.5px !important;
+            border-radius: 10px !important;
           }
           .topbar-actions {
-            gap: 8px;
+            gap: 8px !important;
+            flex-shrink: 0 !important;
+          }
+          .user-avatar-btn {
+            width: 38px !important;
+            height: 38px !important;
           }
           .content {
-            padding: 20px 16px !important;
-            padding-left: 16px !important;
-            padding-right: 16px !important;
+            padding: 16px 14px !important;
           }
           .page-title {
-            font-size: 24px;
+            font-size: 22px !important;
+          }
+          .page-subtitle {
+            font-size: 13.5px !important;
           }
           .stats-grid {
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+            gap: 12px !important;
           }
           .app-grid {
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          }
-          .modal-content {
-            padding: 20px;
-            width: calc(100% - 24px);
-            margin: 0 auto;
-            max-width: 500px;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+            gap: 14px !important;
           }
           .modal-grid-2col {
-            grid-template-columns: 1fr;
-            gap: 12px;
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
           }
         }
 
-        @media (max-width: 480px) {
-          .topbar { height: auto; padding: 12px 16px; flex-direction: column; gap: 12px; align-items: stretch; }
-          .search-container { width: 100%; }
-          .search-container input { width: 100%; }
-          .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
-          .topbar-actions > button { flex: 1; min-width: 100px; text-align: center; justify-content: center; display: flex; align-items: center; }
-          
-          .stats-grid { grid-template-columns: 1fr; gap: 14px; }
-          .stat-card { padding: 16px; }
-          
+        @media (max-width: 640px) {
+          .stats-grid {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+          .stat-card {
+            padding: 14px 16px !important;
+            border-radius: 14px !important;
+          }
+          .stat-icon {
+            width: 42px !important;
+            height: 42px !important;
+            border-radius: 10px !important;
+            font-size: 18px !important;
+          }
+          .stat-value {
+            font-size: 24px !important;
+          }
+          .app-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          .app-card {
+            padding: 16px !important;
+            border-radius: 14px !important;
+          }
+          .company-logo-container {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 9px !important;
+          }
+          .role-title {
+            font-size: 14.5px !important;
+          }
           .card-actions {
-            flex-wrap: wrap;
-            gap: 6px;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+            padding-top: 12px !important;
           }
           .card-btn {
-            flex: 1 1 calc(50% - 4px);
-            min-width: 100px;
+            width: 100% !important;
+            height: 38px !important;
+            padding: 0 6px !important;
+            font-size: 12.5px !important;
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
-          
           .floating-add-btn {
-            bottom: 20px;
-            right: 20px;
-            width: 54px;
-            height: 54px;
+            bottom: max(20px, calc(env(safe-area-inset-bottom) + 12px)) !important;
+            right: max(16px, calc(env(safe-area-inset-right) + 12px)) !important;
+            width: 52px !important;
+            height: 52px !important;
+          }
+          .page-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+            margin-bottom: 18px !important;
+          }
+          .page-header-date-badge {
+            width: 100% !important;
+            justify-content: center !important;
+            padding: 7px 12px !important;
+            font-size: 12.5px !important;
+            border-radius: 10px !important;
+          }
+          .filters {
+            padding: 6px 8px !important;
+            gap: 6px !important;
+            margin-bottom: 16px !important;
+            border-radius: 12px !important;
+          }
+          .filter-btn {
+            padding: 6px 12px !important;
+            font-size: 12.5px !important;
+          }
+
+          /* Bottom Sheet Mobile Modals */
+          .modal-overlay {
+            align-items: flex-end !important;
+            padding: 0 !important;
+          }
+          .modal-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: 20px 20px 0 0 !important;
+            max-height: 88vh !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            padding: 20px 18px calc(20px + env(safe-area-inset-bottom)) !important;
+            margin: 0 !important;
+            animation: modalSlideUpMobile 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+          }
+          @keyframes modalSlideUpMobile {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+          }
+          .modal-title {
+            font-size: 20px !important;
+          }
+          .modal-actions {
+            display: flex !important;
+            gap: 10px !important;
+            margin-top: 20px !important;
+          }
+          .modal-actions button, .modal-actions .btn-cancel, .modal-actions .btn-submit {
+            flex: 1 !important;
+            height: 42px !important;
+            font-size: 13.5px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .user-dropdown-menu {
+            right: 0 !important;
+            width: calc(100vw - 32px) !important;
+            max-width: 260px !important;
           }
         }
 
@@ -3114,7 +3299,7 @@ export default function JobTrackerDashboard() {
 
         <div className="main-wrapper">
           <header className="topbar">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, marginRight: '24px' }}>
+            <div className="topbar-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
               <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
