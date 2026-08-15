@@ -1912,6 +1912,10 @@ export default function JobTrackerDashboard() {
           margin-bottom: 24px;
           gap: 16px;
         }
+
+        .mobile-filter-wrapper {
+          display: none;
+        }
         
         .filter-tab {
           flex: 1;
@@ -2849,48 +2853,76 @@ export default function JobTrackerDashboard() {
             border-radius: 12px !important;
           }
 
-          /* Fix Issue 2: Filter tabs sleek horizontal scrollable pills */
-          .filter-tabs-container {
-            display: flex !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            scrollbar-width: none !important;
-            gap: 8px !important;
-            padding: 4px 6px 12px 6px !important;
-            margin-top: 18px !important;
-            margin-bottom: 18px !important;
-            border-bottom: 1px solid var(--border-color) !important;
-            justify-content: flex-start !important;
-          }
-          .filter-tabs-container::-webkit-scrollbar {
+          /* Fix Issue 2: Mobile Center-Aligned Dropdown Filter */
+          .desktop-only-filters {
             display: none !important;
           }
-          .filter-tab {
-            flex: 0 0 auto !important;
-            padding: 7px 15px !important;
-            font-size: 13px !important;
-            white-space: nowrap !important;
-            border-radius: 999px !important;
+          .mobile-filter-wrapper {
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            width: 100% !important;
+            margin: 18px 0 22px 0 !important;
+          }
+          .mobile-filter-container {
+            width: 100% !important;
+            max-width: 320px !important;
+            display: flex !important;
+            justify-content: center !important;
+          }
+          .mobile-filter-select-box {
+            position: relative !important;
+            width: 100% !important;
+            display: flex !important;
+            align-items: center !important;
             background: var(--surface-color) !important;
-            border: 1px solid var(--border-color) !important;
-            color: var(--text-secondary) !important;
-            height: auto !important;
-            line-height: 1.4 !important;
+            border: 1.5px solid var(--border-color) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
             transition: all 0.2s ease !important;
           }
-          .filter-tab.active {
-            background: rgba(20, 184, 166, 0.14) !important;
-            border-color: rgba(20, 184, 166, 0.45) !important;
-            color: #0f766e !important;
-            font-weight: 600 !important;
+          .dark .mobile-filter-select-box {
+            background: #111827 !important;
+            border-color: rgba(45, 212, 191, 0.3) !important;
+            box-shadow: 0 0 15px rgba(45, 212, 191, 0.08) !important;
           }
-          .dark .filter-tab.active {
-            background: rgba(45, 212, 191, 0.16) !important;
-            border-color: rgba(45, 212, 191, 0.45) !important;
+          .mobile-filter-icon {
+            position: absolute !important;
+            left: 14px !important;
+            color: #0d9488 !important;
+            pointer-events: none !important;
+          }
+          .dark .mobile-filter-icon {
             color: #2dd4bf !important;
           }
-          .filter-tab::after {
-            display: none !important;
+          .mobile-filter-select {
+            width: 100% !important;
+            height: 44px !important;
+            padding: 0 38px 0 38px !important;
+            background: transparent !important;
+            border: none !important;
+            color: var(--text-heading, #0f172a) !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            text-align: center !important;
+            text-align-last: center !important;
+            cursor: pointer !important;
+            outline: none !important;
+            appearance: none !important;
+            -webkit-appearance: none !important;
+          }
+          .dark .mobile-filter-select {
+            color: #f1f5f9 !important;
+          }
+          .dark .mobile-filter-select option {
+            background: #111827 !important;
+            color: #f1f5f9 !important;
+          }
+          .mobile-filter-chevron {
+            position: absolute !important;
+            right: 14px !important;
+            color: var(--text-secondary) !important;
+            pointer-events: none !important;
           }
 
           .stats-grid {
@@ -3060,26 +3092,51 @@ export default function JobTrackerDashboard() {
             padding: 0 !important;
             display: flex !important;
             flex-direction: column !important;
-            height: 88vh !important;
             max-height: 88vh !important;
-            overflow: hidden !important;
-          }
-          .info-modal-header {
-            padding: 16px 18px 12px !important;
-            flex-shrink: 0 !important;
-          }
-          .info-modal-body {
-            flex: 1 1 auto !important;
+            height: auto !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+          }
+          .info-modal-header {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 20 !important;
+            background: var(--surface-color) !important;
+            padding: 16px 18px 12px !important;
+            flex-shrink: 0 !important;
+            border-bottom: 1px solid var(--border-color) !important;
+          }
+          .dark .info-modal-header {
+            background: #0f172a !important;
+            border-color: #1e293b !important;
+          }
+          .info-modal-body {
+            flex: 1 0 auto !important;
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
             padding: 16px 18px !important;
             min-height: 0 !important;
-            touch-action: pan-y !important;
-            overscroll-behavior: contain !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 16px !important;
+          }
+          .info-modal-section {
+            overflow: visible !important;
           }
           .info-modal-footer {
+            position: sticky !important;
+            bottom: 0 !important;
+            z-index: 20 !important;
+            background: var(--surface-color) !important;
             padding: 12px 18px calc(12px + env(safe-area-inset-bottom)) !important;
             flex-shrink: 0 !important;
+            border-top: 1px solid var(--border-color) !important;
+          }
+          .dark .info-modal-footer {
+            background: #0f172a !important;
+            border-color: #1e293b !important;
           }
           .info-modal-footer button {
             width: 100% !important;
@@ -4553,7 +4610,8 @@ export default function JobTrackerDashboard() {
                   </div>
                 </div>
 
-                <div className="dashboard-filters-row">
+                {/* Desktop Filter Tabs */}
+                <div className="dashboard-filters-row desktop-only-filters">
                   {[
                     { label: "New Emails", value: "new" },
                     { label: "Deadline today", value: "deadlines" },
@@ -4578,6 +4636,32 @@ export default function JobTrackerDashboard() {
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Mobile Center-Aligned Dropdown Filter */}
+                <div className="mobile-filter-wrapper">
+                  <div className="mobile-filter-container">
+                    <div className="mobile-filter-select-box">
+                      <svg className="mobile-filter-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                      </svg>
+                      <select
+                        className="mobile-filter-select"
+                        value={activeFilter}
+                        onChange={(e) => setActiveFilter(e.target.value)}
+                      >
+                        <option value="all">All Applications ({applications.length})</option>
+                        <option value="new">New Emails</option>
+                        <option value="deadlines">Deadline Today</option>
+                        <option value="applied">Applied</option>
+                        <option value="done">Marked Done</option>
+                        <option value="unmarked">Unmarked</option>
+                      </select>
+                      <svg className="mobile-filter-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </div>
+                  </div>
                 </div>
 
 
