@@ -1766,34 +1766,19 @@ export default function JobTrackerDashboard() {
         .sidebar-logo-box {
           width: 40px;
           height: 40px;
-          border-radius: 10px;
-          background: #0f172a;
-          border: 1px solid rgba(15, 23, 42, 0.2);
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
         }
         
         .logo-img {
-          width: 32px;
-          height: 32px;
-          border-radius: 6px;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
           object-fit: contain;
           flex-shrink: 0;
           transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-        }
-
-        .dark .sidebar-logo-box {
-          background: transparent;
-          border: none;
-          box-shadow: none;
-        }
-
-        .dark .logo-img {
-          width: 40px;
-          height: 40px;
         }
         
         .logo-text-wrapper {
@@ -3579,7 +3564,7 @@ export default function JobTrackerDashboard() {
         >
           <div className="sidebar-header">
             <div className="sidebar-logo-box">
-              <img src="/logo.png" alt="Email Tracker Logo" className="logo-img" />
+              <img src={isDarkMode ? "/logo.png" : "/logo-light.png"} alt="Email Tracker Logo" className="logo-img" />
             </div>
             <div className="logo-text-wrapper">
               <div className="logo-title-text">Email Tracker</div>
