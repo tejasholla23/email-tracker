@@ -250,6 +250,7 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
     const { google } = require("googleapis");
     const LinkedGmailAccount = require("../models/LinkedGmailAccount");
     const { parseEmailWithLLM, getFullBodyText } = require("../utils/parseEmailWithLLM");
+    const { enrichApplicationRecord } = require("../utils/enrichmentService");
 
     // 1. Find Application record strictly owned by authenticated user
     const app = await Application.findOne({ _id: req.params.id, userId: req.userId });
@@ -257,12 +258,14 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
       return res.status(404).json({ message: "Application not found" });
     }
 
-    if (!app.messageId) {
+    const targetMessageId = req.body?.messageId || app.messageId;
+    if (!targetMessageId) {
       return res.status(400).json({ message: "No email message associated with this application" });
     }
 
     // 2. Resolve receiving inbox source email and OAuth tokens
-    const receivingEmail = (app.accountEmail || req.userEmail || "").toLowerCase().trim();
+    const eventMatchingTarget = (app.events || []).find(e => e.messageId === targetMessageId);
+    const receivingEmail = (eventMatchingTarget?.accountEmail || app.accountEmail || req.userEmail || "").toLowerCase().trim();
     let oauthTokens = null;
 
     if (receivingEmail === (req.userEmail || "").toLowerCase().trim()) {
@@ -303,7 +306,7 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
     try {
       const emailRes = await gmail.users.messages.get({
         userId: "me",
-        id: app.messageId,
+        id: targetMessageId,
         format: "full"
       });
 
@@ -317,7 +320,7 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
         internalDate = new Date(parseInt(emailRes.data.internalDate));
       }
     } catch (gErr) {
-      console.warn(`[REPARSE_GMAIL_WARN] Could not fetch raw email from Gmail for ${app.messageId}:`, gErr.message);
+      console.warn(`[REPARSE_GMAIL_WARN] Could not fetch raw email from Gmail for ${targetMessageId}:`, gErr.message);
       if (!rawText) {
         return res.status(422).json({ message: "Raw email content unavailable for reparsing" });
       }
@@ -329,40 +332,45 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
       return res.status(422).json({ message: "Reparsing failed or email did not contain structured placement data" });
     }
 
-    // 5. Preserve manual overrides while updating non-overridden fields
-    const overrides = app.manualOverrides || [];
-
-    if (!overrides.includes("company") && parsed.company) {
-      const { normalizeCompany } = require("../utils/normalizeCompany");
-      app.company = parsed.company;
-      app.companyKey = normalizeCompany(parsed.company);
+    // 5. Update timeline event in events matching targetMessageId
+    if (!app.events) app.events = [];
+    const evIndex = app.events.findIndex(e => e.messageId === targetMessageId);
+    if (evIndex > -1) {
+      app.events[evIndex].classification = parsed.classification || app.events[evIndex].classification || "";
+      app.events[evIndex].title = parsed.timelineTitle || parsed.title || app.events[evIndex].title || "";
+      app.events[evIndex].summary = parsed.timelineSummary || parsed.summary || app.events[evIndex].summary || "";
+      if (parsed.link) app.events[evIndex].link = parsed.link;
+    } else {
+      app.events.push({
+        messageId: targetMessageId,
+        accountEmail: receivingEmail,
+        date: internalDate,
+        classification: parsed.classification || "",
+        title: parsed.timelineTitle || parsed.title || "",
+        subject: subject || "",
+        status: app.status || "new",
+        link: parsed.link || "",
+        summary: parsed.timelineSummary || parsed.summary || ""
+      });
     }
-    if (!overrides.includes("role") && parsed.role) app.role = parsed.role;
-    if (!overrides.includes("type") && parsed.type) app.type = parsed.type;
-    if (!overrides.includes("deadline") && parsed.deadline) {
-      app.deadline = parsed.deadline;
-      app.deadlineISO = parsed.deadlineISO || "";
-      app.deadlineText = parsed.deadlineText || parsed.deadline;
-    }
-    if (!overrides.includes("subtitle") && parsed.subtitle) app.subtitle = parsed.subtitle;
-    if (!overrides.includes("displayFields") && parsed.displayFields?.length) app.displayFields = parsed.displayFields;
-    if (!overrides.includes("skills") && parsed.skills?.length) app.skills = parsed.skills;
-    if (!overrides.includes("link") && parsed.link) app.link = parsed.link;
-    if (!overrides.includes("classification") && parsed.classification) app.classification = parsed.classification;
+    app.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    app.markModified("events");
 
+    // 6. Chronology-aware safe reconciliation
+    const latestEvent = app.events.reduce((latest, ev) => 
+      (!latest || new Date(ev.date) > new Date(latest.date)) ? ev : latest, null
+    );
+    const isLatestEmail = !latestEvent || latestEvent.messageId === targetMessageId;
+
+    const enrichmentPayload = enrichApplicationRecord(app, parsed, internalDate, {
+      isNewerEmail: isLatestEmail,
+      subject,
+      rawBody: fullBodyText || rawText || ""
+    });
+
+    Object.assign(app, enrichmentPayload);
     app.confidenceScore = parsed.confidenceScore || app.confidenceScore || 0;
     app.parserVersion = "v4";
-
-    // Update timeline event in events matching messageId
-    if (app.events && app.events.length > 0) {
-      const evIndex = app.events.findIndex(e => e.messageId === app.messageId);
-      if (evIndex > -1) {
-        app.events[evIndex].classification = parsed.classification || app.events[evIndex].classification || "";
-        app.events[evIndex].title = parsed.timelineTitle || parsed.title || app.events[evIndex].title || "";
-        app.events[evIndex].summary = parsed.timelineSummary || parsed.summary || app.events[evIndex].summary || "";
-        if (parsed.link) app.events[evIndex].link = parsed.link;
-      }
-    }
 
     await app.save();
     console.log(`[REPARSE_SUCCESS] Reparsed application ${app._id} for company: ${app.company}`);

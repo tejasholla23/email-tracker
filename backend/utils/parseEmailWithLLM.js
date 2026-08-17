@@ -1787,6 +1787,7 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
     extract(/\b(?:prize pool|cash prizes|total prize|win up to|rewards|prize)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Prize");
     extract(/\b(?:team format|team size)\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Team Size");
     extract(/\b(?:registration deadline|registration & submission window|registration closes|register by|last date|apply by|submission window)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:eligibility|eligible batch|batch|eligible criteria)\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Eligibility");
   } else if (opportunityType === "WEBINAR" || opportunityType === "OTHER_PLACEMENT_EVENT") {
     extract(/\b(?:date|scheduled on)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Date");
     extract(/\b(?:time)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Time");
@@ -2303,6 +2304,8 @@ module.exports = {
   cleanDisplayFieldValue,
   validateDisplayField,
   resolveDeadlineISO,
+  resolveEventDateISO,
+  deriveFromDisplayFields,
   mergeAlternativeTexts,
   getFullBodyText
 };

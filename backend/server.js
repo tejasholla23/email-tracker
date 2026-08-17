@@ -13,6 +13,7 @@ const Account = require("./models/Account");
 const LinkedGmailAccount = require("./models/LinkedGmailAccount");
 const applicationRoutes = require("./routes/applicationRoutes");
 const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmailWithLLM");
+const { enrichApplicationRecord } = require("./utils/enrichmentService");
 const { getCompanyInfo } = require("./utils/companyInfoService");
 const { enrichCompanyProfile } = require("./utils/enrichCompanyProfile");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
@@ -985,11 +986,11 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
     accountEmail: accountEmail || application.accountEmail || "",
     date,
     classification: parsed.classification || "",
-    title: parsed.title || "",
+    title: parsed.timelineTitle || parsed.title || "",
     subject: subject || "",
     status: parsed.status || "new",
     link: parsed.link || "",
-    summary: parsed.summary || ""
+    summary: parsed.timelineSummary || parsed.summary || ""
   });
   
   application.events.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -1217,33 +1218,12 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
                 updatePayload.isDeleted = false;
               }
 
-              const ov = exists.manualOverrides || [];
-              if (!ov.includes("programRoles") && !exists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-              if (!ov.includes("programDuration") && !exists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-              if (!ov.includes("programStipend") && !exists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-              if (!ov.includes("deadlineText") && !exists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-              if (!ov.includes("link") && !exists.link && parsed.link) updatePayload.link = parsed.link;
-              if (!ov.includes("links") && (!exists.links || exists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-              if (!ov.includes("isFormLink") && !exists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-              if (!ov.includes("deadline") && !exists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-              if (!ov.includes("deadlineISO") && !exists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-              if (!ov.includes("classification") && !exists.classification && parsed.classification) updatePayload.classification = parsed.classification;
-              if (!ov.includes("confidenceScore") && !exists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
-              if (!ov.includes("jobRole") && !exists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
-              if (!ov.includes("title") && !exists.title && parsed.title) updatePayload.title = parsed.title;
-              if (!ov.includes("processId") && !exists.processId && parsed.processId) updatePayload.processId = parsed.processId;
-              if (!ov.includes("processName") && !exists.processName && parsed.processName) updatePayload.processName = parsed.processName;
-              if (!ov.includes("eventDate") && !exists.eventDate && parsed.eventDate) updatePayload.eventDate = parsed.eventDate;
-              if (!ov.includes("eventTime") && !exists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
-              if (!ov.includes("reportingTime") && !exists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
-              if (!ov.includes("venue") && !exists.venue && parsed.venue) updatePayload.venue = parsed.venue;
-              if (!ov.includes("durationText") && !exists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
-              if (!ov.includes("salaryText") && !exists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
-              if (!ov.includes("parseMeta") && !exists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
-              if (!ov.includes("emailType") && parsed.emailType && exists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
-              if (!ov.includes("subtitle") && !exists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
-              if (!ov.includes("displayFields") && (!exists.displayFields || exists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
-              if (!ov.includes("fieldsToDisplay") && (!exists.fieldsToDisplay || exists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
+              const retryDate = email.data?.internalDate ? new Date(parseInt(email.data.internalDate)) : exists.date;
+              const enrichmentPayload = enrichApplicationRecord(exists, parsed, retryDate, {
+                subject,
+                rawBody: fullBodyText || rawText || ""
+              });
+              Object.assign(updatePayload, enrichmentPayload);
             }
 
             if (eventAdded) updatePayload.events = exists.events;
@@ -1455,48 +1435,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     }
 
     if (contentExists) {
-      const updatePayload = {};
-      const ov = contentExists.manualOverrides || [];
-      if (!ov.includes("programRoles") && !contentExists.programRoles && parsed.programRoles) updatePayload.programRoles = parsed.programRoles;
-      if (!ov.includes("programDuration") && !contentExists.programDuration && parsed.programDuration) updatePayload.programDuration = parsed.programDuration;
-      if (!ov.includes("programStipend") && !contentExists.programStipend && parsed.programStipend) updatePayload.programStipend = parsed.programStipend;
-      if (!ov.includes("deadlineText") && !contentExists.deadlineText && parsed.deadlineText) updatePayload.deadlineText = parsed.deadlineText;
-      if (!ov.includes("link") && !contentExists.link && parsed.link) updatePayload.link = parsed.link;
-      if (!ov.includes("links") && (!contentExists.links || contentExists.links.length === 0) && parsed.links?.length) updatePayload.links = parsed.links;
-      if (!ov.includes("isFormLink") && !contentExists.isFormLink && parsed.isFormLink) updatePayload.isFormLink = parsed.isFormLink;
-      if (!ov.includes("deadline") && !contentExists.deadline && parsed.deadline) updatePayload.deadline = parsed.deadline;
-      if (!ov.includes("deadlineISO") && !contentExists.deadlineISO && parsed.deadlineISO) updatePayload.deadlineISO = parsed.deadlineISO;
-      if (!ov.includes("classification") && !contentExists.classification && parsed.classification) updatePayload.classification = parsed.classification;
-      if (!ov.includes("confidenceScore") && !contentExists.confidenceScore && parsed.confidenceScore) updatePayload.confidenceScore = parsed.confidenceScore;
-      if (!ov.includes("jobRole") && !contentExists.jobRole && parsed.jobRole) updatePayload.jobRole = parsed.jobRole;
-      if (!ov.includes("title") && !contentExists.title && parsed.title) updatePayload.title = parsed.title;
-      if (!ov.includes("processId") && !contentExists.processId && parsed.processId) updatePayload.processId = parsed.processId;
-      if (!ov.includes("processName") && !contentExists.processName && parsed.processName) updatePayload.processName = parsed.processName;
-      
-      if (!ov.includes("eventDate") && parsed.eventDate) {
-        if (!contentExists.eventDate || new Date(parsed.eventDate) > new Date(contentExists.eventDate)) {
-          updatePayload.eventDate = parsed.eventDate;
-        }
-      }
-      if (!ov.includes("type") && parsed.type && parsed.type !== "unknown") {
-        if (!contentExists.type || contentExists.type === "unknown") {
-          updatePayload.type = parsed.type;
-        }
-      }
-      
-      if (!ov.includes("eventTime") && !contentExists.eventTime && parsed.eventTime) updatePayload.eventTime = parsed.eventTime;
-      if (!ov.includes("reportingTime") && !contentExists.reportingTime && parsed.reportingTime) updatePayload.reportingTime = parsed.reportingTime;
-      if (!ov.includes("venue") && !contentExists.venue && parsed.venue) updatePayload.venue = parsed.venue;
-      if (!ov.includes("durationText") && !contentExists.durationText && parsed.durationText) updatePayload.durationText = parsed.durationText;
-      if (!ov.includes("salaryText") && !contentExists.salaryText && parsed.salaryText) updatePayload.salaryText = parsed.salaryText;
-      if (!ov.includes("parseMeta") && !contentExists.parseMeta && parsed.parseMeta) updatePayload.parseMeta = parsed.parseMeta;
-      if (!ov.includes("emailType") && parsed.emailType && contentExists.emailType !== parsed.emailType) updatePayload.emailType = parsed.emailType;
-      if (!ov.includes("subtitle") && !contentExists.subtitle && parsed.subtitle) updatePayload.subtitle = parsed.subtitle;
-      if (!ov.includes("displayFields") && (!contentExists.displayFields || contentExists.displayFields.length === 0) && parsed.displayFields?.length) updatePayload.displayFields = parsed.displayFields;
-      if (!ov.includes("fieldsToDisplay") && (!contentExists.fieldsToDisplay || contentExists.fieldsToDisplay.length === 0) && parsed.fieldsToDisplay?.length) updatePayload.fieldsToDisplay = parsed.fieldsToDisplay;
-      if (!ov.includes("skills") && (!contentExists.skills || contentExists.skills.length === 0) && parsed.skills?.length) updatePayload.skills = parsed.skills;
-
-      const emailDate = new Date(parseInt(email.data.internalDate));
+      const emailDate = new Date(parseInt(email.data.internalDate) || Date.now());
       const eventAdded = appendApplicationEvent(contentExists, parsed, {
         messageId: id,
         accountEmail: receivingEmail,
@@ -1504,21 +1443,23 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         subject: subject
       });
       if (!contentExists.accountEmail) contentExists.accountEmail = receivingEmail;
-      
+
+      const enrichmentPayload = enrichApplicationRecord(contentExists, parsed, emailDate, {
+        subject,
+        rawBody: fullBodyText || rawText || ""
+      });
+
+      const updatePayload = {
+        ...enrichmentPayload
+      };
+
       if (eventAdded) {
         updatePayload.events = contentExists.events;
       }
 
-      if (!ov.includes("date")) {
-        const currentDate = contentExists.date ? new Date(contentExists.date) : new Date(0);
-        if (!isNaN(emailDate.getTime()) && emailDate > currentDate) {
-          updatePayload.date = emailDate;
-        }
-      }
-
       if (Object.keys(updatePayload).length > 0) {
         await Application.findByIdAndUpdate(contentExists._id, updatePayload, { returnDocument: 'after' });
-        console.log(`[UPDATED] ${id} | Duplicate company+role enriched with program data, date update, and/or event history`);
+        console.log(`[UPDATED] ${id} | Duplicate company match enriched (${contentExists.company})`);
       }
 
       console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
