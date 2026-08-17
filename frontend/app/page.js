@@ -82,14 +82,17 @@ export default function JobTrackerDashboard() {
   const [reparsingId, setReparsingId] = useState(null);
   const [reparseToast, setReparseToast] = useState(null);
 
-  const handleReparseEmail = async (appId) => {
+  const handleReparseEmail = async (appId, messageId = null) => {
     if (!appId || reparsingId) return;
-    setReparsingId(appId);
+    const loadingKey = messageId ? `${appId}_${messageId}` : appId;
+    setReparsingId(loadingKey);
     setReparseToast(null);
 
     try {
       const res = await apiFetch(`${BASE_URL}/applications/${appId}/reparse`, {
-        method: "POST"
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: messageId ? JSON.stringify({ messageId }) : undefined
       });
 
       if (res.ok) {
@@ -5514,8 +5517,8 @@ export default function JobTrackerDashboard() {
                         <h3 className="info-modal-company-name" style={{ margin: 0 }}>{app.company}</h3>
                         <button
                           className="btn-reparse"
-                          title="Reparse email with AI"
-                          disabled={reparsingId === app._id}
+                          title="Reparse application source email with AI"
+                          disabled={reparsingId === app._id || (typeof reparsingId === 'string' && reparsingId.startsWith(app._id))}
                           onClick={() => handleReparseEmail(app._id)}
                           style={{
                             background: 'rgba(37, 99, 235, 0.1)',
@@ -5525,7 +5528,7 @@ export default function JobTrackerDashboard() {
                             fontSize: '12px',
                             fontWeight: '600',
                             color: '#2563eb',
-                            cursor: reparsingId === app._id ? 'not-allowed' : 'pointer',
+                            cursor: (reparsingId === app._id || (typeof reparsingId === 'string' && reparsingId.startsWith(app._id))) ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px',
@@ -5688,8 +5691,45 @@ export default function JobTrackerDashboard() {
                                 <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-18px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
                               )}
                               <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
-                                <div className="timeline-title" style={{ fontSize: '14.5px', fontWeight: '600', color: '#0f172a' }}>
-                                  {ev.title || ev.classification || 'Email Notification'}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                                  <div className="timeline-title" style={{ fontSize: '14.5px', fontWeight: '600', color: '#0f172a' }}>
+                                    {ev.title || ev.classification || 'Email Notification'}
+                                  </div>
+                                  {ev.messageId && (
+                                    <button
+                                      className="timeline-reparse-btn"
+                                      title="Reparse this specific email with AI"
+                                      disabled={reparsingId === `${app._id}_${ev.messageId}` || reparsingId === app._id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleReparseEmail(app._id, ev.messageId);
+                                      }}
+                                      style={{
+                                        background: 'rgba(37, 99, 235, 0.06)',
+                                        border: '1px solid rgba(37, 99, 235, 0.2)',
+                                        borderRadius: '5px',
+                                        padding: '2px 8px',
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        color: '#2563eb',
+                                        cursor: (reparsingId === `${app._id}_${ev.messageId}` || reparsingId === app._id) ? 'not-allowed' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '3px',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                    >
+                                      <span style={{
+                                        display: 'inline-block',
+                                        fontSize: '11px',
+                                        transform: reparsingId === `${app._id}_${ev.messageId}` ? 'rotate(360deg)' : 'none',
+                                        transition: reparsingId === `${app._id}_${ev.messageId}` ? 'transform 1s linear infinite' : 'none'
+                                      }}>
+                                        ↻
+                                      </span>
+                                      {reparsingId === `${app._id}_${ev.messageId}` ? "Reparsing..." : "Reparse"}
+                                    </button>
+                                  )}
                                 </div>
                                 <div className="timeline-subtitle" style={{ fontSize: '12.5px', color: '#475569', marginTop: '3px', lineHeight: '1.5' }}>
                                   {ev.summary ? ev.summary : (ev.subject ? (ev.subject.length > 80 ? ev.subject.substring(0, 80) + '...' : ev.subject) : '')}
