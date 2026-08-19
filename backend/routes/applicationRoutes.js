@@ -505,11 +505,21 @@ router.get("/:id/attachments/:attachmentId", readLimiter, async (req, res) => {
     }
     const fileBuffer = Buffer.from(base64Data, "base64url");
 
-    // Determine Content-Disposition: inline for browser-viewable types, attachment for others
+    // Determine Content-Disposition based on query parameter or MIME type fallback
     const filename = attachmentMeta.filename || "attachment";
     const mimeType = attachmentMeta.mimeType || "application/octet-stream";
-    const viewableInline = mimeType === "application/pdf" || mimeType.startsWith("image/");
-    const disposition = viewableInline ? "inline" : "attachment";
+    const requestedDisposition = (req.query.disposition || "").toLowerCase().trim();
+
+    let disposition = "attachment";
+    if (requestedDisposition === "inline" || requestedDisposition === "attachment") {
+      disposition = requestedDisposition;
+    } else {
+      const viewableInline =
+        mimeType === "application/pdf" ||
+        mimeType.startsWith("image/") ||
+        mimeType.startsWith("text/");
+      disposition = viewableInline ? "inline" : "attachment";
+    }
 
     // Sanitize filename for Content-Disposition header (RFC 5987)
     const safeFilename = filename.replace(/[^\x20-\x7E]/g, "_");

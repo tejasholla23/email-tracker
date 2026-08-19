@@ -82,32 +82,80 @@ export default function JobTrackerDashboard() {
   const [reparsingId, setReparsingId] = useState(null);
   const [reparseToast, setReparseToast] = useState(null);
 
-  // Attachment Download State
-  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState(null);
+  // Attachment Action State (view / download)
+  const [attachmentActionId, setAttachmentActionId] = useState(null);
   const [attachmentError, setAttachmentError] = useState(null);
+  const [attachmentToast, setAttachmentToast] = useState(null);
 
-  const handleAttachmentOpen = async (appId, attachmentId, filename, mimeType) => {
-    if (downloadingAttachmentId) return;
-    setDownloadingAttachmentId(attachmentId);
+  const handleAttachmentAction = async (appId, attachmentId, filename, mimeType, action = 'view') => {
+    const actionKey = `${attachmentId}_${action}`;
+    if (attachmentActionId) return;
+    setAttachmentActionId(actionKey);
     setAttachmentError(null);
+    setAttachmentToast(null);
+
+    const mt = (mimeType || '').toLowerCase();
+    const fn = (filename || '').toLowerCase();
+    const isViewable =
+      mt === 'application/pdf' ||
+      mt.startsWith('image/') ||
+      mt.startsWith('text/') ||
+      fn.endsWith('.pdf') ||
+      fn.endsWith('.png') ||
+      fn.endsWith('.jpg') ||
+      fn.endsWith('.jpeg') ||
+      fn.endsWith('.webp') ||
+      fn.endsWith('.svg') ||
+      fn.endsWith('.txt') ||
+      fn.endsWith('.csv');
 
     try {
-      const res = await apiFetch(`${BASE_URL}/applications/${appId}/attachments/${attachmentId}`);
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `Failed to download (${res.status})`);
-      }
+      if (action === 'view') {
+        if (isViewable) {
+          const res = await apiFetch(`${BASE_URL}/applications/${appId}/attachments/${attachmentId}?disposition=inline`);
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.message || `Failed to open (${res.status})`);
+          }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } else {
+          // Graceful fallback for non-viewable formats (DOCX, XLSX, ODT, etc.)
+          const res = await apiFetch(`${BASE_URL}/applications/${appId}/attachments/${attachmentId}?disposition=attachment`);
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.message || `Failed to download (${res.status})`);
+          }
 
-      // For PDFs and images, open in a new tab; for other types, trigger download
-      const viewableInline = mimeType === 'application/pdf' || (mimeType && mimeType.startsWith('image/'));
-      if (viewableInline) {
-        window.open(url, '_blank');
-        // Revoke after a delay to let the tab load
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename || 'attachment';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          const ext = filename ? `.${filename.split('.').pop()}` : 'this';
+          setAttachmentToast({
+            type: 'info',
+            message: `In-browser preview is not supported for ${ext} files. File has been downloaded to your device.`
+          });
+        }
       } else {
+        // Explicit Download
+        const res = await apiFetch(`${BASE_URL}/applications/${appId}/attachments/${attachmentId}?disposition=attachment`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to download (${res.status})`);
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = filename || 'attachment';
@@ -117,10 +165,10 @@ export default function JobTrackerDashboard() {
         URL.revokeObjectURL(url);
       }
     } catch (err) {
-      console.error('[ATTACHMENT_OPEN_ERR]', err);
-      setAttachmentError(err.message || 'Failed to open attachment');
+      console.error('[ATTACHMENT_ACTION_ERR]', err);
+      setAttachmentError(err.message || 'Failed to process attachment');
     } finally {
-      setDownloadingAttachmentId(null);
+      setAttachmentActionId(null);
     }
   };
 
@@ -3611,28 +3659,53 @@ export default function JobTrackerDashboard() {
           margin-top: 1px;
           font-weight: 500;
         }
-        .attachment-open-btn {
+        .attachment-actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
           flex-shrink: 0;
-          font-size: 12px;
+        }
+        .attachment-btn {
+          font-size: 11.5px;
           font-weight: 600;
-          padding: 5px 14px;
+          padding: 5px 11px;
           border-radius: 7px;
-          border: 1.5px solid rgba(37, 99, 235, 0.35);
-          background: rgba(37, 99, 235, 0.06);
-          color: #2563eb;
           cursor: pointer;
           transition: all 0.15s ease;
           display: inline-flex;
           align-items: center;
           gap: 5px;
+          line-height: 1.2;
+          user-select: none;
         }
-        .attachment-open-btn:hover:not(:disabled) {
-          background: rgba(37, 99, 235, 0.12);
-          border-color: rgba(37, 99, 235, 0.5);
+        .attachment-btn svg {
+          width: 12px;
+          height: 12px;
+          flex-shrink: 0;
+          display: block;
         }
-        .attachment-open-btn:disabled {
+        .attachment-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+        .attachment-btn-view {
+          border: 1px solid var(--border-color, #cbd5e1);
+          background: rgba(148, 163, 184, 0.08);
+          color: var(--text-primary, #334155);
+        }
+        .attachment-btn-view:hover:not(:disabled) {
+          background: rgba(148, 163, 184, 0.18);
+          border-color: #94a3b8;
+          color: #0f172a;
+        }
+        .attachment-btn-download {
+          border: 1.5px solid rgba(37, 99, 235, 0.35);
+          background: rgba(37, 99, 235, 0.06);
+          color: #2563eb;
+        }
+        .attachment-btn-download:hover:not(:disabled) {
+          background: rgba(37, 99, 235, 0.14);
+          border-color: rgba(37, 99, 235, 0.55);
         }
         .attachment-source-label {
           font-size: 10.5px;
@@ -3647,11 +3720,24 @@ export default function JobTrackerDashboard() {
         .attachment-error {
           font-size: 12px;
           color: #ef4444;
-          padding: 6px 10px;
+          padding: 7px 11px;
           background: rgba(239, 68, 68, 0.08);
           border: 1px solid rgba(239, 68, 68, 0.2);
-          border-radius: 6px;
-          margin-top: 6px;
+          border-radius: 7px;
+          margin-bottom: 8px;
+        }
+        .attachment-toast {
+          font-size: 12px;
+          color: #0284c7;
+          padding: 7px 11px;
+          background: rgba(2, 132, 199, 0.08);
+          border: 1px solid rgba(2, 132, 199, 0.2);
+          border-radius: 7px;
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
         }
         /* Dark mode attachment overrides */
         .dark .attachment-row { border-color: var(--border-color); }
@@ -3662,15 +3748,19 @@ export default function JobTrackerDashboard() {
         .dark .attachment-icon.presentation { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.25); color: #facc15; }
         .dark .attachment-icon.image { background: rgba(168,85,247,0.12); border-color: rgba(168,85,247,0.25); color: #c084fc; }
         .dark .attachment-icon.other { background: rgba(255,255,255,0.06); border-color: var(--border-color); color: #94a3b8; }
-        .dark .attachment-open-btn { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
-        .dark .attachment-open-btn:hover:not(:disabled) { background: rgba(96,165,250,0.18); border-color: rgba(96,165,250,0.45); }
+        .dark .attachment-btn-view { background: rgba(255, 255, 255, 0.06); border-color: var(--border-color); color: #cbd5e1; }
+        .dark .attachment-btn-view:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.25); color: #f8fafc; }
+        .dark .attachment-btn-download { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
+        .dark .attachment-btn-download:hover:not(:disabled) { background: rgba(96,165,250,0.18); border-color: rgba(96,165,250,0.45); }
         .dark .attachment-error { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); }
+        .dark .attachment-toast { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.25); color: #38bdf8; }
         @media (max-width: 480px) {
-          .attachment-row { gap: 8px; }
+          .attachment-row { gap: 8px; flex-wrap: wrap; }
           .attachment-icon { width: 32px; height: 32px; }
           .attachment-icon svg { width: 16px; height: 16px; }
           .attachment-filename { font-size: 12.5px; }
-          .attachment-open-btn { padding: 4px 10px; font-size: 11px; }
+          .attachment-actions { width: 100%; justify-content: flex-end; margin-top: 4px; }
+          .attachment-btn { padding: 4px 9px; font-size: 11px; }
         }
 
         
@@ -5949,6 +6039,17 @@ export default function JobTrackerDashboard() {
                         {attachmentError && (
                           <div className="attachment-error">{attachmentError}</div>
                         )}
+                        {attachmentToast && (
+                          <div className="attachment-toast">
+                            <span>{attachmentToast.message}</span>
+                            <button
+                              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '13px', padding: '0 2px' }}
+                              onClick={() => setAttachmentToast(null)}
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        )}
                         {messageGroups.map((group, gi) => (
                           <div key={gi}>
                             {hasMultipleEmails && group.event && (
@@ -5963,8 +6064,9 @@ export default function JobTrackerDashboard() {
                               const { icon, cls } = getFileIcon(att.mimeType, att.filename);
                               const sizeStr = formatSize(att.size);
                               const typeLabel = getTypeLabel(att.mimeType, att.filename);
-                              const isDownloading = downloadingAttachmentId === att.attachmentId;
-                              const isViewable = (att.mimeType || '').toLowerCase() === 'application/pdf' || (att.mimeType || '').toLowerCase().startsWith('image/');
+                              const isViewing = attachmentActionId === `${att.attachmentId}_view`;
+                              const isDownloading = attachmentActionId === `${att.attachmentId}_download`;
+                              const isAnyActionLoading = !!attachmentActionId;
 
                               return (
                                 <div key={ai} className="attachment-row">
@@ -5977,36 +6079,51 @@ export default function JobTrackerDashboard() {
                                       {typeLabel}{sizeStr ? ` · ${sizeStr}` : ''}
                                     </div>
                                   </div>
-                                  <button
-                                    className="attachment-open-btn"
-                                    disabled={isDownloading}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAttachmentOpen(app._id, att.attachmentId, att.filename, att.mimeType);
-                                    }}
-                                  >
-                                    {isDownloading ? (
-                                      <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '11px' }}>↻</span> Loading…</>
-                                    ) : isViewable ? (
-                                      <>
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                          <polyline points="15 3 21 3 21 9" />
-                                          <line x1="10" y1="14" x2="21" y2="3" />
-                                        </svg>
-                                        <span>Open</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                          <polyline points="7 10 12 15 17 10" />
-                                          <line x1="12" y1="15" x2="12" y2="3" />
-                                        </svg>
-                                        <span>Download</span>
-                                      </>
-                                    )}
-                                  </button>
+                                  <div className="attachment-actions">
+                                    <button
+                                      className="attachment-btn attachment-btn-view"
+                                      disabled={isAnyActionLoading}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAttachmentAction(app._id, att.attachmentId, att.filename, att.mimeType, 'view');
+                                      }}
+                                      title="Preview attachment in browser"
+                                    >
+                                      {isViewing ? (
+                                        <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '11px' }}>↻</span> View</>
+                                      ) : (
+                                        <>
+                                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                          </svg>
+                                          <span>View</span>
+                                        </>
+                                      )}
+                                    </button>
+                                    <button
+                                      className="attachment-btn attachment-btn-download"
+                                      disabled={isAnyActionLoading}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAttachmentAction(app._id, att.attachmentId, att.filename, att.mimeType, 'download');
+                                      }}
+                                      title="Download attachment to device"
+                                    >
+                                      {isDownloading ? (
+                                        <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '11px' }}>↻</span> Saving…</>
+                                      ) : (
+                                        <>
+                                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                            <polyline points="7 10 12 15 17 10" />
+                                            <line x1="12" y1="15" x2="12" y2="3" />
+                                          </svg>
+                                          <span>Download</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
                                 </div>
                               );
                             })}
