@@ -62,7 +62,20 @@ function resolveDeadlineISO(deadlineText, referenceDate = new Date()) {
   const refMonth = getPartVal("month");
   const refDay = getPartVal("day");
 
-  if (/\b(?:today|tonight)\b/i.test(lower)) {
+  if (/\b(?:today|tonight|eod|cob|end of (?:the )?day|end of today|close of (?:business|day))\b/i.test(lower)) {
+    if (/\btomorrow\b/i.test(lower)) {
+      const dRef = new Date(referenceDate);
+      dRef.setDate(dRef.getDate() + 1);
+
+      const partsTom = formatter.formatToParts(dRef);
+      const getTomVal = (type) => parseInt(partsTom.find(p => p.type === type).value, 10);
+      const tomYear = getTomVal("year");
+      const tomMonth = getTomVal("month");
+      const tomDay = getTomVal("day");
+
+      const d = createDateInIST(tomYear, tomMonth, tomDay, hours, minutes);
+      return d.toISOString();
+    }
     const d = createDateInIST(refYear, refMonth, refDay, hours, minutes);
     return d.toISOString();
   }
@@ -1085,10 +1098,15 @@ function parseDateString(input = "", referenceDate = new Date()) {
   if (!text) return null;
   const lower = text.toLowerCase();
 
-  if (/\btoday\b/.test(lower)) {
+  if (/\b(?:today|tonight|eod|cob|end of (?:the )?day|end of today|close of (?:business|day))\b/i.test(lower)) {
+    if (/\btomorrow\b/i.test(lower)) {
+      const next = new Date(referenceDate);
+      next.setDate(next.getDate() + 1);
+      return next;
+    }
     return new Date(referenceDate);
   }
-  if (/\btomorrow\b/.test(lower)) {
+  if (/\btomorrow\b/i.test(lower)) {
     const next = new Date(referenceDate);
     next.setDate(next.getDate() + 1);
     return next;
@@ -1148,7 +1166,7 @@ function extractDeadlineDetails(text = "", referenceDate = new Date()) {
   const cleaned = normalizeText(text);
   const lines = cleaned.split(/[\r\n]+/);
   for (const line of lines) {
-    if (/\b(deadline|last date|apply by|register by|submit by|submission deadline|before .* today|before .* tomorrow)\b/i.test(line)) {
+    if (/\b(deadline|last date|apply by|register by|submit by|submission deadline|before .* today|before .* tomorrow|eod|cob|end of day)\b/i.test(line)) {
       const date = parseDateString(line, referenceDate);
       if (date) {
         return {

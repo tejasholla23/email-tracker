@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { extractFallbackDisplayFields } = require('../utils/parseEmailWithLLM');
+const { extractFallbackDisplayFields, resolveDeadlineISO } = require('../utils/parseEmailWithLLM');
 
 test('extractFallbackDisplayFields extracts basic fields', () => {
   const body = `
@@ -43,3 +43,19 @@ test('extractFallbackDisplayFields strips trailing punctuation', () => {
   assert.strictEqual(fields.find(f => f.label === 'Role').value, 'Intern');
   assert.strictEqual(fields.find(f => f.label === 'Location').value, 'Remote');
 });
+
+test('resolveDeadlineISO resolves EOD and End of Day to end of email date (23:59 IST)', () => {
+  // Reference date: 19th August 2026 11:00 UTC (16:30 IST)
+  const refDate = new Date("2026-08-19T11:00:00.000Z");
+  
+  const isoEOD = resolveDeadlineISO("EOD", refDate);
+  assert.ok(isoEOD.length > 0);
+  assert.strictEqual(isoEOD, "2026-08-19T18:29:00.000Z"); // 23:59 IST is 18:29 UTC
+  
+  const isoEndOfDay = resolveDeadlineISO("End of Day", refDate);
+  assert.strictEqual(isoEndOfDay, "2026-08-19T18:29:00.000Z");
+
+  const isoToday = resolveDeadlineISO("Today by 5:00 PM", refDate);
+  assert.strictEqual(isoToday, "2026-08-19T11:30:00.000Z"); // 17:00 IST is 11:30 UTC
+});
+

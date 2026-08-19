@@ -1724,9 +1724,32 @@ async function syncLinkedAccountsForUser(acc, context = {}) {
             continue;
           }
 
-          linkedMsgIds = [...new Set(allIds)];
+          // Filter by ALLOWED_SENDERS at the Gmail query level (avoids fetching non-placement messages)
+          const uniqueNewIds = [...new Set(allIds)];
+          const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:30d`;
+          const senderFilterRes = await linkedGmail.users.messages.list({
+            userId: "me",
+            maxResults: 250,
+            q: queryStr
+          });
+          const allowedIdSet = new Set((senderFilterRes.data.messages || []).map(m => m.id));
+          linkedMsgIds = uniqueNewIds.filter(id => allowedIdSet.has(id));
+
+          if (linkedMsgIds.length === 0) {
+            await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
+              lastHistoryId: linkedNewHistoryId,
+              syncMode: "incremental",
+              syncStatus: "success",
+              syncError: null,
+              lastSyncTime: new Date()
+            });
+            console.log(`[LINKED_SYNC] ${uniqueNewIds.length} new message(s) on ${linked.email} (0 matching placement senders)`);
+            console.log(`[LINKED_SYNC_COMPLETE] Completed linked account: ${linked.email} | Duration: ${((Date.now() - linkedStartTime)/1000).toFixed(1)}s | Fetched: 0 | Inserted: 0 | Skipped: 0`);
+            continue;
+          }
+
           linkedSyncPath = "incremental";
-          console.log(`[LINKED_SYNC] Found ${linkedMsgIds.length} new message(s) for ${linked.email} (${allIds.length} history events)`);
+          console.log(`[LINKED_SYNC] Found ${linkedMsgIds.length} placement message(s) to process for ${linked.email} (filtered from ${uniqueNewIds.length} inbox messages)`);
         } catch (hErr) {
           if (hErr.code === 404 || hErr.response?.status === 404) {
             console.log(`[LINKED_SYNC_EXPIRED] historyId expired for ${linked.email}. Full sync fallback.`);
@@ -1773,30 +1796,6 @@ async function syncLinkedAccountsForUser(acc, context = {}) {
         }
 
         const existingFast = knownDocsLinked.get(mId) || null;
-
-        // Lightweight metadata pre-filter for unknown messages in linked incremental sync
-        if (linkedSyncPath === "incremental" && !existingFast) {
-          try {
-            const metaRes = await linkedGmail.users.messages.get({
-              userId: "me",
-              id: mId,
-              format: "metadata",
-              metadataHeaders: ["From"]
-            });
-            const fromVal = (metaRes.data?.payload?.headers || []).find(h => h.name === "From")?.value || "";
-            const isAllowed = ALLOWED_SENDERS.some(s => fromVal.toLowerCase().includes(s.toLowerCase()));
-            if (!isAllowed) {
-              console.log(`[SKIP_LINKED_META] ${mId} | Reason: Sender not in allowed list (${fromVal})`);
-              lSkipped++;
-              totalLinkedSkipped++;
-              if (context.onSkipped) context.onSkipped();
-              continue;
-            }
-          } catch (metaErr) {
-            // Non-fatal metadata fetch error — fall through to normal processMessage
-          }
-        }
-
         const res = await processMessage(linkedGmail, acc, mId, null, existingFast, context.llmParsedCount, linked.email);
         if (res.action === "inserted") {
           lInserted++;
