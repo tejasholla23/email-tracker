@@ -1630,6 +1630,215 @@ async function batchLookupMessageIds(messageIds, userId) {
   return lookup;
 }
 
+/**
+ * Synchronizes all linked Gmail accounts associated with a parent user Account.
+ * Always executed for every parent account, regardless of whether the parent
+ * account had 0 or >0 new messages in its primary inbox.
+ *
+ * @param {Object} acc - The parent Account document
+ * @param {Object} context - Shared execution context (llmParsedCount, callbacks)
+ * @returns {Promise<{ inserted: number, skipped: number }>}
+ */
+async function syncLinkedAccountsForUser(acc, context = {}) {
+  const linkedAccounts = await LinkedGmailAccount.find({ parentAccountId: acc._id });
+  if (!linkedAccounts || linkedAccounts.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  console.log(`[LINKED_SYNC_START] Found ${linkedAccounts.length} linked account(s) for user ${acc.email}`);
+  let totalLinkedInserted = 0;
+  let totalLinkedSkipped = 0;
+
+  for (const linked of linkedAccounts) {
+    if (!linked.tokens) {
+      console.log(`[LINKED_SYNC] Skipping linked account ${linked.email} — no tokens available`);
+      continue;
+    }
+
+    const linkedStartTime = Date.now();
+    console.log(`[LINKED_SYNC] Checking linked account: ${linked.email} (Parent: ${acc.email})`);
+
+    try {
+      await LinkedGmailAccount.findByIdAndUpdate(linked._id, { syncStatus: "pending" });
+
+      const linkedOauth = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        getLinkRedirectUri()
+      );
+      linkedOauth.setCredentials(linked.tokens);
+
+      linkedOauth.on("tokens", async (newTokens) => {
+        try {
+          const updatedTokens = { ...linked.tokens, ...newTokens };
+          await LinkedGmailAccount.findByIdAndUpdate(linked._id, { tokens: updatedTokens });
+          linked.tokens = updatedTokens;
+        } catch (e) {
+          console.error(`[LINKED_TOKEN_SAVE_ERR] ${linked.email}:`, e.message);
+        }
+      });
+
+      const linkedGmail = google.gmail({ version: "v1", auth: linkedOauth });
+
+      let linkedMsgIds = [];
+      let linkedNewHistoryId = null;
+      let linkedSyncPath = "full";
+
+      if (linked.lastHistoryId) {
+        try {
+          let pageToken = null;
+          let allIds = [];
+          let latestHId = null;
+          do {
+            const hParams = {
+              userId: "me",
+              startHistoryId: linked.lastHistoryId,
+              historyTypes: ["messageAdded"]
+            };
+            if (pageToken) hParams.pageToken = pageToken;
+            const hRes = await linkedGmail.users.history.list(hParams);
+            latestHId = hRes.data.historyId;
+            if (hRes.data.history) {
+              for (const rec of hRes.data.history) {
+                if (rec.messagesAdded) {
+                  for (const added of rec.messagesAdded) {
+                    allIds.push(added.message.id);
+                  }
+                }
+              }
+            }
+            pageToken = hRes.data.nextPageToken || null;
+          } while (pageToken);
+
+          linkedNewHistoryId = latestHId;
+          if (allIds.length === 0) {
+            await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
+              lastHistoryId: linkedNewHistoryId,
+              syncMode: "incremental",
+              syncStatus: "success",
+              syncError: null,
+              lastSyncTime: new Date()
+            });
+            console.log(`[LINKED_SYNC] No new messages for ${linked.email}`);
+            console.log(`[LINKED_SYNC_COMPLETE] Completed linked account: ${linked.email} | Duration: ${((Date.now() - linkedStartTime)/1000).toFixed(1)}s | Fetched: 0 | Inserted: 0 | Skipped: 0`);
+            continue;
+          }
+
+          linkedMsgIds = [...new Set(allIds)];
+          linkedSyncPath = "incremental";
+          console.log(`[LINKED_SYNC] Found ${linkedMsgIds.length} new message(s) for ${linked.email} (${allIds.length} history events)`);
+        } catch (hErr) {
+          if (hErr.code === 404 || hErr.response?.status === 404) {
+            console.log(`[LINKED_SYNC_EXPIRED] historyId expired for ${linked.email}. Full sync fallback.`);
+            linked.lastHistoryId = null; // Clear stale historyId so fallback uses first-time sync limits
+            linkedSyncPath = "full";
+          } else {
+            throw hErr;
+          }
+        }
+      }
+
+      if (linkedSyncPath === "full") {
+        // Linked accounts: limit first-time full sync to recent emails only
+        const linkedMaxResults = linked.lastHistoryId ? 250 : 20;
+        const linkedRecency = linked.lastHistoryId ? "90d" : "30d";
+        const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:${linkedRecency}`;
+        console.log(`[LINKED_FULL_SYNC] ${linked.email} | maxResults: ${linkedMaxResults} | recency: ${linkedRecency}`);
+        const listRes = await linkedGmail.users.messages.list({
+          userId: "me",
+          maxResults: linkedMaxResults,
+          q: queryStr
+        });
+        linkedMsgIds = (listRes.data.messages || []).map(m => m.id);
+        if (linkedMsgIds.length === 0) {
+          console.log(`[LINKED_SYNC] No messages found for ${linked.email}`);
+        } else {
+          console.log(`[LINKED_SYNC] Found ${linkedMsgIds.length} message(s) to process for ${linked.email}`);
+        }
+        try {
+          const profRes = await linkedGmail.users.getProfile({ userId: "me" });
+          linkedNewHistoryId = profRes.data.historyId;
+        } catch (pErr) {}
+      }
+
+      const knownDocsLinked = await batchLookupMessageIds(linkedMsgIds, acc._id);
+      let lInserted = 0;
+      let lSkipped = 0;
+
+      for (const mId of linkedMsgIds) {
+        if (activeClearRequests.has(acc._id.toString())) break;
+        if (context.llmParsedCount >= config.MAX_EMAILS_PER_SYNC) {
+          console.log(`[LINKED_SYNC_PROGRESSIVE] Reached global limit of ${config.MAX_EMAILS_PER_SYNC} LLM parses. Stopping linked sync for ${linked.email}.`);
+          break;
+        }
+
+        const existingFast = knownDocsLinked.get(mId) || null;
+
+        // Lightweight metadata pre-filter for unknown messages in linked incremental sync
+        if (linkedSyncPath === "incremental" && !existingFast) {
+          try {
+            const metaRes = await linkedGmail.users.messages.get({
+              userId: "me",
+              id: mId,
+              format: "metadata",
+              metadataHeaders: ["From"]
+            });
+            const fromVal = (metaRes.data?.payload?.headers || []).find(h => h.name === "From")?.value || "";
+            const isAllowed = ALLOWED_SENDERS.some(s => fromVal.toLowerCase().includes(s.toLowerCase()));
+            if (!isAllowed) {
+              console.log(`[SKIP_LINKED_META] ${mId} | Reason: Sender not in allowed list (${fromVal})`);
+              lSkipped++;
+              totalLinkedSkipped++;
+              if (context.onSkipped) context.onSkipped();
+              continue;
+            }
+          } catch (metaErr) {
+            // Non-fatal metadata fetch error — fall through to normal processMessage
+          }
+        }
+
+        const res = await processMessage(linkedGmail, acc, mId, null, existingFast, context.llmParsedCount, linked.email);
+        if (res.action === "inserted") {
+          lInserted++;
+          totalLinkedInserted++;
+          if (context.onInserted) context.onInserted();
+        } else {
+          lSkipped++;
+          totalLinkedSkipped++;
+          if (context.onSkipped) context.onSkipped();
+        }
+        if (res.usedLLM) {
+          context.llmParsedCount = (context.llmParsedCount || 0) + 1;
+        }
+      }
+
+      const linkedUpdate = {
+        syncStatus: "success",
+        syncError: null,
+        lastSyncTime: new Date()
+      };
+      if (linkedNewHistoryId) {
+        linkedUpdate.lastHistoryId = linkedNewHistoryId;
+        linkedUpdate.syncMode = "incremental";
+      }
+      await LinkedGmailAccount.findByIdAndUpdate(linked._id, linkedUpdate);
+      console.log(`[LINKED_SYNC_COMPLETE] Completed linked account: ${linked.email} | Duration: ${((Date.now() - linkedStartTime)/1000).toFixed(1)}s | Fetched: ${linkedMsgIds.length} | Inserted: ${lInserted} | Skipped: ${lSkipped}`);
+    } catch (linkedErr) {
+      console.error(`[LINKED_SYNC_ERR] ${linked.email}:`, linkedErr.message);
+      let errText = linkedErr.message || "Sync failed";
+      if (linkedErr.code === 400 || linkedErr.code === 401) {
+        errText = "Authentication expired. Please reconnect this account.";
+      }
+      await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
+        syncStatus: "failed",
+        syncError: errText
+      });
+    }
+  }
+
+  return { inserted: totalLinkedInserted, skipped: totalLinkedSkipped };
+}
+
 // --- Main sync orchestrator ---
 async function fetchAndProcessEmails(targetUserId = null) {
   if (targetUserId) {
@@ -1699,7 +1908,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
       const accIdStr = acc._id.toString();
       if (!targetUserId) {
         if (activeSyncs.has(accIdStr)) {
-          console.log(`[CRON] Skipping account ${acc.email} - sync already in progress`);
+          console.log(`[SYNC] Skipping ${acc.email} in cron — manual sync already in progress for this user`);
           accountsSkipped++;
           continue;
         }
@@ -1707,8 +1916,18 @@ async function fetchAndProcessEmails(targetUserId = null) {
       }
 
       const accountStartTime = Date.now();
-      console.log(`Processing account: ${acc.email}`);
+      let llmParsedCount = 0;
+
       try {
+        console.log(`Processing account: ${acc.email}`);
+        console.log(`[SYNC_TOKENS] ${acc.email} | scope: ${acc.tokens?.scope || 'none'} | has_refresh: ${!!acc.tokens?.refresh_token}`);
+
+        if (!acc.tokens) {
+          console.log(`Account ${acc.email} has no OAuth tokens — skipping`);
+          accountsSkipped++;
+          continue;
+        }
+
         await Account.findOneAndUpdate({ email: acc.email }, { syncStatus: "pending" });
 
         const localOauth2Client = new google.auth.OAuth2(
@@ -1717,7 +1936,6 @@ async function fetchAndProcessEmails(targetUserId = null) {
           process.env.GOOGLE_REDIRECT_URI
         );
         localOauth2Client.setCredentials(acc.tokens);
-        console.log(`[SYNC_TOKENS] ${acc.email} | scope: ${acc.tokens?.scope || 'NONE'} | has_refresh: ${!!acc.tokens?.refresh_token}`);
 
         localOauth2Client.on("tokens", async (newTokens) => {
           console.log(`[TOKEN_REFRESH] Received refreshed Google tokens for: ${acc.email}`);
@@ -1748,6 +1966,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
         let messageIdsToProcess = [];
         let newHistoryId = null;
         let syncPath = "full"; // default
+        let isZeroIncremental = false;
 
         if (acc.lastHistoryId) {
           // ── PATH 1: INCREMENTAL SYNC via History API ──
@@ -1786,25 +2005,32 @@ async function fetchAndProcessEmails(targetUserId = null) {
             newHistoryId = latestHistoryId;
 
             if (allAddedMessageIds.length === 0) {
+              isZeroIncremental = true;
+              syncPath = "incremental";
+              messageIdsToProcess = [];
               console.log(`[ACCOUNT START]\nEmail: ${acc.email}\nMode: Incremental\nHistoryId: ${acc.lastHistoryId}`);
+              console.log(`[INCREMENTAL] No new messages for primary account since last sync.`);
+              console.log(`[INCREMENTAL_SUMMARY] History events: 0 | New messages: 0 | historyId: ${acc.lastHistoryId} → ${newHistoryId}`);
+              
+              // Update historyId for primary account
+              const syncedAccount = await Account.findOneAndUpdate(
+                { email: acc.email },
+                { lastHistoryId: newHistoryId, syncMode: "incremental", syncStatus: "success", syncError: null, lastSyncTime: new Date() },
+                { returnDocument: 'after' }
+              );
+              if (syncedAccount) {
+                await processCalendarSyncQueue(syncedAccount);
+              }
+
               const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
               console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: 0\nInserted: 0\nSkipped: 0\nMode: Incremental`);
               accountsProcessed++;
-
-              console.log(`[INCREMENTAL] No new messages since last sync.`);
-              console.log(`[INCREMENTAL_SUMMARY] History events: 0 | New messages: 0 | historyId: ${acc.lastHistoryId} → ${newHistoryId}`);
-              // Update historyId even when nothing changed
-              await Account.findOneAndUpdate(
-                { email: acc.email },
-                { lastHistoryId: newHistoryId, syncMode: "incremental", syncStatus: "success", syncError: null, lastSyncTime: new Date() }
-              );
-              continue; // Skip to next account
+            } else {
+              // Deduplicate (History API can return the same message in multiple history records)
+              messageIdsToProcess = [...new Set(allAddedMessageIds)];
+              syncPath = "incremental";
+              console.log(`[INCREMENTAL] Found ${messageIdsToProcess.length} new message(s) to process (${allAddedMessageIds.length} history events, ${messageIdsToProcess.length} unique).`);
             }
-
-            // Deduplicate (History API can return the same message in multiple history records)
-            messageIdsToProcess = [...new Set(allAddedMessageIds)];
-            syncPath = "incremental";
-            console.log(`[INCREMENTAL] Found ${messageIdsToProcess.length} new message(s) to process (${allAddedMessageIds.length} history events, ${messageIdsToProcess.length} unique).`);
 
           } catch (historyError) {
             // 404 means historyId has expired — fall back to full sync
@@ -1825,7 +2051,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
           const listTimeoutId = setTimeout(() => listController.abort(), 15000);
           let response;
           try {
-            const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:90d`;
+            const queryStr = `(${config.ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:90d`;
             response = await gmail.users.messages.list({
               userId: "me",
               maxResults: 250,
@@ -1848,251 +2074,91 @@ async function fetchAndProcessEmails(targetUserId = null) {
           messageIdsToProcess = messages.map(m => m.id);
 
           // Capture historyId from the profile for bootstrapping
-          // messages.list doesn't return historyId directly, so we get it from the user's profile
           try {
             const profileResponse = await gmail.users.getProfile({ userId: "me" });
             newHistoryId = profileResponse.data.historyId;
             console.log(`[FULL_SYNC] Captured historyId from profile: ${newHistoryId}`);
           } catch (profileErr) {
             console.error(`[FULL_SYNC] Failed to get profile historyId: ${profileErr.message}`);
-            // Non-fatal: we proceed without historyId and will do a full sync again next time
           }
 
           console.log(`[FULL_SYNC] Messages listed: ${messageIdsToProcess.length} | historyId: ${newHistoryId || 'unavailable'}`);
         }
 
-        console.log(`[ACCOUNT START]\nEmail: ${acc.email}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}${syncPath === "incremental" ? `\nHistoryId: ${acc.lastHistoryId}` : ""}`);
-
-        // ══════════════════════════════════════════════
-        // COMMON: Process the collected message IDs
-        // ══════════════════════════════════════════════
-        fetchedCount += messageIdsToProcess.length;
-        console.log(`\n--- STARTING SYNC FOR ${acc.email} (${syncPath}) ---`);
-
-        // BATCH DB LOOKUP: Replace N individual findOne() calls with one $in query
-        const knownDocs = await batchLookupMessageIds(messageIdsToProcess, acc._id);
-        const newCount = messageIdsToProcess.length - knownDocs.size;
-        console.log(`[BATCH_LOOKUP] Already known: ${knownDocs.size} | New: ${newCount} | Total: ${messageIdsToProcess.length}`);
-
         let accInserted = 0;
         let accSkipped = 0;
-        let llmParsedCount = 0;
 
-        for (const msgId of messageIdsToProcess) {
-          // Abort the loop immediately if a Clear All was requested for this account while sync was running
-          if (activeClearRequests.has(acc._id.toString())) {
-            console.log(`[SYNC_ABORTED] Clear All requested for user ${acc.email} — aborting sync loop`);
-            break;
-          }
+        if (!isZeroIncremental) {
+          console.log(`[ACCOUNT START]\nEmail: ${acc.email}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}${syncPath === "incremental" ? `\nHistoryId: ${acc.lastHistoryId}` : ""}`);
 
-          const existingFast = knownDocs.get(msgId) || null;
-          const result = await processMessage(gmail, acc, msgId, null, existingFast, llmParsedCount);
+          // ══════════════════════════════════════════════
+          // COMMON: Process the collected message IDs
+          // ══════════════════════════════════════════════
+          fetchedCount += messageIdsToProcess.length;
+          console.log(`\n--- STARTING SYNC FOR ${acc.email} (${syncPath}) ---`);
 
-          if (result.action === 'inserted') {
-            accInserted++;
-            insertedCount++;
-          } else {
-            accSkipped++;
-            skippedCount++;
-          }
+          // BATCH DB LOOKUP: Replace N individual findOne() calls with one $in query
+          const knownDocs = await batchLookupMessageIds(messageIdsToProcess, acc._id);
+          const newCount = messageIdsToProcess.length - knownDocs.size;
+          console.log(`[BATCH_LOOKUP] Already known: ${knownDocs.size} | New: ${newCount} | Total: ${messageIdsToProcess.length}`);
 
-          if (result.usedLLM) llmParsedCount++;
+          for (const msgId of messageIdsToProcess) {
+            // Abort the loop immediately if a Clear All was requested for this account while sync was running
+            if (activeClearRequests.has(acc._id.toString())) {
+              console.log(`[SYNC_ABORTED] Clear All requested for user ${acc.email} — aborting sync loop`);
+              break;
+            }
 
-          if (llmParsedCount >= config.MAX_EMAILS_PER_SYNC) {
-            console.log(`[SYNC_PROGRESSIVE] Reached limit of ${config.MAX_EMAILS_PER_SYNC} LLM parses. Stopping sync to preserve quota.`);
-            break;
-          }
-        }
+            const existingFast = knownDocs.get(msgId) || null;
+            const result = await processMessage(gmail, acc, msgId, null, existingFast, llmParsedCount);
 
-        // ══════════════════════════════════════════════
-        // PERSIST: Update account state after sync
-        // ══════════════════════════════════════════════
-        const accountUpdate = {
-          syncStatus: "success",
-          syncError: null,
-          lastSyncTime: new Date(),
-        };
-        if (newHistoryId) {
-          accountUpdate.lastHistoryId = newHistoryId;
-          accountUpdate.syncMode = "incremental";
-          console.log(`[SYNC_CHECKPOINT] historyId saved: ${newHistoryId}`);
-        }
-        const syncedAccount = await Account.findOneAndUpdate({ email: acc.email }, accountUpdate, { returnDocument: 'after' });
-        if (syncedAccount) {
-          await processCalendarSyncQueue(syncedAccount);
-        }
+            if (result.action === 'inserted') {
+              accInserted++;
+              insertedCount++;
+            } else {
+              accSkipped++;
+              skippedCount++;
+            }
 
-        const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
-        console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: ${messageIdsToProcess.length}\nInserted: ${accInserted}\nSkipped: ${accSkipped}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}`);
-        accountsProcessed++;
+            if (result.usedLLM) llmParsedCount++;
 
-        // ── SYNC LINKED GMAIL ACCOUNTS FOR THIS USER ──
-        const linkedAccounts = await LinkedGmailAccount.find({ parentAccountId: acc._id });
-        if (linkedAccounts.length > 0) {
-          console.log(`[LINKED_SYNC_START] Found ${linkedAccounts.length} linked account(s) for user ${acc.email}`);
-          for (const linked of linkedAccounts) {
-            if (!linked.tokens) continue;
-            const linkedStartTime = Date.now();
-            console.log(`[LINKED_SYNC] Processing linked account: ${linked.email} (Parent: ${acc.email})`);
-            try {
-              await LinkedGmailAccount.findByIdAndUpdate(linked._id, { syncStatus: "pending" });
-
-              const linkedOauth = new google.auth.OAuth2(
-                process.env.GOOGLE_CLIENT_ID,
-                process.env.GOOGLE_CLIENT_SECRET,
-                getLinkRedirectUri()
-              );
-              linkedOauth.setCredentials(linked.tokens);
-
-              linkedOauth.on("tokens", async (newTokens) => {
-                try {
-                  const updatedTokens = { ...linked.tokens, ...newTokens };
-                  await LinkedGmailAccount.findByIdAndUpdate(linked._id, { tokens: updatedTokens });
-                  linked.tokens = updatedTokens;
-                } catch (e) {
-                  console.error(`[LINKED_TOKEN_SAVE_ERR] ${linked.email}:`, e.message);
-                }
-              });
-
-              const linkedGmail = google.gmail({ version: "v1", auth: linkedOauth });
-
-              let linkedMsgIds = [];
-              let linkedNewHistoryId = null;
-              let linkedSyncPath = "full";
-
-              if (linked.lastHistoryId) {
-                try {
-                  let pageToken = null;
-                  let allIds = [];
-                  let latestHId = null;
-                  do {
-                    const hParams = {
-                      userId: "me",
-                      startHistoryId: linked.lastHistoryId,
-                      historyTypes: ["messageAdded"]
-                    };
-                    if (pageToken) hParams.pageToken = pageToken;
-                    const hRes = await linkedGmail.users.history.list(hParams);
-                    latestHId = hRes.data.historyId;
-                    if (hRes.data.history) {
-                      for (const rec of hRes.data.history) {
-                        if (rec.messagesAdded) {
-                          for (const added of rec.messagesAdded) {
-                            allIds.push(added.message.id);
-                          }
-                        }
-                      }
-                    }
-                    pageToken = hRes.data.nextPageToken || null;
-                  } while (pageToken);
-
-                  linkedNewHistoryId = latestHId;
-                  if (allIds.length === 0) {
-                    await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
-                      lastHistoryId: linkedNewHistoryId,
-                      syncMode: "incremental",
-                      syncStatus: "success",
-                      syncError: null,
-                      lastSyncTime: new Date()
-                    });
-                    console.log(`[LINKED_SYNC] No new messages for linked account ${linked.email}`);
-                    continue;
-                  }
-                  linkedMsgIds = [...new Set(allIds)];
-                  linkedSyncPath = "incremental";
-                } catch (hErr) {
-                  if (hErr.code === 404 || hErr.response?.status === 404) {
-                    console.log(`[LINKED_SYNC_EXPIRED] historyId expired for ${linked.email}. Full sync fallback.`);
-                    linked.lastHistoryId = null; // Clear stale historyId so fallback uses first-time sync limits (20 maxResults, 30d recency)
-                    linkedSyncPath = "full";
-                  } else {
-                    throw hErr;
-                  }
-                }
-              }
-
-              if (linkedSyncPath === "full") {
-                // Linked accounts: limit first-time full sync to recent emails only
-                const linkedMaxResults = linked.lastHistoryId ? 250 : 20;
-                const linkedRecency = linked.lastHistoryId ? "90d" : "30d";
-                const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:${linkedRecency}`;
-                console.log(`[LINKED_FULL_SYNC] ${linked.email} | maxResults: ${linkedMaxResults} | recency: ${linkedRecency}`);
-                const listRes = await linkedGmail.users.messages.list({
-                  userId: "me",
-                  maxResults: linkedMaxResults,
-                  q: queryStr
-                });
-                linkedMsgIds = (listRes.data.messages || []).map(m => m.id);
-                try {
-                  const profRes = await linkedGmail.users.getProfile({ userId: "me" });
-                  linkedNewHistoryId = profRes.data.historyId;
-                } catch (pErr) {}
-              }
-
-              const knownDocsLinked = await batchLookupMessageIds(linkedMsgIds, acc._id);
-              let lInserted = 0;
-              let lSkipped = 0;
-
-              for (const mId of linkedMsgIds) {
-                if (activeClearRequests.has(acc._id.toString())) break;
-                if (llmParsedCount >= config.MAX_EMAILS_PER_SYNC) {
-                  console.log(`[LINKED_SYNC_PROGRESSIVE] Reached global limit of ${config.MAX_EMAILS_PER_SYNC} LLM parses. Stopping linked sync for ${linked.email}.`);
-                  break;
-                }
-
-                const existingFast = knownDocsLinked.get(mId) || null;
-
-                // Lightweight metadata pre-filter for unknown messages in linked incremental sync
-                if (linkedSyncPath === "incremental" && !existingFast) {
-                  try {
-                    const metaRes = await linkedGmail.users.messages.get({
-                      userId: "me",
-                      id: mId,
-                      format: "metadata",
-                      metadataHeaders: ["From"]
-                    });
-                    const fromVal = (metaRes.data?.payload?.headers || []).find(h => h.name === "From")?.value || "";
-                    const isAllowed = ALLOWED_SENDERS.some(s => fromVal.toLowerCase().includes(s.toLowerCase()));
-                    if (!isAllowed) {
-                      console.log(`[SKIP_LINKED_META] ${mId} | Reason: Sender not in allowed list (${fromVal})`);
-                      lSkipped++;
-                      continue;
-                    }
-                  } catch (metaErr) {
-                    // Non-fatal metadata fetch error — fall through to normal processMessage
-                  }
-                }
-
-                const res = await processMessage(linkedGmail, acc, mId, null, existingFast, llmParsedCount, linked.email);
-                if (res.action === "inserted") { lInserted++; insertedCount++; }
-                else { lSkipped++; skippedCount++; }
-                if (res.usedLLM) llmParsedCount++;
-              }
-
-              const linkedUpdate = {
-                syncStatus: "success",
-                syncError: null,
-                lastSyncTime: new Date()
-              };
-              if (linkedNewHistoryId) {
-                linkedUpdate.lastHistoryId = linkedNewHistoryId;
-                linkedUpdate.syncMode = "incremental";
-              }
-              await LinkedGmailAccount.findByIdAndUpdate(linked._id, linkedUpdate);
-              console.log(`[LINKED_SYNC_COMPLETE] ${linked.email} | Duration: ${((Date.now() - linkedStartTime)/1000).toFixed(1)}s | Fetched: ${linkedMsgIds.length} | Inserted: ${lInserted}`);
-            } catch (linkedErr) {
-              console.error(`[LINKED_SYNC_ERR] ${linked.email}:`, linkedErr.message);
-              let errText = linkedErr.message || "Sync failed";
-              if (linkedErr.code === 400 || linkedErr.code === 401) {
-                errText = "Authentication expired. Please reconnect this account.";
-              }
-              await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
-                syncStatus: "failed",
-                syncError: errText
-              });
+            if (llmParsedCount >= config.MAX_EMAILS_PER_SYNC) {
+              console.log(`[SYNC_PROGRESSIVE] Reached limit of ${config.MAX_EMAILS_PER_SYNC} LLM parses. Stopping sync to preserve quota.`);
+              break;
             }
           }
+
+          // ══════════════════════════════════════════════
+          // PERSIST: Update account state after sync
+          // ══════════════════════════════════════════════
+          const accountUpdate = {
+            syncStatus: "success",
+            syncError: null,
+            lastSyncTime: new Date(),
+          };
+          if (newHistoryId) {
+            accountUpdate.lastHistoryId = newHistoryId;
+            accountUpdate.syncMode = "incremental";
+            console.log(`[SYNC_CHECKPOINT] historyId saved: ${newHistoryId}`);
+          }
+          const syncedAccount = await Account.findOneAndUpdate({ email: acc.email }, accountUpdate, { returnDocument: 'after' });
+          if (syncedAccount) {
+            await processCalendarSyncQueue(syncedAccount);
+          }
+
+          const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
+          console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: ${messageIdsToProcess.length}\nInserted: ${accInserted}\nSkipped: ${accSkipped}\nMode: ${syncPath === "incremental" ? "Incremental" : "Full"}`);
+          accountsProcessed++;
         }
+
+        // ══════════════════════════════════════════════
+        // ALWAYS SYNC LINKED GMAIL ACCOUNTS FOR THIS USER
+        // ══════════════════════════════════════════════
+        await syncLinkedAccountsForUser(acc, {
+          llmParsedCount,
+          onInserted: () => { insertedCount++; },
+          onSkipped: () => { skippedCount++; }
+        });
 
       } catch (err) {
         const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
@@ -2237,5 +2303,6 @@ if (require.main === module) {
 module.exports = {
   app,
   mergeAlternativeTexts,
-  fetchAndProcessEmails
+  fetchAndProcessEmails,
+  syncLinkedAccountsForUser
 };
