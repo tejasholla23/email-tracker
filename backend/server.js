@@ -23,7 +23,7 @@ const { extractAttachmentMetadata, mergeAttachments } = require("./utils/attachm
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 const { createLinkState, consumeLinkState } = require("./utils/linkStateStore");
-const { processCalendarSyncQueue, migrateAccountCalendar } = require("./utils/calendarService");
+const { processCalendarSyncQueue, migrateAccountCalendar, getCalendarListForAccount } = require("./utils/calendarService");
 const {
   authLimiter,
   syncLimiter,
@@ -293,7 +293,8 @@ app.get("/auth/google/calendar", authLimiter, (req, res) => {
     scope: [
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/calendar.events"
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.readonly"
     ],
     include_granted_scopes: true,
     prompt: "consent",
@@ -437,7 +438,10 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
       }
 
       // 2. Preserve calendar scope if the user previously had it authorized
-      const hadCalendarScope = existingAccount.tokens.scope && existingAccount.tokens.scope.includes("auth/calendar.events");
+      const hadCalendarScope = existingAccount.tokens.scope && (
+        existingAccount.tokens.scope.includes("auth/calendar.events") ||
+        existingAccount.tokens.scope.includes("auth/calendar.readonly")
+      );
       const hasCalendarScopeNow = mergedTokens.scope && mergedTokens.scope.includes("auth/calendar.events");
 
       if (hadCalendarScope && !hasCalendarScopeNow) {
@@ -700,30 +704,13 @@ app.get("/auth/calendar/status", readLimiter, authenticate, async (req, res) => 
 app.get("/auth/calendar/list", readLimiter, authenticate, async (req, res) => {
   try {
     const account = await Account.findById(req.userId);
-    const hasCalendarScope = account.tokens?.scope && account.tokens.scope.includes("auth/calendar.events");
-    if (!hasCalendarScope) {
-      return res.json({ calendars: [] });
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
-    );
-    oauth2Client.setCredentials(account.tokens);
-    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
-
-    const calendarListRes = await calendar.calendarList.list();
-    const calendars = (calendarListRes.data.items || []).map(c => ({
-      id: c.id,
-      summary: c.summary,
-      primary: !!c.primary
-    }));
-
+    const calendars = await getCalendarListForAccount(account);
     res.json({ calendars });
   } catch (err) {
     console.error("[CALENDAR_LIST] Error fetching calendar list:", err.message);
-    res.json({ calendars: [] });
+    res.json({
+      calendars: [{ id: "primary", summary: "Primary Calendar (Default)", primary: true }]
+    });
   }
 });
 

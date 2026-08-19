@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { parseEventTime, buildEventPayload } = require('../utils/calendarService');
+const { parseEventTime, buildEventPayload, getCalendarListForAccount } = require('../utils/calendarService');
 
 test('parseEventTime: returns clean all-day date format for deadlines', () => {
   const dateInfo = parseEventTime('2026-08-25T18:29:00.000Z', null, 'deadline');
@@ -75,4 +75,98 @@ test('code verification: calendarService.js must use calendar.events.update inst
   const serviceCode = fs.readFileSync(path.join(__dirname, '../utils/calendarService.js'), 'utf-8');
   assert.ok(!serviceCode.includes('calendar.events.patch'), 'calendar.events.patch must not be called in calendarService.js');
   assert.ok(serviceCode.includes('calendar.events.update'), 'calendar.events.update must be present in calendarService.js');
+});
+
+test('getCalendarListForAccount: returns primary fallback for users with only calendar.events scope without calling API', async () => {
+  let listApiCalled = false;
+  const mockClient = {
+    calendarList: {
+      list: async () => {
+        listApiCalled = true;
+        return { data: { items: [] } };
+      }
+    }
+  };
+
+  const account = {
+    tokens: {
+      scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events openid'
+    }
+  };
+
+  const calendars = await getCalendarListForAccount(account, mockClient);
+  assert.strictEqual(listApiCalled, false, 'calendarList.list must NOT be called for calendar.events-only users');
+  assert.strictEqual(calendars.length, 1);
+  assert.strictEqual(calendars[0].id, 'primary');
+  assert.strictEqual(calendars[0].primary, true);
+});
+
+test('getCalendarListForAccount: calls calendarList.list when calendar.readonly scope is present', async () => {
+  let listApiCalled = false;
+  const mockClient = {
+    calendarList: {
+      list: async () => {
+        listApiCalled = true;
+        return {
+          data: {
+            items: [
+              { id: 'primary', summary: 'My Primary', primary: true },
+              { id: 'custom_cal_123', summary: 'Placements Calendar', primary: false }
+            ]
+          }
+        };
+      }
+    }
+  };
+
+  const account = {
+    tokens: {
+      scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly'
+    }
+  };
+
+  const calendars = await getCalendarListForAccount(account, mockClient);
+  assert.strictEqual(listApiCalled, true, 'calendarList.list must be called when calendar.readonly is present');
+  assert.strictEqual(calendars.length, 2);
+  assert.strictEqual(calendars[1].id, 'custom_cal_123');
+  assert.strictEqual(calendars[1].summary, 'Placements Calendar');
+});
+
+test('getCalendarListForAccount: calls calendarList.list when full calendar scope is present', async () => {
+  let listApiCalled = false;
+  const mockClient = {
+    calendarList: {
+      list: async () => {
+        listApiCalled = true;
+        return {
+          data: {
+            items: [
+              { id: 'primary', summary: 'Primary Calendar', primary: true }
+            ]
+          }
+        };
+      }
+    }
+  };
+
+  const account = {
+    tokens: {
+      scope: 'https://www.googleapis.com/auth/calendar'
+    }
+  };
+
+  const calendars = await getCalendarListForAccount(account, mockClient);
+  assert.strictEqual(listApiCalled, true, 'calendarList.list must be called when calendar scope is present');
+  assert.strictEqual(calendars.length, 1);
+});
+
+test('getCalendarListForAccount: returns empty array when no calendar scope is authorized', async () => {
+  const account = {
+    tokens: {
+      scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email'
+    }
+  };
+
+  const calendars = await getCalendarListForAccount(account);
+  assert.strictEqual(calendars.length, 0, 'Must return empty array for accounts without any calendar scope');
 });

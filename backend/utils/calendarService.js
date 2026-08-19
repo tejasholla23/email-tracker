@@ -597,6 +597,54 @@ async function migrateAccountCalendar(account, sourceCalendarId = "primary") {
   console.log(`[CALENDAR_MIGRATE] Migration sweep completed for ${account.email}`);
 }
 
+/**
+ * Resolves the available Google Calendar list for an account based on granted OAuth scopes.
+ * If user has calendar.readonly or calendar scope, queries Google Calendar API.
+ * If user has calendar.events only, returns primary calendar fallback without calling calendarList.list().
+ * If user has no calendar scopes, returns empty array.
+ */
+async function getCalendarListForAccount(account, calendarClient = null) {
+  const scopes = (account?.tokens?.scope || "").split(/\s+/);
+  const hasEventsScope = scopes.some(s => s.includes("auth/calendar.events"));
+  const hasListScope = scopes.some(s => s.endsWith("/calendar.readonly") || s.endsWith("/calendar"));
+
+  // If user has not authorized any calendar scopes, return empty list
+  if (!hasEventsScope && !hasListScope) {
+    return [];
+  }
+
+  const primaryFallback = [{
+    id: "primary",
+    summary: "Primary Calendar (Default)",
+    primary: true
+  }];
+
+  // If user has granted the scope to list secondary calendars, query Google Calendar API
+  if (hasListScope) {
+    const calendar = calendarClient || (() => {
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+      );
+      oauth2Client.setCredentials(account.tokens);
+      return google.calendar({ version: "v3", auth: oauth2Client });
+    })();
+
+    const calendarListRes = await calendar.calendarList.list();
+    const calendars = (calendarListRes.data.items || []).map(c => ({
+      id: c.id,
+      summary: c.summary,
+      primary: !!c.primary
+    }));
+
+    return calendars.length > 0 ? calendars : primaryFallback;
+  }
+
+  // For existing users with calendar.events only, gracefully return primary fallback without calling calendarList.list()
+  return primaryFallback;
+}
+
 module.exports = {
   syncAppToCalendar,
   processCalendarSyncQueue,
@@ -604,5 +652,6 @@ module.exports = {
   migrateAccountCalendar,
   resolveCalendarId,
   parseEventTime,
-  buildEventPayload
+  buildEventPayload,
+  getCalendarListForAccount
 };
