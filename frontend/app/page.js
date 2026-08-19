@@ -3436,6 +3436,34 @@ export default function JobTrackerDashboard() {
           color: #2dd4bf;
         }
 
+        .card-attachment-indicator {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #2563eb;
+          background: rgba(37, 99, 235, 0.08);
+          border: 1px solid rgba(37, 99, 235, 0.22);
+          padding: 3px 10px;
+          border-radius: 6px;
+          width: fit-content;
+          margin-top: 4px;
+          letter-spacing: 0.01em;
+          transition: all 0.15s ease;
+        }
+        .card-attachment-indicator svg {
+          width: 13px;
+          height: 13px;
+          flex-shrink: 0;
+          display: block;
+        }
+        .dark .card-attachment-indicator {
+          background: rgba(59, 130, 246, 0.12);
+          border-color: rgba(59, 130, 246, 0.28);
+          color: #60a5fa;
+        }
+
         .info-modal-content {
           max-width: 640px;
           width: 100%;
@@ -3529,19 +3557,27 @@ export default function JobTrackerDashboard() {
         .attachment-icon {
           width: 36px;
           height: 36px;
-          border-radius: 8px;
+          border-radius: 9px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 18px;
           flex-shrink: 0;
-          background: #eff6ff;
-          border: 1px solid #dbeafe;
+          background: #f1f5f9;
+          border: 1px solid var(--border-color, #e2e8f0);
+          color: #64748b;
+          transition: transform 0.15s ease;
         }
-        .attachment-icon.pdf { background: #fef2f2; border-color: #fecaca; }
-        .attachment-icon.spreadsheet { background: #f0fdf4; border-color: #bbf7d0; }
-        .attachment-icon.document { background: #eff6ff; border-color: #bfdbfe; }
-        .attachment-icon.presentation { background: #fefce8; border-color: #fde68a; }
+        .attachment-icon svg {
+          width: 18px;
+          height: 18px;
+          display: block;
+        }
+        .attachment-icon.pdf { background: #fef2f2; border-color: #fecaca; color: #ef4444; }
+        .attachment-icon.spreadsheet { background: #f0fdf4; border-color: #bbf7d0; color: #10b981; }
+        .attachment-icon.document { background: #eff6ff; border-color: #bfdbfe; color: #3b82f6; }
+        .attachment-icon.presentation { background: #fefce8; border-color: #fde68a; color: #d97706; }
+        .attachment-icon.image { background: #faf5ff; border-color: #e9d5ff; color: #9333ea; }
+        .attachment-icon.other { background: #f8fafc; border-color: #e2e8f0; color: #64748b; }
         .attachment-info {
           flex: 1;
           min-width: 0;
@@ -3573,7 +3609,7 @@ export default function JobTrackerDashboard() {
           transition: all 0.15s ease;
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 5px;
         }
         .attachment-open-btn:hover:not(:disabled) {
           background: rgba(37, 99, 235, 0.12);
@@ -3604,17 +3640,20 @@ export default function JobTrackerDashboard() {
         }
         /* Dark mode attachment overrides */
         .dark .attachment-row { border-color: var(--border-color); }
-        .dark .attachment-icon { background: rgba(255,255,255,0.06); border-color: var(--border-color); }
-        .dark .attachment-icon.pdf { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); }
-        .dark .attachment-icon.spreadsheet { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25); }
-        .dark .attachment-icon.document { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.25); }
-        .dark .attachment-icon.presentation { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.25); }
+        .dark .attachment-icon { background: rgba(255,255,255,0.06); border-color: var(--border-color); color: #94a3b8; }
+        .dark .attachment-icon.pdf { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: #f87171; }
+        .dark .attachment-icon.spreadsheet { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25); color: #4ade80; }
+        .dark .attachment-icon.document { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.25); color: #60a5fa; }
+        .dark .attachment-icon.presentation { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.25); color: #facc15; }
+        .dark .attachment-icon.image { background: rgba(168,85,247,0.12); border-color: rgba(168,85,247,0.25); color: #c084fc; }
+        .dark .attachment-icon.other { background: rgba(255,255,255,0.06); border-color: var(--border-color); color: #94a3b8; }
         .dark .attachment-open-btn { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
         .dark .attachment-open-btn:hover:not(:disabled) { background: rgba(96,165,250,0.18); border-color: rgba(96,165,250,0.45); }
         .dark .attachment-error { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); }
         @media (max-width: 480px) {
           .attachment-row { gap: 8px; }
-          .attachment-icon { width: 32px; height: 32px; font-size: 16px; }
+          .attachment-icon { width: 32px; height: 32px; }
+          .attachment-icon svg { width: 16px; height: 16px; }
           .attachment-filename { font-size: 12.5px; }
           .attachment-open-btn { padding: 4px 10px; font-size: 11px; }
         }
@@ -5061,6 +5100,19 @@ export default function JobTrackerDashboard() {
                                       </div>
                                     )}
 
+                                  {(() => {
+                                    const realAttachments = (app.attachments || []).filter(a => !a.isInline);
+                                    if (realAttachments.length === 0) return null;
+                                    return (
+                                      <div className="card-attachment-indicator" title={`${realAttachments.length} attachment${realAttachments.length > 1 ? 's' : ''} available`}>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                        </svg>
+                                        <span>Attachments ({realAttachments.length})</span>
+                                      </div>
+                                    );
+                                  })()}
+
                                   <div className="app-footer">
                                     <div className="email-info" title={`Received on ${app.accountEmail || app.email || "Gmail"}`}>
                                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', flexShrink: 0 }}>
@@ -5746,13 +5798,91 @@ export default function JobTrackerDashboard() {
                   const getFileIcon = (mimeType, filename) => {
                     const mt = (mimeType || '').toLowerCase();
                     const fn = (filename || '').toLowerCase();
-                    if (mt === 'application/pdf' || fn.endsWith('.pdf')) return { icon: '📄', cls: 'pdf' };
-                    if (mt.includes('spreadsheet') || mt.includes('excel') || mt === 'text/csv' || fn.endsWith('.xlsx') || fn.endsWith('.xls') || fn.endsWith('.csv')) return { icon: '📊', cls: 'spreadsheet' };
-                    if (mt.includes('presentation') || mt.includes('powerpoint') || fn.endsWith('.pptx') || fn.endsWith('.ppt')) return { icon: '📽️', cls: 'presentation' };
-                    if (mt.includes('word') || mt.includes('document') || mt === 'application/rtf' || fn.endsWith('.doc') || fn.endsWith('.docx') || fn.endsWith('.odt') || fn.endsWith('.rtf')) return { icon: '📝', cls: 'document' };
-                    if (mt.startsWith('image/')) return { icon: '🖼️', cls: '' };
-                    if (mt.startsWith('text/')) return { icon: '📃', cls: '' };
-                    return { icon: '📎', cls: '' };
+
+                    // PDF
+                    if (mt === 'application/pdf' || fn.endsWith('.pdf')) {
+                      return {
+                        cls: 'pdf',
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                          </svg>
+                        )
+                      };
+                    }
+
+                    // Spreadsheets (XLSX, XLS, CSV)
+                    if (mt.includes('spreadsheet') || mt.includes('excel') || mt === 'text/csv' || fn.endsWith('.xlsx') || fn.endsWith('.xls') || fn.endsWith('.csv')) {
+                      return {
+                        cls: 'spreadsheet',
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <path d="M8 13h8" />
+                            <path d="M8 17h8" />
+                            <path d="M12 13v8" />
+                          </svg>
+                        )
+                      };
+                    }
+
+                    // Presentations (PPT, PPTX)
+                    if (mt.includes('presentation') || mt.includes('powerpoint') || fn.endsWith('.pptx') || fn.endsWith('.ppt')) {
+                      return {
+                        cls: 'presentation',
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                            <line x1="8" y1="21" x2="16" y2="21" />
+                            <line x1="12" y1="17" x2="12" y2="21" />
+                          </svg>
+                        )
+                      };
+                    }
+
+                    // Word / Documents (DOC, DOCX, ODT, RTF)
+                    if (mt.includes('word') || mt.includes('document') || mt === 'application/rtf' || fn.endsWith('.doc') || fn.endsWith('.docx') || fn.endsWith('.odt') || fn.endsWith('.rtf')) {
+                      return {
+                        cls: 'document',
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                          </svg>
+                        )
+                      };
+                    }
+
+                    // Images
+                    if (mt.startsWith('image/')) {
+                      return {
+                        cls: 'image',
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                        )
+                      };
+                    }
+
+                    // Other / Generic Files
+                    return {
+                      cls: 'other',
+                      icon: (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                        </svg>
+                      )
+                    };
                   };
 
                   const formatSize = (bytes) => {
@@ -5791,8 +5921,11 @@ export default function JobTrackerDashboard() {
 
                   return (
                     <div className="info-modal-section">
-                      <div className="info-modal-section-header">
-                        Attachments ({realAttachments.length})
+                      <div className="info-modal-section-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #3b82f6)', flexShrink: 0 }}>
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                        </svg>
+                        <span>Attachments ({realAttachments.length})</span>
                       </div>
                       <div className="info-modal-section-body">
                         {attachmentError && (
@@ -5813,6 +5946,7 @@ export default function JobTrackerDashboard() {
                               const sizeStr = formatSize(att.size);
                               const typeLabel = getTypeLabel(att.mimeType, att.filename);
                               const isDownloading = downloadingAttachmentId === att.attachmentId;
+                              const isViewable = (att.mimeType || '').toLowerCase() === 'application/pdf' || (att.mimeType || '').toLowerCase().startsWith('image/');
 
                               return (
                                 <div key={ai} className="attachment-row">
@@ -5835,8 +5969,24 @@ export default function JobTrackerDashboard() {
                                   >
                                     {isDownloading ? (
                                       <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '11px' }}>↻</span> Loading…</>
+                                    ) : isViewable ? (
+                                      <>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                          <polyline points="15 3 21 3 21 9" />
+                                          <line x1="10" y1="14" x2="21" y2="3" />
+                                        </svg>
+                                        <span>Open</span>
+                                      </>
                                     ) : (
-                                      'Open'
+                                      <>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                          <polyline points="7 10 12 15 17 10" />
+                                          <line x1="12" y1="15" x2="12" y2="3" />
+                                        </svg>
+                                        <span>Download</span>
+                                      </>
                                     )}
                                   </button>
                                 </div>
