@@ -3437,31 +3437,46 @@ export default function JobTrackerDashboard() {
         }
 
         .card-attachment-indicator {
-          display: inline-flex;
+          display: flex;
           align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #2563eb;
-          background: rgba(37, 99, 235, 0.08);
-          border: 1px solid rgba(37, 99, 235, 0.22);
-          padding: 3px 10px;
-          border-radius: 6px;
+          gap: 7px;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-secondary, #64748b);
+          background: transparent;
+          border: none;
+          padding: 2px 0 0 0;
           width: fit-content;
-          margin-top: 4px;
           letter-spacing: 0.01em;
-          transition: all 0.15s ease;
+          transition: color 0.15s ease;
+          user-select: none;
         }
-        .card-attachment-indicator svg {
+        .card-attachment-indicator:hover {
+          color: var(--text-primary, #0f172a);
+        }
+        .card-attachment-icon {
+          width: 15px;
+          height: 15px;
+          flex-shrink: 0;
+          display: block;
+          color: inherit;
+        }
+        .card-attachment-chevron {
           width: 13px;
           height: 13px;
           flex-shrink: 0;
           display: block;
+          color: inherit;
+          opacity: 0.6;
+          margin-left: 1px;
         }
         .dark .card-attachment-indicator {
-          background: rgba(59, 130, 246, 0.12);
-          border-color: rgba(59, 130, 246, 0.28);
-          color: #60a5fa;
+          color: #94a3b8;
+          background: transparent;
+          border: none;
+        }
+        .dark .card-attachment-indicator:hover {
+          color: #f1f5f9;
         }
 
         .info-modal-content {
@@ -5100,18 +5115,21 @@ export default function JobTrackerDashboard() {
                                       </div>
                                     )}
 
-                                  {(() => {
-                                    const realAttachments = (app.attachments || []).filter(a => !a.isInline);
-                                    if (realAttachments.length === 0) return null;
-                                    return (
-                                      <div className="card-attachment-indicator" title={`${realAttachments.length} attachment${realAttachments.length > 1 ? 's' : ''} available`}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                                        </svg>
-                                        <span>Attachments ({realAttachments.length})</span>
-                                      </div>
-                                    );
-                                  })()}
+                                   {(() => {
+                                     const realAttachments = (app.attachments || []).filter(a => !a.isInline);
+                                     if (realAttachments.length === 0) return null;
+                                     return (
+                                       <div className="card-attachment-indicator" title={`${realAttachments.length} attachment${realAttachments.length > 1 ? 's' : ''} available`}>
+                                         <svg className="card-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                         </svg>
+                                         <span>Attachments ({realAttachments.length})</span>
+                                         <svg className="card-attachment-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                           <polyline points="9 18 15 12 9 6" />
+                                         </svg>
+                                       </div>
+                                     );
+                                   })()}
 
                                   <div className="app-footer">
                                     <div className="email-info" title={`Received on ${app.accountEmail || app.email || "Gmail"}`}>
