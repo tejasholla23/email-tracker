@@ -377,9 +377,9 @@ async function syncAppToCalendar(account, app) {
     let eventId = app.calendarEventId;
 
     if (eventId) {
-      // Patch existing event
-      console.log(`[CALENDAR_SYNC] Patching event ${eventId} for application ${app._id}`);
-      await calendar.events.patch({
+      // Update existing event (complete replacement avoids schema conflicts between date and dateTime)
+      console.log(`[CALENDAR_SYNC] Updating event ${eventId} for application ${app._id}`);
+      await calendar.events.update({
         calendarId: calendarId,
         eventId: eventId,
         resource: payload
@@ -397,7 +397,7 @@ async function syncAppToCalendar(account, app) {
       if (existingEvent) {
         eventId = existingEvent.id;
         console.log(`[CALENDAR_SYNC] Found existing calendar event ${eventId} via fingerprint lookup`);
-        await calendar.events.patch({
+        await calendar.events.update({
           calendarId: calendarId,
           eventId: eventId,
           resource: payload
@@ -602,5 +602,7 @@ module.exports = {
   processCalendarSyncQueue,
   CALENDAR_SYNC_VERSION,
   migrateAccountCalendar,
-  resolveCalendarId
+  resolveCalendarId,
+  parseEventTime,
+  buildEventPayload
 };
