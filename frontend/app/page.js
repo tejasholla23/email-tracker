@@ -82,6 +82,48 @@ export default function JobTrackerDashboard() {
   const [reparsingId, setReparsingId] = useState(null);
   const [reparseToast, setReparseToast] = useState(null);
 
+  // Attachment Download State
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState(null);
+  const [attachmentError, setAttachmentError] = useState(null);
+
+  const handleAttachmentOpen = async (appId, attachmentId, filename, mimeType) => {
+    if (downloadingAttachmentId) return;
+    setDownloadingAttachmentId(attachmentId);
+    setAttachmentError(null);
+
+    try {
+      const res = await apiFetch(`${BASE_URL}/applications/${appId}/attachments/${attachmentId}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Failed to download (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      // For PDFs and images, open in a new tab; for other types, trigger download
+      const viewableInline = mimeType === 'application/pdf' || (mimeType && mimeType.startsWith('image/'));
+      if (viewableInline) {
+        window.open(url, '_blank');
+        // Revoke after a delay to let the tab load
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'attachment';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('[ATTACHMENT_OPEN_ERR]', err);
+      setAttachmentError(err.message || 'Failed to open attachment');
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  };
+
   const handleReparseEmail = async (appId, messageId = null) => {
     if (!appId || reparsingId) return;
     const loadingKey = messageId ? `${appId}_${messageId}` : appId;
@@ -3474,6 +3516,109 @@ export default function JobTrackerDashboard() {
         .dark .skill-chip { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); }
         .dark .skeleton-line { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; }
 
+        /* ── Attachment Row Styles ── */
+        .attachment-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 0;
+          border-bottom: 1px solid var(--border-color, #f1f5f9);
+        }
+        .attachment-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .attachment-row:first-child { padding-top: 0; }
+        .attachment-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          flex-shrink: 0;
+          background: #eff6ff;
+          border: 1px solid #dbeafe;
+        }
+        .attachment-icon.pdf { background: #fef2f2; border-color: #fecaca; }
+        .attachment-icon.spreadsheet { background: #f0fdf4; border-color: #bbf7d0; }
+        .attachment-icon.document { background: #eff6ff; border-color: #bfdbfe; }
+        .attachment-icon.presentation { background: #fefce8; border-color: #fde68a; }
+        .attachment-info {
+          flex: 1;
+          min-width: 0;
+        }
+        .attachment-filename {
+          font-size: 13.5px;
+          font-weight: 600;
+          color: var(--text-primary, #0f172a);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .attachment-meta {
+          font-size: 11.5px;
+          color: var(--text-secondary, #64748b);
+          margin-top: 1px;
+          font-weight: 500;
+        }
+        .attachment-open-btn {
+          flex-shrink: 0;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 5px 14px;
+          border-radius: 7px;
+          border: 1.5px solid rgba(37, 99, 235, 0.35);
+          background: rgba(37, 99, 235, 0.06);
+          color: #2563eb;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .attachment-open-btn:hover:not(:disabled) {
+          background: rgba(37, 99, 235, 0.12);
+          border-color: rgba(37, 99, 235, 0.5);
+        }
+        .attachment-open-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .attachment-source-label {
+          font-size: 10.5px;
+          font-weight: 600;
+          color: var(--text-secondary, #94a3b8);
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          margin-top: 12px;
+          margin-bottom: 4px;
+        }
+        .attachment-source-label:first-child { margin-top: 0; }
+        .attachment-error {
+          font-size: 12px;
+          color: #ef4444;
+          padding: 6px 10px;
+          background: rgba(239, 68, 68, 0.08);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          border-radius: 6px;
+          margin-top: 6px;
+        }
+        /* Dark mode attachment overrides */
+        .dark .attachment-row { border-color: var(--border-color); }
+        .dark .attachment-icon { background: rgba(255,255,255,0.06); border-color: var(--border-color); }
+        .dark .attachment-icon.pdf { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); }
+        .dark .attachment-icon.spreadsheet { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25); }
+        .dark .attachment-icon.document { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.25); }
+        .dark .attachment-icon.presentation { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.25); }
+        .dark .attachment-open-btn { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
+        .dark .attachment-open-btn:hover:not(:disabled) { background: rgba(96,165,250,0.18); border-color: rgba(96,165,250,0.45); }
+        .dark .attachment-error { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); }
+        @media (max-width: 480px) {
+          .attachment-row { gap: 8px; }
+          .attachment-icon { width: 32px; height: 32px; font-size: 16px; }
+          .attachment-filename { font-size: 12.5px; }
+          .attachment-open-btn { padding: 4px 10px; font-size: 11px; }
+        }
+
         
         @keyframes slideDownFade {
           from {
@@ -5667,6 +5812,117 @@ export default function JobTrackerDashboard() {
                             </ul>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Attachments Section ── */}
+                {(() => {
+                  const realAttachments = (app.attachments || []).filter(a => !a.isInline);
+                  if (realAttachments.length === 0) return null;
+
+                  const getFileIcon = (mimeType, filename) => {
+                    const mt = (mimeType || '').toLowerCase();
+                    const fn = (filename || '').toLowerCase();
+                    if (mt === 'application/pdf' || fn.endsWith('.pdf')) return { icon: '📄', cls: 'pdf' };
+                    if (mt.includes('spreadsheet') || mt.includes('excel') || mt === 'text/csv' || fn.endsWith('.xlsx') || fn.endsWith('.xls') || fn.endsWith('.csv')) return { icon: '📊', cls: 'spreadsheet' };
+                    if (mt.includes('presentation') || mt.includes('powerpoint') || fn.endsWith('.pptx') || fn.endsWith('.ppt')) return { icon: '📽️', cls: 'presentation' };
+                    if (mt.includes('word') || mt.includes('document') || mt === 'application/rtf' || fn.endsWith('.doc') || fn.endsWith('.docx') || fn.endsWith('.odt') || fn.endsWith('.rtf')) return { icon: '📝', cls: 'document' };
+                    if (mt.startsWith('image/')) return { icon: '🖼️', cls: '' };
+                    if (mt.startsWith('text/')) return { icon: '📃', cls: '' };
+                    return { icon: '📎', cls: '' };
+                  };
+
+                  const formatSize = (bytes) => {
+                    if (!bytes || bytes <= 0) return '';
+                    if (bytes < 1024) return `${bytes} B`;
+                    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+                    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                  };
+
+                  const getTypeLabel = (mimeType, filename) => {
+                    const fn = (filename || '').toLowerCase();
+                    if (fn.endsWith('.pdf')) return 'PDF';
+                    if (fn.endsWith('.xlsx') || fn.endsWith('.xls')) return fn.endsWith('.xlsx') ? 'XLSX' : 'XLS';
+                    if (fn.endsWith('.csv')) return 'CSV';
+                    if (fn.endsWith('.doc') || fn.endsWith('.docx')) return fn.endsWith('.docx') ? 'DOCX' : 'DOC';
+                    if (fn.endsWith('.odt')) return 'ODT';
+                    if (fn.endsWith('.pptx') || fn.endsWith('.ppt')) return fn.endsWith('.pptx') ? 'PPTX' : 'PPT';
+                    if (fn.endsWith('.rtf')) return 'RTF';
+                    if (fn.endsWith('.txt')) return 'TXT';
+                    const mt = (mimeType || '').toLowerCase();
+                    if (mt === 'application/pdf') return 'PDF';
+                    if (mt.startsWith('image/')) return mt.split('/')[1]?.toUpperCase() || 'Image';
+                    const ext = fn.split('.').pop();
+                    return ext && ext.length <= 5 ? ext.toUpperCase() : 'File';
+                  };
+
+                  // Group attachments by source messageId to show which email they came from
+                  const hasMultipleEmails = app.events && app.events.length > 1;
+                  const messageGroups = hasMultipleEmails
+                    ? [...new Set(realAttachments.map(a => a.messageId))].map(mid => ({
+                        messageId: mid,
+                        event: (app.events || []).find(e => e.messageId === mid),
+                        items: realAttachments.filter(a => a.messageId === mid)
+                      }))
+                    : [{ messageId: null, event: null, items: realAttachments }];
+
+                  return (
+                    <div className="info-modal-section">
+                      <div className="info-modal-section-header">
+                        Attachments ({realAttachments.length})
+                      </div>
+                      <div className="info-modal-section-body">
+                        {attachmentError && (
+                          <div className="attachment-error">{attachmentError}</div>
+                        )}
+                        {messageGroups.map((group, gi) => (
+                          <div key={gi}>
+                            {hasMultipleEmails && group.event && (
+                              <div className="attachment-source-label">
+                                From: {group.event.title || group.event.subject || (() => {
+                                  const d = new Date(group.event.date);
+                                  return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()} email`;
+                                })()}
+                              </div>
+                            )}
+                            {group.items.map((att, ai) => {
+                              const { icon, cls } = getFileIcon(att.mimeType, att.filename);
+                              const sizeStr = formatSize(att.size);
+                              const typeLabel = getTypeLabel(att.mimeType, att.filename);
+                              const isDownloading = downloadingAttachmentId === att.attachmentId;
+
+                              return (
+                                <div key={ai} className="attachment-row">
+                                  <div className={`attachment-icon ${cls}`}>{icon}</div>
+                                  <div className="attachment-info">
+                                    <div className="attachment-filename" title={att.filename}>
+                                      {att.filename || 'Unnamed attachment'}
+                                    </div>
+                                    <div className="attachment-meta">
+                                      {typeLabel}{sizeStr ? ` · ${sizeStr}` : ''}
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="attachment-open-btn"
+                                    disabled={isDownloading}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAttachmentOpen(app._id, att.attachmentId, att.filename, att.mimeType);
+                                    }}
+                                  >
+                                    {isDownloading ? (
+                                      <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '11px' }}>↻</span> Loading…</>
+                                    ) : (
+                                      'Open'
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   );

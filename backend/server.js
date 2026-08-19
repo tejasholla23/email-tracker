@@ -19,6 +19,7 @@ const { enrichCompanyProfile } = require("./utils/enrichCompanyProfile");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
 const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
+const { extractAttachmentMetadata, mergeAttachments } = require("./utils/attachmentUtils");
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 const { createLinkState, consumeLinkState } = require("./utils/linkStateStore");
@@ -1070,7 +1071,14 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     
     const fullBodyText = getFullBodyText(email.data.payload);
     console.log(`[BODY_FETCHED] ${id} length: ${fullBodyText.length}`);
-    
+
+    // ── EXTRACT ATTACHMENT METADATA ──
+    const emailAttachments = extractAttachmentMetadata(email.data.payload, id);
+    if (emailAttachments.length > 0) {
+      const realCount = emailAttachments.filter(a => !a.isInline).length;
+      console.log(`[ATTACHMENTS] ${id} | Total: ${emailAttachments.length} | Real: ${realCount} | Inline: ${emailAttachments.length - realCount}`);
+    }
+
     console.log(`[FETCH] ${id} | Subject: ${subject} | From: ${fromHeader}`);
 
     // ── EXISTING RECORD: enrich or skip ──
@@ -1228,6 +1236,16 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
             if (eventAdded) updatePayload.events = exists.events;
 
+            // Merge attachment metadata (deduplicate by messageId+attachmentId)
+            if (emailAttachments.length > 0) {
+              const existingAttachments = exists.attachments || [];
+              const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
+              const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
+              if (newAttachments.length > 0) {
+                updatePayload.attachments = [...existingAttachments, ...newAttachments];
+              }
+            }
+
             await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
             console.log(`[UPDATED] ${id} | Existing application enriched & locked (${CURRENT_PARSER_VERSION})`);
           } else {
@@ -1246,8 +1264,17 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             if (eventAdded) {
               updateObj.events = exists.events;
             }
+            // Still persist attachment metadata even on deferred reparse
+            if (emailAttachments.length > 0) {
+              const existingAttachments = exists.attachments || [];
+              const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
+              const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
+              if (newAttachments.length > 0) {
+                updateObj.attachments = [...existingAttachments, ...newAttachments];
+              }
+            }
             await Application.findByIdAndUpdate(exists._id, updateObj, { returnDocument: 'after' });
-            console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
+            console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`)
           }
         } else {
           // Fatal parsing error (parseEmailWithLLM returned null)
@@ -1263,8 +1290,21 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
           console.log(`[REPARSE_FAILED] ${id} | Fatal parsing error, locked to ${CURRENT_PARSER_VERSION}`);
         }
-      } else if (eventAdded) {
-        await Application.findByIdAndUpdate(exists._id, { events: exists.events }, { returnDocument: 'after' });
+      } else if (eventAdded || emailAttachments.length > 0) {
+        const patchPayload = {};
+        if (eventAdded) patchPayload.events = exists.events;
+        // Merge attachment metadata even when only events changed
+        if (emailAttachments.length > 0) {
+          const existingAttachments = exists.attachments || [];
+          const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
+          const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
+          if (newAttachments.length > 0) {
+            patchPayload.attachments = [...existingAttachments, ...newAttachments];
+          }
+        }
+        if (Object.keys(patchPayload).length > 0) {
+          await Application.findByIdAndUpdate(exists._id, patchPayload, { returnDocument: 'after' });
+        }
       }
 
       console.log(`[SKIP] ${id} | Reason: Already exists in DB`);
@@ -1457,6 +1497,16 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         updatePayload.events = contentExists.events;
       }
 
+      // Merge attachment metadata into existing company-match application
+      if (emailAttachments.length > 0) {
+        const existingAttachments = contentExists.attachments || [];
+        const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
+        const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
+        if (newAttachments.length > 0) {
+          updatePayload.attachments = [...existingAttachments, ...newAttachments];
+        }
+      }
+
       if (Object.keys(updatePayload).length > 0) {
         await Application.findByIdAndUpdate(contentExists._id, updatePayload, { returnDocument: 'after' });
         console.log(`[UPDATED] ${id} | Duplicate company match enriched (${contentExists.company})`);
@@ -1522,6 +1572,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       email: acc.email,
       accountEmail: receivingEmail,
       date: new Date(parseInt(email.data.internalDate)),
+      attachments: emailAttachments,
       parserVersion: parserVer,
     });
 

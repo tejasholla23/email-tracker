@@ -319,6 +319,14 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
       if (emailRes.data.internalDate) {
         internalDate = new Date(parseInt(emailRes.data.internalDate));
       }
+
+      // Extract and merge attachment metadata
+      const { extractAttachmentMetadata, mergeAttachments } = require("../utils/attachmentUtils");
+      const extractedAttachments = extractAttachmentMetadata(emailRes.data.payload, targetMessageId);
+      if (extractedAttachments.length > 0) {
+        app.attachments = mergeAttachments(app.attachments, extractedAttachments);
+        app.markModified("attachments");
+      }
     } catch (gErr) {
       console.warn(`[REPARSE_GMAIL_WARN] Could not fetch raw email from Gmail for ${targetMessageId}:`, gErr.message);
       if (!rawText) {
@@ -388,5 +396,141 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
   }
 });
 
-module.exports = router;
+// GET /applications/:id/attachments/:attachmentId - Download/view an attachment
+// Security: JWT auth + Application ownership + attachment existence check
+router.get("/:id/attachments/:attachmentId", readLimiter, async (req, res) => {
+  try {
+    const { google } = require("googleapis");
+    const LinkedGmailAccount = require("../models/LinkedGmailAccount");
 
+    // Layer 2: Application ownership check (Layer 1 is authenticate middleware)
+    const app = await Application.findOne({ _id: req.params.id, userId: req.userId });
+    if (!app) {
+      return res.status(404).json({ message: "Application not found" });
+    }
+
+    // Layer 3: Attachment existence check within this application
+    const attachmentMeta = (app.attachments || []).find(
+      (a) => a.attachmentId === req.params.attachmentId
+    );
+    if (!attachmentMeta) {
+      return res.status(404).json({ message: "Attachment not found" });
+    }
+
+    // Resolve the correct OAuth tokens for the Gmail account that received this email
+    const targetMessageId = attachmentMeta.messageId;
+    const eventForMessage = (app.events || []).find((e) => e.messageId === targetMessageId);
+    const receivingEmail = (
+      eventForMessage?.accountEmail || app.accountEmail || req.userEmail || ""
+    ).toLowerCase().trim();
+
+    let oauthTokens = null;
+
+    if (receivingEmail === (req.userEmail || "").toLowerCase().trim()) {
+      // Primary account
+      const primaryAcc = await Account.findById(req.userId);
+      oauthTokens = primaryAcc?.tokens;
+    } else {
+      // Linked account
+      const linkedAcc = await LinkedGmailAccount.findOne({
+        parentAccountId: req.userId,
+        email: receivingEmail,
+      });
+      oauthTokens = linkedAcc?.tokens;
+    }
+
+    // Fallback: try primary account tokens if above didn't match
+    if (!oauthTokens) {
+      const primaryAcc = await Account.findById(req.userId);
+      oauthTokens = primaryAcc?.tokens;
+    }
+
+    if (!oauthTokens) {
+      return res.status(401).json({
+        message: "Gmail authorization missing. Please reconnect your account.",
+      });
+    }
+
+    // Fetch attachment data from Gmail API
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials(oauthTokens);
+
+    // Persist refreshed tokens back to DB if Google issues new ones
+    oauth2Client.on("tokens", async (newTokens) => {
+      try {
+        if (receivingEmail === (req.userEmail || "").toLowerCase().trim()) {
+          const updatedTokens = { ...oauthTokens, ...newTokens };
+          await Account.findByIdAndUpdate(req.userId, { tokens: updatedTokens });
+        } else {
+          const updatedTokens = { ...oauthTokens, ...newTokens };
+          await LinkedGmailAccount.findOneAndUpdate(
+            { parentAccountId: req.userId, email: receivingEmail },
+            { tokens: updatedTokens }
+          );
+        }
+      } catch (tokenErr) {
+        console.error("[ATTACHMENT_TOKEN_REFRESH_ERR]", tokenErr.message);
+      }
+    });
+
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+    let attachmentResponse;
+    try {
+      attachmentResponse = await gmail.users.messages.attachments.get({
+        userId: "me",
+        messageId: targetMessageId,
+        id: req.params.attachmentId,
+      });
+    } catch (gmailErr) {
+      const statusCode = gmailErr.code || gmailErr.response?.status || 500;
+      if (statusCode === 404) {
+        return res.status(404).json({
+          message: "Attachment no longer available in Gmail. The email may have been deleted.",
+        });
+      }
+      console.error("[ATTACHMENT_GMAIL_ERR]", gmailErr.message);
+      return res.status(502).json({
+        message: "Failed to retrieve attachment from Gmail.",
+      });
+    }
+
+    // Decode the base64url-encoded attachment data into a binary Buffer
+    const base64Data = attachmentResponse.data.data;
+    if (!base64Data) {
+      return res.status(404).json({ message: "Attachment data is empty." });
+    }
+    const fileBuffer = Buffer.from(base64Data, "base64url");
+
+    // Determine Content-Disposition: inline for browser-viewable types, attachment for others
+    const filename = attachmentMeta.filename || "attachment";
+    const mimeType = attachmentMeta.mimeType || "application/octet-stream";
+    const viewableInline = mimeType === "application/pdf" || mimeType.startsWith("image/");
+    const disposition = viewableInline ? "inline" : "attachment";
+
+    // Sanitize filename for Content-Disposition header (RFC 5987)
+    const safeFilename = filename.replace(/[^\x20-\x7E]/g, "_");
+    const encodedFilename = encodeURIComponent(filename);
+
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`
+    );
+    res.setHeader("Content-Length", fileBuffer.length);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(fileBuffer);
+
+    console.log(
+      `[ATTACHMENT_SERVED] App: ${app._id} | File: ${filename} | Size: ${fileBuffer.length} | User: ${req.userId}`
+    );
+  } catch (error) {
+    console.error("[ATTACHMENT_DOWNLOAD_ERROR]", error.message);
+    res.status(500).json({ message: "Failed to download attachment." });
+  }
+});
+
+module.exports = router;

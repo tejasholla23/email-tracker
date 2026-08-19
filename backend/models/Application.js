@@ -69,6 +69,21 @@ const applicationSchema = new mongoose.Schema(
     isPinned: { type: Boolean, default: false },
     pinnedAt: { type: Date, default: null },
 
+    // Gmail Attachment Metadata (Phase 1)
+    attachments: {
+      type: [
+        {
+          messageId: { type: String, required: true },
+          attachmentId: { type: String, required: true },
+          filename: { type: String, default: "" },
+          mimeType: { type: String, default: "" },
+          size: { type: Number, default: 0 },
+          isInline: { type: Boolean, default: false },
+        },
+      ],
+      default: [],
+    },
+
     events: {
       type: [
         {
