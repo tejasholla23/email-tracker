@@ -3564,44 +3564,86 @@ export default function JobTrackerDashboard() {
         .card-attachment-indicator {
           display: flex;
           align-items: center;
-          gap: 7px;
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--text-secondary, #64748b);
-          background: transparent;
-          border: none;
-          padding: 2px 0 0 0;
-          width: fit-content;
-          letter-spacing: 0.01em;
-          transition: color 0.15s ease;
+          justify-content: space-between;
+          width: 100%;
+          padding: 8px 12px;
+          margin-top: 10px;
+          margin-bottom: 2px;
+          background: rgba(241, 245, 249, 0.6);
+          border: 1px solid rgba(203, 213, 225, 0.8);
+          border-radius: 8px;
+          transition: all 0.15s ease;
           user-select: none;
+          cursor: pointer;
         }
         .card-attachment-indicator:hover {
-          color: var(--text-primary, #0f172a);
+          background: rgba(226, 232, 240, 0.8);
+          border-color: rgba(148, 163, 184, 0.8);
+        }
+        .card-attachment-left {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          min-width: 0;
         }
         .card-attachment-icon {
           width: 15px;
           height: 15px;
           flex-shrink: 0;
           display: block;
-          color: inherit;
+          color: var(--text-secondary, #64748b);
+        }
+        .card-attachment-label {
+          font-size: 12.5px;
+          font-weight: 500;
+          color: var(--text-secondary, #64748b);
+          letter-spacing: 0.01em;
+          white-space: nowrap;
+        }
+        .card-attachment-shortlist-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 2.5px 9px;
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.35);
+          border-radius: 6px;
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #059669;
+          letter-spacing: 0.01em;
+          line-height: 1.3;
         }
         .card-attachment-chevron {
           width: 13px;
           height: 13px;
           flex-shrink: 0;
           display: block;
-          color: inherit;
-          opacity: 0.6;
-          margin-left: 1px;
+          color: var(--text-secondary, #64748b);
+          opacity: 0.7;
+          margin-left: 6px;
         }
         .dark .card-attachment-indicator {
-          color: #94a3b8;
-          background: transparent;
-          border: none;
+          background: rgba(15, 23, 42, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.08);
         }
         .dark .card-attachment-indicator:hover {
-          color: #f1f5f9;
+          background: rgba(30, 41, 59, 0.7);
+          border-color: rgba(255, 255, 255, 0.15);
+        }
+        .dark .card-attachment-icon {
+          color: #94a3b8;
+        }
+        .dark .card-attachment-label {
+          color: #94a3b8;
+        }
+        .dark .card-attachment-shortlist-pill {
+          background: rgba(6, 78, 59, 0.3);
+          border-color: rgba(16, 185, 129, 0.4);
+          color: #2dd4bf;
+        }
+        .dark .card-attachment-chevron {
+          color: #94a3b8;
         }
 
         .info-modal-content {
@@ -5557,22 +5599,33 @@ export default function JobTrackerDashboard() {
                                       </div>
                                     )}
 
-                                   {app.isShortlisted && (
-                                     <div className="card-shortlist-badge" title={`Shortlist match detected in ${app.shortlistSummary?.matchedFilename || 'spreadsheet'}`}>
-                                       <span className="card-shortlist-dot" />
-                                       <span>You appear to be shortlisted</span>
-                                     </div>
-                                   )}
-
                                    {(() => {
                                      const realAttachments = (app.attachments || []).filter(a => !a.isInline);
-                                     if (realAttachments.length === 0) return null;
+                                     if (realAttachments.length === 0) {
+                                       if (app.isShortlisted) {
+                                         return (
+                                           <div className="card-shortlist-badge" title={`Shortlist match detected in ${app.shortlistSummary?.matchedFilename || 'spreadsheet'}`}>
+                                             <span className="card-shortlist-dot" />
+                                             <span>Shortlisted</span>
+                                           </div>
+                                         );
+                                       }
+                                       return null;
+                                     }
                                      return (
                                        <div className="card-attachment-indicator" title={`${realAttachments.length} attachment${realAttachments.length > 1 ? 's' : ''} available`}>
-                                         <svg className="card-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                                         </svg>
-                                         <span>Attachments ({realAttachments.length})</span>
+                                         <div className="card-attachment-left">
+                                           <svg className="card-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                           </svg>
+                                           <span className="card-attachment-label">Attachments ({realAttachments.length})</span>
+                                           {app.isShortlisted && (
+                                             <span className="card-attachment-shortlist-pill" title={`Shortlist match detected in ${app.shortlistSummary?.matchedFilename || 'spreadsheet'}`}>
+                                               <span className="card-shortlist-dot" />
+                                               <span>Shortlisted</span>
+                                             </span>
+                                           )}
+                                         </div>
                                          <svg className="card-attachment-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                            <polyline points="9 18 15 12 9 6" />
                                          </svg>
