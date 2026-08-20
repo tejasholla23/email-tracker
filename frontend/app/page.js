@@ -82,6 +82,83 @@ export default function JobTrackerDashboard() {
   const [reparsingId, setReparsingId] = useState(null);
   const [reparseToast, setReparseToast] = useState(null);
 
+  // Student Profile State (Phase 2)
+  const [studentProfile, setStudentProfile] = useState({
+    fullName: "",
+    personalEmail: "",
+    mobileNumber: "",
+    derivedUsn: "",
+    email: "",
+  });
+  const [studentProfileLoading, setStudentProfileLoading] = useState(false);
+  const [studentProfileSaving, setStudentProfileSaving] = useState(false);
+  const [studentProfileToast, setStudentProfileToast] = useState(null);
+
+  const fetchStudentProfile = async () => {
+    setStudentProfileLoading(true);
+    try {
+      const res = await apiFetch(`${BASE_URL}/auth/student-profile`);
+      if (res.ok) {
+        const data = await res.json();
+        setStudentProfile({
+          fullName: data.studentProfile?.fullName || "",
+          personalEmail: data.studentProfile?.personalEmail || "",
+          mobileNumber: data.studentProfile?.mobileNumber || "",
+          derivedUsn: data.derivedUsn || "",
+          email: data.email || "",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to fetch student profile:", err);
+    } finally {
+      setStudentProfileLoading(false);
+    }
+  };
+
+  const handleSaveStudentProfile = async (e) => {
+    if (e) e.preventDefault();
+    setStudentProfileSaving(true);
+    setStudentProfileToast(null);
+
+    try {
+      const res = await apiFetch(`${BASE_URL}/auth/student-profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: studentProfile.fullName,
+          personalEmail: studentProfile.personalEmail,
+          mobileNumber: studentProfile.mobileNumber,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setStudentProfile((prev) => ({
+          ...prev,
+          fullName: data.studentProfile?.fullName || prev.fullName,
+          personalEmail: data.studentProfile?.personalEmail || prev.personalEmail,
+          mobileNumber: data.studentProfile?.mobileNumber || prev.mobileNumber,
+          derivedUsn: data.derivedUsn || prev.derivedUsn,
+        }));
+
+        let msg = "Student details updated successfully.";
+        if (data.newMatchesCount > 0) {
+          msg = `Student details updated! Found ${data.newMatchesCount} new shortlist match${data.newMatchesCount > 1 ? "es" : ""}.`;
+          fetchApplications();
+        }
+        setStudentProfileToast({ type: "success", message: msg });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setStudentProfileToast({ type: "error", message: errData.message || "Failed to update profile." });
+      }
+    } catch (err) {
+      console.error("Failed to save student profile:", err);
+      setStudentProfileToast({ type: "error", message: "Failed to save student profile." });
+    } finally {
+      setStudentProfileSaving(false);
+    }
+  };
+
   // Attachment Action State (view / download)
   const [attachmentActionId, setAttachmentActionId] = useState(null);
   const [attachmentError, setAttachmentError] = useState(null);
@@ -3739,6 +3816,98 @@ export default function JobTrackerDashboard() {
           justify-content: space-between;
           gap: 8px;
         }
+
+        /* ── Phase 2: Shortlist Detection Badges & Styling ── */
+        .card-shortlist-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #059669;
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          padding: 3px 9px;
+          border-radius: 6px;
+          width: fit-content;
+          margin-top: 4px;
+          margin-bottom: 6px;
+          letter-spacing: 0.01em;
+        }
+        .card-shortlist-dot {
+          width: 6.5px;
+          height: 6.5px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+          flex-shrink: 0;
+        }
+        .dark .card-shortlist-badge {
+          color: #34d399;
+          background: rgba(16, 185, 129, 0.12);
+          border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .modal-shortlist-banner {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          border-left: 4px solid #10b981;
+          padding: 10px 16px;
+          border-radius: 10px;
+          margin-bottom: 16px;
+        }
+        .modal-shortlist-banner-icon {
+          font-size: 18px;
+          line-height: 1;
+        }
+        .modal-shortlist-banner-title {
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #059669;
+        }
+        .modal-shortlist-banner-sub {
+          font-size: 11.5px;
+          color: var(--text-secondary, #64748b);
+          margin-top: 1px;
+        }
+        .dark .modal-shortlist-banner {
+          background: rgba(16, 185, 129, 0.12);
+          border-color: rgba(16, 185, 129, 0.3);
+          border-left-color: #34d399;
+        }
+        .dark .modal-shortlist-banner-title {
+          color: #34d399;
+        }
+        .dark .modal-shortlist-banner-sub {
+          color: #94a3b8;
+        }
+
+        .attachment-shortlist-tag {
+          display: inline-block;
+          font-size: 10.5px;
+          font-weight: 600;
+          padding: 1px 6px;
+          border-radius: 4px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
+        .attachment-shortlist-tag.matched {
+          background: rgba(16, 185, 129, 0.12);
+          color: #059669;
+          border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+        .dark .attachment-shortlist-tag.matched {
+          background: rgba(16, 185, 129, 0.18);
+          color: #34d399;
+          border-color: rgba(16, 185, 129, 0.35);
+        }
+        .attachment-shortlist-tag.no-match {
+          background: rgba(148, 163, 184, 0.1);
+          color: var(--text-secondary, #94a3b8);
+        }
         /* Dark mode attachment overrides */
         .dark .attachment-row { border-color: var(--border-color); }
         .dark .attachment-icon { background: rgba(255,255,255,0.06); border-color: var(--border-color); color: #94a3b8; }
@@ -3979,6 +4148,9 @@ export default function JobTrackerDashboard() {
                       <>
                         <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('linked-accounts'); setShowUserDropdown(false); fetchLinkedAccounts(); }}>
                           Linked Gmail Accounts {linkedAccounts.some(a => a.syncStatus === "failed") ? "⚠️" : ""} ❯
+                        </button>
+                        <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('student-profile'); setShowUserDropdown(false); fetchStudentProfile(); }}>
+                          Student Details ❯
                         </button>
                         <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
                           Theme
@@ -4466,6 +4638,16 @@ export default function JobTrackerDashboard() {
                           <span>Accounts & Delete</span>
                         </h3>
                         <div className="settings-list">
+                          <button className="settings-item" onClick={() => { setSettingsSubView("student-profile"); fetchStudentProfile(); }}>
+                            <span className="settings-item-icon" style={{ color: 'var(--text-primary)' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                              </svg>
+                            </span>
+                            <span className="settings-item-label">Student Details & Shortlist Profile</span>
+                            <span className="settings-item-arrow">❯</span>
+                          </button>
                           <button className="settings-item" onClick={() => { setSettingsSubView("linked-accounts"); fetchLinkedAccounts(); }}>
                             <span className="settings-item-icon" style={{ color: 'var(--text-primary)' }}>
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -4684,6 +4866,186 @@ export default function JobTrackerDashboard() {
                         <strong>tejasholla23@gmail.com</strong>
                       </p>
                     </div>
+                  </div>
+                )}
+
+                {settingsSubView === "student-profile" && (
+                  <div className="settings-container" style={{ maxWidth: '680px', margin: '0 auto' }}>
+                    <div style={{ marginBottom: '20px' }}>
+                      <button
+                        className="btn-outline-primary"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => setActiveFilter("all")}
+                      >
+                        ❮ Back to Dashboard
+                      </button>
+                    </div>
+
+                    <div className="settings-header" style={{ marginBottom: '24px' }}>
+                      <h1 className="settings-main-title">Student Details</h1>
+                      <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.5' }}>
+                        Provide your details to automatically check placement shortlist spreadsheets (.xlsx) received via recruitment emails.
+                      </p>
+                    </div>
+
+                    {studentProfileToast && (
+                      <div style={{
+                        marginBottom: '16px',
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: studentProfileToast.type === 'success' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                        border: `1px solid ${studentProfileToast.type === 'success' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                        color: studentProfileToast.type === 'success' ? '#22c55e' : '#ef4444'
+                      }}>
+                        <span>{studentProfileToast.message}</span>
+                        <button
+                          style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '15px' }}
+                          onClick={() => setStudentProfileToast(null)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSaveStudentProfile} className="settings-card" style={{ padding: '24px' }}>
+                      {/* Derived USN (Read-Only) */}
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                          University Seat Number (USN)
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <input
+                            type="text"
+                            readOnly
+                            disabled
+                            value={studentProfile.derivedUsn || "Not detected"}
+                            style={{
+                              flex: 1,
+                              padding: '10px 14px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-secondary, rgba(0,0,0,0.05))',
+                              color: 'var(--text-primary)',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              letterSpacing: '0.04em'
+                            }}
+                          />
+                          {studentProfile.derivedUsn && (
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              padding: '5px 10px',
+                              borderRadius: '12px',
+                              background: 'rgba(34, 197, 94, 0.15)',
+                              color: '#22c55e',
+                              border: '1px solid rgba(34, 197, 94, 0.3)',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              ✓ AUTOMATIC
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '5px' }}>
+                          Automatically derived from your authenticated college email ({studentProfile.email || userEmail || "college account"}).
+                        </p>
+                      </div>
+
+                      {/* Full Name (Optional) */}
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                          Full Name <span style={{ fontWeight: '400', color: 'var(--text-secondary)' }}>(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Tejas Holla"
+                          value={studentProfile.fullName}
+                          onChange={(e) => setStudentProfile({ ...studentProfile, fullName: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--input-bg, transparent)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px'
+                          }}
+                        />
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '5px' }}>
+                          The name you commonly use when applying for campus placements (e.g. matching "Candidate Name" columns).
+                        </p>
+                      </div>
+
+                      {/* Personal Email (Optional) */}
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                          Personal Email <span style={{ fontWeight: '400', color: 'var(--text-secondary)' }}>(Optional)</span>
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="e.g. tejasholla23@gmail.com"
+                          value={studentProfile.personalEmail}
+                          onChange={(e) => setStudentProfile({ ...studentProfile, personalEmail: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--input-bg, transparent)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px'
+                          }}
+                        />
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '5px' }}>
+                          Used to match against shortlists that list personal email addresses instead of college IDs.
+                        </p>
+                      </div>
+
+                      {/* Mobile Number (Optional) */}
+                      <div style={{ marginBottom: '24px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                          Mobile Number <span style={{ fontWeight: '400', color: 'var(--text-secondary)' }}>(Optional)</span>
+                        </label>
+                        <input
+                          type="tel"
+                          placeholder="e.g. 9876543210"
+                          value={studentProfile.mobileNumber}
+                          onChange={(e) => setStudentProfile({ ...studentProfile, mobileNumber: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--input-bg, transparent)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px'
+                          }}
+                        />
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '5px' }}>
+                          10-digit mobile number used for contact-number shortlist checks.
+                        </p>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                        <button
+                          type="submit"
+                          className="btn-primary"
+                          disabled={studentProfileSaving}
+                          style={{ padding: '9px 20px', fontSize: '13.5px', fontWeight: '600', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          {studentProfileSaving ? (
+                            <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '12px' }}>↻</span> Saving…</>
+                          ) : (
+                            "Save Details"
+                          )}
+                        </button>
+                      </div>
+                    </form>
                   </div>
                 )}
 
@@ -5204,6 +5566,13 @@ export default function JobTrackerDashboard() {
                                         Deadline: {app.deadline}
                                       </div>
                                     )}
+
+                                   {app.isShortlisted && (
+                                     <div className="card-shortlist-badge" title={`Shortlist match detected in ${app.shortlistSummary?.matchedFilename || 'spreadsheet'}`}>
+                                       <span className="card-shortlist-dot" />
+                                       <span>You appear to be shortlisted</span>
+                                     </div>
+                                   )}
 
                                    {(() => {
                                      const realAttachments = (app.attachments || []).filter(a => !a.isInline);
@@ -5898,6 +6267,20 @@ export default function JobTrackerDashboard() {
               {/* ── Scrollable body ── */}
               <div className="info-modal-body">
 
+                {/* ── Shortlist Match Banner (Phase 2) ── */}
+                {app.isShortlisted && (
+                  <div className="modal-shortlist-banner">
+                    <div className="modal-shortlist-banner-icon">🟢</div>
+                    <div>
+                      <div className="modal-shortlist-banner-title">You appear to be shortlisted</div>
+                      <div className="modal-shortlist-banner-sub">
+                        Found in {app.shortlistSummary?.matchedFilename || "placement spreadsheet"}
+                        {app.shortlistSummary?.matchedIdentifierType && ` (via ${app.shortlistSummary.matchedIdentifierType.replace('_', ' ').toUpperCase()})`}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* ── Attachments Section ── */}
                 {(() => {
                   const realAttachments = (app.attachments || []).filter(a => !a.isInline);
@@ -6077,6 +6460,16 @@ export default function JobTrackerDashboard() {
                                     </div>
                                     <div className="attachment-meta">
                                       {typeLabel}{sizeStr ? ` · ${sizeStr}` : ''}
+                                      {att.shortlistStatus === 'matched' && (
+                                        <span className="attachment-shortlist-tag matched">
+                                          🟢 Shortlisted{att.shortlistDetails?.matchedIdentifierType ? ` (${att.shortlistDetails.matchedIdentifierType.replace('_', ' ').toUpperCase()})` : ''}
+                                        </span>
+                                      )}
+                                      {att.shortlistStatus === 'no_match' && (
+                                        <span className="attachment-shortlist-tag no-match">
+                                          No match detected
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="attachment-actions">

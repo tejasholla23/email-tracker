@@ -20,6 +20,12 @@ const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany")
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
 const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
 const { extractAttachmentMetadata, mergeAttachments } = require("./utils/attachmentUtils");
+const {
+  deriveUsnFromEmail,
+  buildStudentIdentity,
+  inspectAndMatchWorkbook,
+  recomputeApplicationShortlistState,
+} = require("./utils/shortlistMatcher");
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 const { createLinkState, consumeLinkState } = require("./utils/linkStateStore");
@@ -681,6 +687,150 @@ app.get("/auth/me", readLimiter, authenticate, async (req, res) => {
   }
 });
 
+// GET /auth/student-profile - get student profile and dynamically derived USN
+app.get("/auth/student-profile", readLimiter, authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    const linkedAccs = await LinkedGmailAccount.find({ parentAccountId: req.userId }, { email: 1 });
+    const linkedEmails = linkedAccs.map((l) => l.email);
+
+    const derivedUsn = deriveUsnFromEmail([account.email, ...linkedEmails]);
+
+    res.json({
+      derivedUsn,
+      email: account.email,
+      studentProfile: {
+        fullName: account.studentProfile?.fullName || "",
+        personalEmail: account.studentProfile?.personalEmail || "",
+        mobileNumber: account.studentProfile?.mobileNumber || "",
+        lastUpdated: account.studentProfile?.lastUpdated || null,
+      },
+    });
+  } catch (err) {
+    console.error("[GET_STUDENT_PROFILE_ERR]", err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /auth/student-profile - update student profile and re-evaluate past shortlist spreadsheets
+app.put("/auth/student-profile", writeLimiter, authenticate, async (req, res) => {
+  try {
+    const { fullName, personalEmail, mobileNumber } = req.body || {};
+
+    const account = await Account.findById(req.userId);
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    account.studentProfile = {
+      fullName: (fullName || "").trim(),
+      personalEmail: (personalEmail || "").toLowerCase().trim(),
+      mobileNumber: (mobileNumber || "").trim(),
+      lastUpdated: new Date(),
+    };
+
+    await account.save();
+
+    // Dynamically derive USN and build updated identity vector
+    const linkedAccs = await LinkedGmailAccount.find({ parentAccountId: req.userId });
+    const linkedEmails = linkedAccs.map((l) => l.email);
+    const derivedUsn = deriveUsnFromEmail([account.email, ...linkedEmails]);
+    const studentIdentity = buildStudentIdentity(account, linkedEmails);
+
+    // Re-evaluate past spreadsheets that previously had no match or were unprocessed
+    let reEvaluatedCount = 0;
+    let newMatchesCount = 0;
+
+    try {
+      const candidateApps = await Application.find({
+        userId: req.userId,
+        isDeleted: false,
+        "attachments.filename": { $regex: /\.xlsx$/i },
+      });
+
+      for (const app of candidateApps) {
+        let appModified = false;
+
+        for (const att of app.attachments) {
+          if (
+            !att.isInline &&
+            (att.filename || "").toLowerCase().endsWith(".xlsx") &&
+            (att.shortlistStatus === "no_match" || att.shortlistStatus === "unprocessed")
+          ) {
+            // Resolve OAuth tokens for message
+            const targetMessageId = att.messageId;
+            const eventForMessage = (app.events || []).find((e) => e.messageId === targetMessageId);
+            const receivingEmail = (
+              eventForMessage?.accountEmail || app.accountEmail || account.email || ""
+            ).toLowerCase().trim();
+
+            let oauthTokens = account.tokens;
+            if (receivingEmail !== (account.email || "").toLowerCase().trim()) {
+              const linked = linkedAccs.find((l) => l.email.toLowerCase().trim() === receivingEmail);
+              if (linked?.tokens) oauthTokens = linked.tokens;
+            }
+
+            if (oauthTokens) {
+              const oauth2Client = new google.auth.OAuth2(
+                process.env.GOOGLE_CLIENT_ID,
+                process.env.GOOGLE_CLIENT_SECRET
+              );
+              oauth2Client.setCredentials(oauthTokens);
+              const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+              try {
+                const attRes = await gmail.users.messages.attachments.get({
+                  userId: "me",
+                  messageId: targetMessageId,
+                  id: att.attachmentId,
+                });
+
+                if (attRes.data && attRes.data.data) {
+                  const fileBuffer = Buffer.from(attRes.data.data, "base64url");
+                  const matchResult = inspectAndMatchWorkbook(fileBuffer, studentIdentity, att.filename);
+
+                  att.shortlistStatus = matchResult.status;
+                  att.shortlistDetails = {
+                    matchedIdentifierType: matchResult.matchDetails?.matchedIdentifierType || null,
+                    sheetName: matchResult.matchDetails?.sheetName || null,
+                    processedAt: matchResult.matchDetails?.processedAt || new Date(),
+                  };
+                  appModified = true;
+                  reEvaluatedCount++;
+
+                  if (matchResult.status === "matched") {
+                    newMatchesCount++;
+                  }
+                }
+              } catch (fetchErr) {
+                console.error(`[PROFILE_RECHECK_ERR] ${att.filename}:`, fetchErr.message);
+              }
+            }
+          }
+        }
+
+        if (appModified) {
+          recomputeApplicationShortlistState(app);
+          await app.save();
+        }
+      }
+    } catch (recheckErr) {
+      console.error("[PROFILE_RECHECK_GLOBAL_ERR]", recheckErr.message);
+    }
+
+    res.json({
+      message: "Student profile updated successfully",
+      derivedUsn,
+      studentProfile: account.studentProfile,
+      reEvaluatedCount,
+      newMatchesCount,
+    });
+  } catch (err) {
+    console.error("[PUT_STUDENT_PROFILE_ERR]", err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /auth/calendar/status - check calendar integration status
 app.get("/auth/calendar/status", readLimiter, authenticate, async (req, res) => {
   try {
@@ -990,6 +1140,70 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
 // 📥 FETCH + SAVE EMAILS
 // ==========================
 
+/**
+ * Evaluates any unprocessed .xlsx attachments in an application record for shortlist matches.
+ * Uses the deterministic shortlistMatcher engine.
+ */
+async function evaluateAppXLSXShortlists(app, acc, gmailClient) {
+  if (!app || !Array.isArray(app.attachments) || app.attachments.length === 0) return false;
+
+  const xlsxAttachments = app.attachments.filter(
+    (a) =>
+      !a.isInline &&
+      (a.filename || "").toLowerCase().endsWith(".xlsx") &&
+      (!a.shortlistStatus || a.shortlistStatus === "unprocessed")
+  );
+
+  if (xlsxAttachments.length === 0) return false;
+
+  const linkedAccs = await LinkedGmailAccount.find({ parentAccountId: acc._id }, { email: 1 });
+  const linkedEmails = linkedAccs.map((l) => l.email);
+  const studentIdentity = buildStudentIdentity(acc, linkedEmails);
+
+  let modified = false;
+
+  for (const att of xlsxAttachments) {
+    try {
+      const attRes = await gmailClient.users.messages.attachments.get({
+        userId: "me",
+        messageId: att.messageId,
+        id: att.attachmentId,
+      });
+
+      if (attRes.data && attRes.data.data) {
+        const fileBuffer = Buffer.from(attRes.data.data, "base64url");
+        const matchResult = inspectAndMatchWorkbook(fileBuffer, studentIdentity, att.filename);
+
+        att.shortlistStatus = matchResult.status;
+        att.shortlistDetails = {
+          matchedIdentifierType: matchResult.matchDetails?.matchedIdentifierType || null,
+          sheetName: matchResult.matchDetails?.sheetName || null,
+          processedAt: matchResult.matchDetails?.processedAt || new Date(),
+        };
+        modified = true;
+        console.log(
+          `[SHORTLIST_EVAL] Message: ${att.messageId} | File: ${att.filename} | Status: ${matchResult.status} | Type: ${matchResult.matchDetails?.matchedIdentifierType || "none"}`
+        );
+      }
+    } catch (err) {
+      console.error(`[SHORTLIST_EVAL_ERR] Message ${att.messageId} | File ${att.filename}:`, err.message);
+      att.shortlistStatus = "error";
+      att.shortlistDetails = {
+        matchedIdentifierType: null,
+        sheetName: null,
+        processedAt: new Date(),
+      };
+      modified = true;
+    }
+  }
+
+  if (modified) {
+    recomputeApplicationShortlistState(app);
+  }
+
+  return modified;
+}
+
 // --- Extracted per-message processing logic ---
 // Returns: { action: 'inserted' | 'skipped' | 'error', usedLLM: boolean }
 async function processMessage(gmail, acc, messageId, subject_unused, existingFast, llmParsedCount, receivingEmailOverride) {
@@ -1286,7 +1500,17 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
           const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
           if (newAttachments.length > 0) {
-            patchPayload.attachments = [...existingAttachments, ...newAttachments];
+            exists.attachments = [...existingAttachments, ...newAttachments];
+            // Evaluate shortlist on newly merged attachments if any are XLSX
+            try {
+              await evaluateAppXLSXShortlists(exists, acc, gmail);
+            } catch (xlsxErr) {
+              console.error(`[SHORTLIST_MERGE_ERR] ${id}:`, xlsxErr.message);
+            }
+            recomputeApplicationShortlistState(exists);
+            patchPayload.attachments = exists.attachments;
+            patchPayload.isShortlisted = exists.isShortlisted;
+            patchPayload.shortlistSummary = exists.shortlistSummary;
           }
         }
         if (Object.keys(patchPayload).length > 0) {
@@ -1563,8 +1787,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       parserVersion: parserVer,
     });
 
+    // Evaluate XLSX attachments for shortlist matches (Phase 2)
+    try {
+      await evaluateAppXLSXShortlists(newApp, acc, gmail);
+    } catch (shortlistErr) {
+      console.error(`[SHORTLIST_INIT_ERR] ${id}:`, shortlistErr.message);
+    }
+
     await newApp.save();
-    console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}`);
+    console.log(`[INSERTED] ${id} | ${parsed.company} | ${finalRole}${newApp.isShortlisted ? " | [SHORTLISTED 🟢]" : ""}`);
 
     // Send push notification for new email (fire-and-forget)
     try {

@@ -325,8 +325,51 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
       const extractedAttachments = extractAttachmentMetadata(emailRes.data.payload, targetMessageId);
       if (extractedAttachments.length > 0) {
         app.attachments = mergeAttachments(app.attachments, extractedAttachments);
-        app.markModified("attachments");
       }
+
+      // Re-evaluate shortlist matching for any XLSX attachments (Phase 2)
+      try {
+        const {
+          buildStudentIdentity,
+          inspectAndMatchWorkbook,
+          recomputeApplicationShortlistState,
+        } = require("../utils/shortlistMatcher");
+        const LinkedGmailAccount = require("../models/LinkedGmailAccount");
+        const Account = require("../models/Account");
+        const userAccount = await Account.findById(req.userId);
+        const linkedAccs = await LinkedGmailAccount.find({ parentAccountId: req.userId });
+        const studentIdentity = buildStudentIdentity(userAccount, linkedAccs.map((l) => l.email));
+
+        for (const att of (app.attachments || [])) {
+          if (!att.isInline && (att.filename || "").toLowerCase().endsWith(".xlsx")) {
+            try {
+              const attRes = await gmail.users.messages.attachments.get({
+                userId: "me",
+                messageId: att.messageId,
+                id: att.attachmentId,
+              });
+              if (attRes.data && attRes.data.data) {
+                const fileBuffer = Buffer.from(attRes.data.data, "base64url");
+                const matchResult = inspectAndMatchWorkbook(fileBuffer, studentIdentity, att.filename);
+                att.shortlistStatus = matchResult.status;
+                att.shortlistDetails = {
+                  matchedIdentifierType: matchResult.matchDetails?.matchedIdentifierType || null,
+                  sheetName: matchResult.matchDetails?.sheetName || null,
+                  processedAt: matchResult.matchDetails?.processedAt || new Date(),
+                };
+              }
+            } catch (attErr) {
+              console.error("[REPARSE_SHORTLIST_ERR]", attErr.message);
+            }
+          }
+        }
+
+        recomputeApplicationShortlistState(app);
+      } catch (shortlistErr) {
+        console.error("[REPARSE_SHORTLIST_GLOBAL_ERR]", shortlistErr.message);
+      }
+
+      app.markModified("attachments");
     } catch (gErr) {
       console.warn(`[REPARSE_GMAIL_WARN] Could not fetch raw email from Gmail for ${targetMessageId}:`, gErr.message);
       if (!rawText) {

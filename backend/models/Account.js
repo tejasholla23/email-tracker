@@ -57,6 +57,13 @@ const accountSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  // Phase 2: Student Profile for Shortlist Matching
+  studentProfile: {
+    fullName: { type: String, default: "", trim: true },
+    personalEmail: { type: String, default: "", lowercase: true, trim: true },
+    mobileNumber: { type: String, default: "", trim: true },
+    lastUpdated: { type: Date, default: null },
+  },
 });
 
 module.exports = mongoose.model("Account", accountSchema);

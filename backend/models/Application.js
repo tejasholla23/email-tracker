@@ -69,7 +69,7 @@ const applicationSchema = new mongoose.Schema(
     isPinned: { type: Boolean, default: false },
     pinnedAt: { type: Date, default: null },
 
-    // Gmail Attachment Metadata (Phase 1)
+    // Gmail Attachment Metadata & Shortlist Status (Phase 1 & Phase 2)
     attachments: {
       type: [
         {
@@ -79,9 +79,30 @@ const applicationSchema = new mongoose.Schema(
           mimeType: { type: String, default: "" },
           size: { type: Number, default: 0 },
           isInline: { type: Boolean, default: false },
+          // Phase 2: Shortlist Detection State
+          shortlistStatus: {
+            type: String,
+            enum: ["unprocessed", "matched", "no_match", "skipped", "error"],
+            default: "unprocessed",
+          },
+          shortlistDetails: {
+            matchedIdentifierType: { type: String, default: null }, // 'usn' | 'college_email' | 'personal_email' | 'mobile' | 'name'
+            sheetName: { type: String, default: null },
+            processedAt: { type: Date, default: null },
+          },
         },
       ],
       default: [],
+    },
+
+    // Phase 2: Application-level derived shortlist summary (for fast querying & UI badges)
+    isShortlisted: { type: Boolean, default: false },
+    shortlistSummary: {
+      matchedAttachmentId: { type: String, default: null },
+      matchedFilename: { type: String, default: null },
+      matchedMessageId: { type: String, default: null },
+      matchedIdentifierType: { type: String, default: null },
+      detectedAt: { type: Date, default: null },
     },
 
     events: {
