@@ -4638,16 +4638,6 @@ export default function JobTrackerDashboard() {
                           <span>Accounts & Delete</span>
                         </h3>
                         <div className="settings-list">
-                          <button className="settings-item" onClick={() => { setSettingsSubView("student-profile"); fetchStudentProfile(); }}>
-                            <span className="settings-item-icon" style={{ color: 'var(--text-primary)' }}>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                <circle cx="12" cy="7" r="4"/>
-                              </svg>
-                            </span>
-                            <span className="settings-item-label">Student Details & Shortlist Profile</span>
-                            <span className="settings-item-arrow">❯</span>
-                          </button>
                           <button className="settings-item" onClick={() => { setSettingsSubView("linked-accounts"); fetchLinkedAccounts(); }}>
                             <span className="settings-item-icon" style={{ color: 'var(--text-primary)' }}>
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
