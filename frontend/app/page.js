@@ -3600,6 +3600,12 @@ export default function JobTrackerDashboard() {
           letter-spacing: 0.01em;
           white-space: nowrap;
         }
+        .card-attachment-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-left: auto;
+        }
         .card-attachment-shortlist-pill {
           display: inline-flex;
           align-items: center;
@@ -3621,7 +3627,6 @@ export default function JobTrackerDashboard() {
           display: block;
           color: var(--text-secondary, #64748b);
           opacity: 0.7;
-          margin-left: 6px;
         }
         .dark .card-attachment-indicator {
           background: rgba(15, 23, 42, 0.6);
@@ -3893,38 +3898,63 @@ export default function JobTrackerDashboard() {
         .modal-shortlist-banner {
           display: flex;
           align-items: center;
-          gap: 12px;
-          background: rgba(16, 185, 129, 0.08);
-          border: 1px solid rgba(16, 185, 129, 0.25);
+          gap: 16px;
+          background: rgba(16, 185, 129, 0.05);
+          border: 1px solid rgba(16, 185, 129, 0.28);
           border-left: 4px solid #10b981;
-          padding: 10px 16px;
-          border-radius: 10px;
-          margin-bottom: 16px;
+          padding: 14px 18px;
+          border-radius: 12px;
+          margin-bottom: 18px;
         }
-        .modal-shortlist-banner-icon {
-          font-size: 18px;
-          line-height: 1;
+        .modal-shortlist-banner-icon-badge {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background: rgba(16, 185, 129, 0.15);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .modal-shortlist-banner-content {
+          flex: 1;
+          min-width: 0;
         }
         .modal-shortlist-banner-title {
-          font-size: 13.5px;
+          font-size: 15px;
           font-weight: 700;
-          color: #059669;
+          color: #047857;
+          line-height: 1.25;
+          letter-spacing: -0.01em;
         }
         .modal-shortlist-banner-sub {
-          font-size: 11.5px;
-          color: var(--text-secondary, #64748b);
-          margin-top: 1px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 13px;
+          color: var(--text-secondary, #475569);
+          margin-top: 4px;
+        }
+        .modal-shortlist-banner-sub strong {
+          color: var(--text-primary, #0f172a);
+          font-weight: 600;
         }
         .dark .modal-shortlist-banner {
-          background: rgba(16, 185, 129, 0.12);
-          border-color: rgba(16, 185, 129, 0.3);
-          border-left-color: #34d399;
+          background: rgba(16, 185, 129, 0.08);
+          border-color: rgba(16, 185, 129, 0.28);
+          border-left-color: #10b981;
+        }
+        .dark .modal-shortlist-banner-icon-badge {
+          background: rgba(16, 185, 129, 0.2);
         }
         .dark .modal-shortlist-banner-title {
           color: #34d399;
         }
         .dark .modal-shortlist-banner-sub {
           color: #94a3b8;
+        }
+        .dark .modal-shortlist-banner-sub strong {
+          color: #f1f5f9;
         }
 
         .attachment-shortlist-tag {
@@ -5619,16 +5649,18 @@ export default function JobTrackerDashboard() {
                                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                                            </svg>
                                            <span className="card-attachment-label">Attachments ({realAttachments.length})</span>
+                                         </div>
+                                         <div className="card-attachment-right">
                                            {app.isShortlisted && (
                                              <span className="card-attachment-shortlist-pill" title={`Shortlist match detected in ${app.shortlistSummary?.matchedFilename || 'spreadsheet'}`}>
                                                <span className="card-shortlist-dot" />
                                                <span>Shortlisted</span>
                                              </span>
                                            )}
+                                           <svg className="card-attachment-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                             <polyline points="9 18 15 12 9 6" />
+                                           </svg>
                                          </div>
-                                         <svg className="card-attachment-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                           <polyline points="9 18 15 12 9 6" />
-                                         </svg>
                                        </div>
                                      );
                                    })()}
@@ -6313,12 +6345,22 @@ export default function JobTrackerDashboard() {
                 {/* ── Shortlist Match Banner (Phase 2) ── */}
                 {app.isShortlisted && (
                   <div className="modal-shortlist-banner">
-                    <div className="modal-shortlist-banner-icon">🟢</div>
-                    <div>
+                    <div className="modal-shortlist-banner-icon-badge">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#059669" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <div className="modal-shortlist-banner-content">
                       <div className="modal-shortlist-banner-title">You appear to be shortlisted</div>
                       <div className="modal-shortlist-banner-sub">
-                        Found in {app.shortlistSummary?.matchedFilename || "placement spreadsheet"}
-                        {app.shortlistSummary?.matchedIdentifierType && ` (via ${app.shortlistSummary.matchedIdentifierType.replace('_', ' ').toUpperCase()})`}
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: '#10b981' }}>
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <path d="M8 13h8" />
+                          <path d="M8 17h8" />
+                          <path d="M10 9H8" />
+                        </svg>
+                        <span>Found in <strong>{app.shortlistSummary?.matchedFilename || "placement spreadsheet"}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -6455,11 +6497,16 @@ export default function JobTrackerDashboard() {
 
                   return (
                     <div className="info-modal-section">
-                      <div className="info-modal-section-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #3b82f6)', flexShrink: 0 }}>
-                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                      <div className="info-modal-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #3b82f6)', flexShrink: 0 }}>
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                          </svg>
+                          <span>ATTACHMENTS ({realAttachments.length})</span>
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                          <polyline points="18 15 12 9 6 15" />
                         </svg>
-                        <span>Attachments ({realAttachments.length})</span>
                       </div>
                       <div className="info-modal-section-body">
                         {attachmentError && (
@@ -6480,10 +6527,10 @@ export default function JobTrackerDashboard() {
                           <div key={gi}>
                             {hasMultipleEmails && group.event && (
                               <div className="attachment-source-label">
-                                From: {group.event.title || group.event.subject || (() => {
+                                FROM: {(group.event.title || group.event.subject || (() => {
                                   const d = new Date(group.event.date);
                                   return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()} email`;
-                                })()}
+                                })()).toUpperCase()}
                               </div>
                             )}
                             {group.items.map((att, ai) => {
@@ -6502,17 +6549,7 @@ export default function JobTrackerDashboard() {
                                       {att.filename || 'Unnamed attachment'}
                                     </div>
                                     <div className="attachment-meta">
-                                      {typeLabel}{sizeStr ? ` · ${sizeStr}` : ''}
-                                      {att.shortlistStatus === 'matched' && (
-                                        <span className="attachment-shortlist-tag matched">
-                                          🟢 Shortlisted{att.shortlistDetails?.matchedIdentifierType ? ` (${att.shortlistDetails.matchedIdentifierType.replace('_', ' ').toUpperCase()})` : ''}
-                                        </span>
-                                      )}
-                                      {att.shortlistStatus === 'no_match' && (
-                                        <span className="attachment-shortlist-tag no-match">
-                                          No match detected
-                                        </span>
-                                      )}
+                                      {typeLabel}{sizeStr ? ` • ${sizeStr}` : ''}
                                     </div>
                                   </div>
                                   <div className="attachment-actions">
