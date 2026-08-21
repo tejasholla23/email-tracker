@@ -433,6 +433,11 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
     resultObj.companyInfo = companyInfoData || null;
 
     res.json(resultObj);
+
+    // Sync in background (non-blocking)
+    Account.findById(req.userId).then(account => {
+      if (account) processCalendarSyncQueue(account);
+    }).catch(err => console.error("Async calendar sync error on reparse:", err.message));
   } catch (error) {
     console.error("[REPARSE_ERROR]", error.message);
     res.status(500).json({ message: "Failed to reparse email: " + error.message });

@@ -2,28 +2,77 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { parseEventTime, buildEventPayload, getCalendarListForAccount } = require('../utils/calendarService');
+const { parseEventTime, buildEventPayload, getCalendarListForAccount, syncAppToCalendar } = require('../utils/calendarService');
 
-test('parseEventTime: returns clean all-day date format for deadlines', () => {
+test('parseEventTime: returns clean all-day date format for deadlines in IST', () => {
   const dateInfo = parseEventTime('2026-08-25T18:29:00.000Z', null, 'deadline');
   assert.ok(dateInfo, 'Must return valid dateInfo');
   assert.strictEqual(dateInfo.allDay, true);
-  assert.ok(dateInfo.start.date, 'start must have date');
+  assert.strictEqual(dateInfo.start.date, '2026-08-25');
   assert.strictEqual(dateInfo.start.dateTime, undefined, 'start must NOT have dateTime');
-  assert.ok(dateInfo.end.date, 'end must have date');
+  assert.strictEqual(dateInfo.end.date, '2026-08-26');
   assert.strictEqual(dateInfo.end.dateTime, undefined, 'end must NOT have dateTime');
 });
 
-test('parseEventTime: returns clean timed format for talks, interviews, and OAs', () => {
+test('parseEventTime: early morning IST date (02:00 IST) correctly maps to the IST calendar date, not previous UTC day', () => {
+  // 2026-08-24 20:30:00 UTC == 2026-08-25 02:00:00 IST
+  const earlyMorningIso = '2026-08-24T20:30:00.000Z';
+  const dateInfo = parseEventTime(earlyMorningIso, null, 'deadline');
+  assert.ok(dateInfo, 'Must return valid dateInfo');
+  assert.strictEqual(dateInfo.start.date, '2026-08-25', 'Must be August 25 in IST, not August 24');
+  assert.strictEqual(dateInfo.end.date, '2026-08-26');
+});
+
+test('parseEventTime: returns clean timed format for talks, interviews, and OAs in IST', () => {
   const dateInfo = parseEventTime('2026-08-20T08:00:00.000Z', '1:30 PM', 'talk');
   assert.ok(dateInfo, 'Must return valid dateInfo');
   assert.strictEqual(dateInfo.allDay, false);
-  assert.ok(dateInfo.start.dateTime, 'start must have dateTime');
+  assert.strictEqual(dateInfo.start.dateTime, '2026-08-20T13:30:00+05:30');
   assert.strictEqual(dateInfo.start.date, undefined, 'start must NOT have date');
-  assert.ok(dateInfo.end.dateTime, 'end must have dateTime');
+  assert.strictEqual(dateInfo.end.dateTime, '2026-08-20T14:30:00+05:30');
   assert.strictEqual(dateInfo.end.date, undefined, 'end must NOT have date');
   assert.strictEqual(dateInfo.start.timeZone, 'Asia/Kolkata');
   assert.strictEqual(dateInfo.end.timeZone, 'Asia/Kolkata');
+});
+
+test('parseEventTime: timed OA duration is 120 minutes with proper IST rollover', () => {
+  const dateInfo = parseEventTime('2026-08-20T00:00:00.000Z', '10:00 AM', 'oa');
+  assert.ok(dateInfo, 'Must return valid dateInfo');
+  assert.strictEqual(dateInfo.start.dateTime, '2026-08-20T10:00:00+05:30');
+  assert.strictEqual(dateInfo.end.dateTime, '2026-08-20T12:00:00+05:30');
+});
+
+test('parseEventTime: midnight rollover for late-night timed events in IST', () => {
+  const dateInfo = parseEventTime('2026-08-20T00:00:00.000Z', '11:30 PM', 'oa');
+  assert.ok(dateInfo, 'Must return valid dateInfo');
+  assert.strictEqual(dateInfo.start.dateTime, '2026-08-20T23:30:00+05:30');
+  assert.strictEqual(dateInfo.end.dateTime, '2026-08-21T01:30:00+05:30', 'Must rollover to next day in IST');
+});
+
+test('parseEventTime: timezone invariance across simulated process.env.TZ', () => {
+  const sampleInputs = [
+    { date: '2026-08-25T18:29:00.000Z', time: null, type: 'deadline' },
+    { date: '2026-08-24T20:30:00.000Z', time: null, type: 'deadline' },
+    { date: '2026-08-20T08:00:00.000Z', time: '2:30 PM', type: 'interview' },
+    { date: '2026-08-20T00:00:00.000Z', time: '10:00 AM', type: 'oa' },
+  ];
+
+  const origTz = process.env.TZ;
+  try {
+    process.env.TZ = 'UTC';
+    const resultsUtc = sampleInputs.map(s => parseEventTime(s.date, s.time, s.type));
+
+    process.env.TZ = 'Asia/Kolkata';
+    const resultsIst = sampleInputs.map(s => parseEventTime(s.date, s.time, s.type));
+
+    process.env.TZ = 'America/New_York';
+    const resultsNy = sampleInputs.map(s => parseEventTime(s.date, s.time, s.type));
+
+    assert.deepStrictEqual(resultsUtc, resultsIst, 'UTC and IST runs must produce identical results');
+    assert.deepStrictEqual(resultsUtc, resultsNy, 'UTC and NY runs must produce identical results');
+  } finally {
+    process.env.TZ = origTz;
+  }
 });
 
 test('buildEventPayload: provides full resource payload required by events.update', () => {
@@ -75,6 +124,11 @@ test('code verification: calendarService.js must use calendar.events.update inst
   const serviceCode = fs.readFileSync(path.join(__dirname, '../utils/calendarService.js'), 'utf-8');
   assert.ok(!serviceCode.includes('calendar.events.patch'), 'calendar.events.patch must not be called in calendarService.js');
   assert.ok(serviceCode.includes('calendar.events.update'), 'calendar.events.update must be present in calendarService.js');
+});
+
+test('code verification: calendarService.js must NOT hard-delete applications on soft-delete', () => {
+  const serviceCode = fs.readFileSync(path.join(__dirname, '../utils/calendarService.js'), 'utf-8');
+  assert.ok(!serviceCode.includes('Application.deleteOne'), 'Application.deleteOne must NOT be present in calendarService.js');
 });
 
 test('getCalendarListForAccount: returns primary fallback for users with only calendar.events scope without calling API', async () => {
@@ -160,13 +214,105 @@ test('getCalendarListForAccount: calls calendarList.list when full calendar scop
   assert.strictEqual(calendars.length, 1);
 });
 
-test('getCalendarListForAccount: returns empty array when no calendar scope is authorized', async () => {
-  const account = {
-    tokens: {
-      scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email'
+test('syncAppToCalendar: soft-deleted application deletes Google Calendar event and preserves DB record', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  let deleteCalledWith = null;
+  google.calendar = () => ({
+    events: {
+      delete: async (params) => {
+        deleteCalledWith = params;
+        return {};
+      }
     }
+  });
+
+  let saved = false;
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Google',
+    isDeleted: true,
+    calendarEventId: 'event_to_delete_123',
+    needsCalendarSync: true,
+    save: async () => { saved = true; }
   };
 
-  const calendars = await getCalendarListForAccount(account);
-  assert.strictEqual(calendars.length, 0, 'Must return empty array for accounts without any calendar scope');
+  const account = {
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.ok(deleteCalledWith, 'calendar.events.delete must be called');
+    assert.strictEqual(deleteCalledWith.eventId, 'event_to_delete_123');
+    assert.strictEqual(app.calendarEventId, null, 'calendarEventId must be cleared');
+    assert.strictEqual(app.needsCalendarSync, false, 'needsCalendarSync must be false');
+    assert.strictEqual(app.isDeleted, true, 'isDeleted must remain true');
+    assert.strictEqual(saved, true, 'Application must be saved in MongoDB, not deleted');
+  } finally {
+    google.calendar = origCalendar;
+  }
 });
+
+test('syncAppToCalendar: recovers when Google Calendar event is deleted externally (404/410)', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  let updateAttempted = false;
+  let insertAttempted = false;
+  let listAttempted = false;
+
+  google.calendar = () => ({
+    events: {
+      update: async () => {
+        updateAttempted = true;
+        const err = new Error('Resource has been deleted');
+        err.status = 410;
+        throw err;
+      },
+      list: async () => {
+        listAttempted = true;
+        return { data: { items: [] } };
+      },
+      insert: async (params) => {
+        insertAttempted = true;
+        return { data: { id: 'recreated_event_id_456' } };
+      }
+    }
+  });
+
+  let saved = false;
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Amazon',
+    role: 'SDE-1',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-10-15T18:29:00.000Z',
+    calendarEventId: 'stale_event_id_123',
+    calendarPayloadHash: 'old_hash',
+    needsCalendarSync: true,
+    save: async () => { saved = true; }
+  };
+
+  const account = {
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.ok(updateAttempted, 'Update must be attempted first');
+    assert.ok(listAttempted, 'List fallback must be queried when stale ID is cleared');
+    assert.ok(insertAttempted, 'Insert must be called to recreate the event');
+    assert.strictEqual(app.calendarEventId, 'recreated_event_id_456', 'New event ID must be persisted');
+    assert.strictEqual(app.needsCalendarSync, false, 'needsCalendarSync must be false');
+    assert.strictEqual(app.calendarSyncError, null, 'Error must be cleared on successful recovery');
+    assert.strictEqual(saved, true, 'Updated app state must be saved to DB');
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+

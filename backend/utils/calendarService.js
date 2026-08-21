@@ -58,9 +58,12 @@ function generateEventFingerprint(app, eventType, dateString) {
   return crypto.createHash("sha256").update(rawKey).digest("hex");
 }
 
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
 /**
  * Formats date and time components into proper Google Calendar API formats.
  * Returns either an all-day event or a timed event depending on eventType.
+ * All computations are timezone-independent and explicitly projected into Asia/Kolkata (IST).
  *
  * @param {string|Date} dateInput - The date to use for the event
  * @param {string|null} timeInput - Optional explicit time string (e.g. "2:30 PM")
@@ -74,20 +77,24 @@ function parseEventTime(dateInput, timeInput, eventType) {
 
   const pad = (num) => String(num).padStart(2, "0");
 
+  // Project baseDate into IST (Asia/Kolkata: UTC+05:30) using pure UTC arithmetic
+  const istTimeMs = baseDate.getTime() + IST_OFFSET_MS;
+  const istDate = new Date(istTimeMs);
+
+  const y = istDate.getUTCFullYear();
+  const m = pad(istDate.getUTCMonth() + 1);
+  const d = pad(istDate.getUTCDate());
+
   // ── ALL-DAY events for deadlines ──────────────────────────────────────────
   // Deadlines are "last date to apply" — they make most sense as all-day events
   // with reminders, not as 1-hour timed slots.
   if (eventType === "deadline") {
-    const y = baseDate.getUTCFullYear();
-    const m = pad(baseDate.getUTCMonth() + 1);
-    const d = pad(baseDate.getUTCDate());
     const startDate = `${y}-${m}-${d}`;
-    // All-day events use exclusive end date (next day)
-    const endDateObj = new Date(baseDate);
-    endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
-    const ey = endDateObj.getUTCFullYear();
-    const em = pad(endDateObj.getUTCMonth() + 1);
-    const ed = pad(endDateObj.getUTCDate());
+    // All-day events use exclusive end date (next day in IST)
+    const nextDayIst = new Date(istTimeMs + 24 * 60 * 60 * 1000);
+    const ey = nextDayIst.getUTCFullYear();
+    const em = pad(nextDayIst.getUTCMonth() + 1);
+    const ed = pad(nextDayIst.getUTCDate());
     const endDate = `${ey}-${em}-${ed}`;
 
     return {
@@ -113,43 +120,42 @@ function parseEventTime(dateInput, timeInput, eventType) {
 
     if (timeMatch) {
       let h = parseInt(timeMatch[1], 10);
-      let m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      let min = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
       const meridiem = timeMatch[3];
       if (meridiem) {
         if (meridiem.toLowerCase() === "pm" && h !== 12) h += 12;
         if (meridiem.toLowerCase() === "am" && h === 12) h = 0;
       }
-      if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+      if (h >= 0 && h < 24 && min >= 0 && min < 60) {
         startHour = h;
-        startMinute = m;
+        startMinute = min;
       }
     }
   }
-
-  const start = new Date(baseDate);
-  start.setHours(startHour, startMinute, 0, 0);
 
   // Duration depends on event type
   let durationMinutes = 60; // default 1 hour
   if (eventType === "oa") durationMinutes = 120;       // OA: 2 hours
   if (eventType === "interview") durationMinutes = 45;  // Interview: 45 min
 
-  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+  const startIso = `${y}-${m}-${d}T${pad(startHour)}:${pad(startMinute)}:00+05:30`;
 
-  const toRfc3339 = (d) => {
-    const year = d.getFullYear();
-    const month = pad(d.getMonth() + 1);
-    const day = pad(d.getDate());
-    const hours = pad(d.getHours());
-    const minutes = pad(d.getMinutes());
-    const seconds = pad(d.getSeconds());
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
-  };
+  // Compute end time using pure UTC millisecond arithmetic
+  const startUtcMs = Date.UTC(y, parseInt(m, 10) - 1, parseInt(d, 10), startHour, startMinute, 0) - IST_OFFSET_MS;
+  const endUtcMs = startUtcMs + durationMinutes * 60 * 1000;
+  const endIstDate = new Date(endUtcMs + IST_OFFSET_MS);
+
+  const ey = endIstDate.getUTCFullYear();
+  const em = pad(endIstDate.getUTCMonth() + 1);
+  const ed = pad(endIstDate.getUTCDate());
+  const eh = pad(endIstDate.getUTCHours());
+  const emin = pad(endIstDate.getUTCMinutes());
+  const endIso = `${ey}-${em}-${ed}T${eh}:${emin}:00+05:30`;
 
   return {
     allDay: false,
-    start: { dateTime: toRfc3339(start), timeZone: "Asia/Kolkata" },
-    end: { dateTime: toRfc3339(end), timeZone: "Asia/Kolkata" }
+    start: { dateTime: startIso, timeZone: "Asia/Kolkata" },
+    end: { dateTime: endIso, timeZone: "Asia/Kolkata" }
   };
 }
 
@@ -279,7 +285,34 @@ async function syncAppToCalendar(account, app) {
   // resolve calendar id to use for this account
   const calendarId = resolveCalendarId(account);
 
-  // 1. Resolve event type from classification
+  // 1. Handle soft-deleted applications: remove Google Calendar event and keep DB record
+  if (app.isDeleted) {
+    if (app.calendarEventId) {
+      console.log(`[CALENDAR_SYNC] Deleting event ${app.calendarEventId} for soft-deleted application ${app._id}`);
+      try {
+        await calendar.events.delete({
+          calendarId: calendarId,
+          eventId: app.calendarEventId
+        });
+      } catch (delErr) {
+        const delStatus = delErr.status || delErr.code;
+        if (delStatus !== 404 && delStatus !== 410) {
+          console.warn(`[CALENDAR_SYNC] Warning deleting event ${app.calendarEventId} from Google Calendar:`, delErr.message);
+        }
+      }
+    }
+    // Preserve soft-deleted state in MongoDB so Gmail sync skips re-parsing
+    app.calendarEventId = null;
+    app.needsCalendarSync = false;
+    app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
+    app.calendarLastSyncedAt = new Date();
+    app.calendarSyncError = null;
+    await app.save();
+    console.log(`[CALENDAR_SYNC] Soft-deleted application ${app._id} retained in DB (calendar event removed)`);
+    return;
+  }
+
+  // 2. Resolve event type from classification
   const roleVal = getAppField(app, "Role", app.role);
   let eventType = "deadline";
   if (app.classification === "Interview Schedule") {
@@ -290,7 +323,7 @@ async function syncAppToCalendar(account, app) {
     eventType = "talk";
   }
 
-  // 2. Resolve date — only use meaningful dates, NOT the email-received date
+  // 3. Resolve date — only use meaningful dates, NOT the email-received date
   //    For deadlines: must have an explicit deadlineISO (parsed from Deadline displayField)
   //    For interviews/OAs/talks: can use testDate, eventDate, or deadlineISO
   //    NEVER fall back to app.date (email received date) — that creates misleading events
@@ -314,7 +347,7 @@ async function syncAppToCalendar(account, app) {
     return;
   }
 
-  // 3. Reject past dates — Google Calendar rejects events in the past anyway
+  // 4. Reject past dates
   const eventDate = new Date(dateInput);
   if (isNaN(eventDate.getTime())) {
     app.needsCalendarSync = false;
@@ -344,27 +377,12 @@ async function syncAppToCalendar(account, app) {
     return;
   }
 
-  // 4. Generate fingerprint and payload
+  // 5. Generate fingerprint and payload
   const fingerprint = generateEventFingerprint(app, eventType, eventDate.toISOString());
   const payload = buildEventPayload(app, eventType, dateInfo, fingerprint);
   const payloadHash = computePayloadHash(payload);
 
   try {
-    // Check if soft-deleted
-    if (app.isDeleted) {
-      if (app.calendarEventId) {
-        console.log(`[CALENDAR_SYNC] Deleting event ${app.calendarEventId} for soft-deleted application ${app._id}`);
-        await calendar.events.delete({
-          calendarId: calendarId,
-          eventId: app.calendarEventId
-        });
-      }
-      // Remove application permanently from DB after successful deletion from Google Calendar
-      await Application.deleteOne({ _id: app._id });
-      console.log(`[CALENDAR_SYNC] Successfully deleted application ${app._id} from DB`);
-      return;
-    }
-
     // Check if event already exists locally & has not changed
     if (app.calendarEventId && app.calendarPayloadHash === payloadHash && app.calendarSyncVersion === CALENDAR_SYNC_VERSION) {
       console.log(`[CALENDAR_SYNC] Skipping sync for application ${app._id} - payload hash unchanged`);
@@ -378,14 +396,29 @@ async function syncAppToCalendar(account, app) {
 
     if (eventId) {
       // Update existing event (complete replacement avoids schema conflicts between date and dateTime)
-      console.log(`[CALENDAR_SYNC] Updating event ${eventId} for application ${app._id}`);
-      await calendar.events.update({
-        calendarId: calendarId,
-        eventId: eventId,
-        resource: payload
-      });
-    } else {
-      // Perform fingerprint lookup to prevent duplicate events on primary calendar
+      try {
+        console.log(`[CALENDAR_SYNC] Updating event ${eventId} for application ${app._id}`);
+        await calendar.events.update({
+          calendarId: calendarId,
+          eventId: eventId,
+          resource: payload
+        });
+      } catch (updateErr) {
+        const status = updateErr.status || updateErr.code;
+        const msg = (updateErr.message || "").toLowerCase();
+        const isNotFound = status === 404 || status === 410 || msg.includes("not found") || msg.includes("deleted");
+        if (isNotFound) {
+          console.log(`[CALENDAR_SYNC] Event ${eventId} was deleted externally (status ${status}). Recreating event for application ${app._id}`);
+          eventId = null;
+          app.calendarEventId = null;
+        } else {
+          throw updateErr;
+        }
+      }
+    }
+
+    if (!eventId) {
+      // Perform fingerprint lookup to prevent duplicate events on primary/target calendar
       console.log(`[CALENDAR_SYNC] Checking fingerprint ${fingerprint} for application ${app._id}`);
       const listResponse = await calendar.events.list({
         calendarId: calendarId,
@@ -413,7 +446,7 @@ async function syncAppToCalendar(account, app) {
       }
     }
 
-    // 3. Update database sync status fields
+    // 6. Update database sync status fields
     app.calendarEventId = eventId;
     app.calendarEventFingerprint = fingerprint;
     app.calendarPayloadHash = payloadHash;
