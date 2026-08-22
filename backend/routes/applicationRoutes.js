@@ -119,7 +119,9 @@ router.post("/", writeLimiter, async (req, res) => {
     const newApplication = await Application.create({
       ...appData,
       userId: req.userId,
-      needsCalendarSync: true
+      needsCalendarSync: true,
+      calendarRetryCount: 0,
+      calendarSyncError: null
     });
 
     res.status(201).json(newApplication);
@@ -138,7 +140,7 @@ router.post("/", writeLimiter, async (req, res) => {
 router.patch("/:id", writeLimiter, async (req, res) => {
   try {
     const { status, note, manualEdits } = req.body;
-    const update = { needsCalendarSync: true };
+    const update = { needsCalendarSync: true, calendarRetryCount: 0, calendarSyncError: null };
     if (status !== undefined) update.status = status;
     if (note  !== undefined) update.note   = note;
     // Auto-unpin when marking as done
@@ -189,7 +191,7 @@ router.delete("/clear", writeLimiter, async (req, res) => {
     // Soft-delete and queue all for sync so Google Calendar is cleaned up
     await Application.updateMany(
       { userId: req.userId, isDeleted: { $ne: true } },
-      { $set: { isDeleted: true, needsCalendarSync: true } }
+      { $set: { isDeleted: true, needsCalendarSync: true, calendarRetryCount: 0, calendarSyncError: null } }
     );
 
     res.json({ message: "All applications marked for sync and clearance" });
@@ -209,7 +211,7 @@ router.delete("/:id", writeLimiter, async (req, res) => {
   try {
     const deleted = await Application.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      { isDeleted: true, needsCalendarSync: true },
+      { isDeleted: true, needsCalendarSync: true, calendarRetryCount: 0, calendarSyncError: null },
       { returnDocument: 'after' }
     );
     if (!deleted) {

@@ -460,6 +460,8 @@ function enrichApplicationRecord(existingApp, parsed, emailDate, options = {}) {
   );
   if (dateChanged) {
     updatePayload.needsCalendarSync = true;
+    updatePayload.calendarRetryCount = 0;
+    updatePayload.calendarSyncError = null;
   }
 
   return updatePayload;

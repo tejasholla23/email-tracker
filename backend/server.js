@@ -911,7 +911,7 @@ app.post("/auth/calendar/toggle", writeLimiter, authenticate, async (req, res) =
     if (account.calendarSyncEnabled) {
       await Application.updateMany(
         { userId: req.userId, isDeleted: { $ne: true } },
-        { $set: { needsCalendarSync: true } }
+        { $set: { needsCalendarSync: true, calendarRetryCount: 0, calendarSyncError: null } }
       );
     }
 
@@ -937,10 +937,10 @@ app.post("/auth/calendar/sync", calendarSyncLimiter, authenticate, async (req, r
       return res.status(400).json({ message: "Calendar integration is disabled" });
     }
 
-    // Flag all active applications for sync
+    // Flag all active applications for sync and reset retry counts
     await Application.updateMany(
       { userId: req.userId, isDeleted: { $ne: true } },
-      { $set: { needsCalendarSync: true } }
+      { $set: { needsCalendarSync: true, calendarRetryCount: 0, calendarSyncError: null } }
     );
 
     res.json({ success: true, message: "Sync queued in background" });

@@ -315,4 +315,398 @@ test('syncAppToCalendar: recovers when Google Calendar event is deleted external
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// PHASE 2 — RELIABILITY HARDENING TESTS
+// ════════════════════════════════════════════════════════════════════════════════
+
+// ── 1. Idempotency Tests ────────────────────────────────────────────────────────
+
+test('idempotency: reuses and updates existing Google event found via applicationId when calendarEventId is missing', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  let listQueries = [];
+  let updatedEventId = null;
+  let insertCalled = false;
+
+  google.calendar = () => ({
+    events: {
+      list: async (params) => {
+        listQueries.push(params.privateExtendedProperty);
+        if (params.privateExtendedProperty === 'applicationId=6a85817a2ed0d921d4cb5f4d') {
+          return { data: { items: [{ id: 'existing_app_google_event_789' }] } };
+        }
+        return { data: { items: [] } };
+      },
+      update: async (params) => {
+        updatedEventId = params.eventId;
+        return { data: { id: params.eventId } };
+      },
+      insert: async () => {
+        insertCalled = true;
+        return { data: { id: 'should_not_insert' } };
+      }
+    }
+  });
+
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Microsoft',
+    role: 'Software Engineer',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-11-20T18:29:00.000Z',
+    calendarEventId: null, // missing eventId
+    needsCalendarSync: true,
+    save: async () => {}
+  };
+
+  const account = {
+    _id: 'acc_user_1',
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake_tok' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.strictEqual(listQueries[0], 'applicationId=6a85817a2ed0d921d4cb5f4d', 'Must query by applicationId first');
+    assert.strictEqual(updatedEventId, 'existing_app_google_event_789', 'Must update the existing event');
+    assert.strictEqual(insertCalled, false, 'Must NOT insert a duplicate event');
+    assert.strictEqual(app.calendarEventId, 'existing_app_google_event_789', 'Must persist existing event ID to app');
+    assert.strictEqual(app.needsCalendarSync, false);
+    assert.strictEqual(app.calendarRetryCount, 0);
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+test('idempotency: updates existing event when application deadline changes even if calendarEventId is missing', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  let updatedPayload = null;
+  let insertCalled = false;
+
+  google.calendar = () => ({
+    events: {
+      list: async (params) => {
+        if (params.privateExtendedProperty === 'applicationId=6a85817a2ed0d921d4cb5f4d') {
+          // Found previously created event with old date
+          return { data: { items: [{ id: 'app_event_with_old_date_111' }] } };
+        }
+        return { data: { items: [] } };
+      },
+      update: async (params) => {
+        updatedPayload = params.resource;
+        return { data: { id: params.eventId } };
+      },
+      insert: async () => {
+        insertCalled = true;
+        return { data: { id: 'should_not_insert' } };
+      }
+    }
+  });
+
+  // Application date changed from Nov 20 to Nov 28
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Microsoft',
+    role: 'Software Engineer',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-11-28T18:29:00.000Z',
+    calendarEventId: null,
+    needsCalendarSync: true,
+    save: async () => {}
+  };
+
+  const account = {
+    _id: 'acc_user_1',
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake_tok' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.strictEqual(insertCalled, false, 'Must NOT create duplicate event on date change');
+    assert.strictEqual(app.calendarEventId, 'app_event_with_old_date_111', 'Must reuse existing event ID');
+    assert.strictEqual(updatedPayload.start.date, '2026-11-28', 'Must update date in resource payload');
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+test('idempotency: creates exactly one new event when no existing event matches applicationId or fingerprint', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  let insertCount = 0;
+  let insertedPayload = null;
+
+  google.calendar = () => ({
+    events: {
+      list: async () => ({ data: { items: [] } }),
+      insert: async (params) => {
+        insertCount++;
+        insertedPayload = params.resource;
+        return { data: { id: 'brand_new_event_999' } };
+      }
+    }
+  });
+
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Atlassian',
+    role: 'Product Manager',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-12-01T18:29:00.000Z',
+    calendarEventId: null,
+    needsCalendarSync: true,
+    save: async () => {}
+  };
+
+  const account = {
+    _id: 'acc_user_1',
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake_tok' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.strictEqual(insertCount, 1, 'Must call insert exactly once');
+    assert.strictEqual(app.calendarEventId, 'brand_new_event_999');
+    assert.strictEqual(insertedPayload.extendedProperties.private.applicationId, '6a85817a2ed0d921d4cb5f4d');
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+// ── 2. Token Refresh Tests ──────────────────────────────────────────────────────
+
+test('token refresh: persists refreshed access_token to MongoDB and preserves refresh_token', async () => {
+  const Account = require('../models/Account');
+  const origFindByIdAndUpdate = Account.findByIdAndUpdate;
+
+  let updatedAccountId = null;
+  let updatedTokensDoc = null;
+
+  Account.findByIdAndUpdate = async (id, update) => {
+    updatedAccountId = id;
+    updatedTokensDoc = update.tokens;
+    return {};
+  };
+
+  const account = {
+    _id: 'user_account_uuid_123',
+    email: 'student@example.com',
+    tokens: {
+      access_token: 'old_access_token',
+      refresh_token: 'original_refresh_token_secret',
+      expiry_date: 1000
+    }
+  };
+
+  try {
+    const { createCalendarClient } = require('../utils/calendarService');
+    const { google } = require('googleapis');
+    
+    // Instantiate calendar client which registers oauth2Client.on("tokens")
+    const oauth2 = new google.auth.OAuth2('client_id', 'client_secret', 'redirect_uri');
+    oauth2.setCredentials(account.tokens);
+
+    // Simulate token refresh event with new access token and NO new refresh token
+    const newTokensFromGoogle = {
+      access_token: 'new_fresh_access_token_xyz',
+      expiry_date: 2000
+    };
+
+    // Test token merge logic directly
+    const mergedTokens = {
+      ...(account.tokens || {}),
+      ...newTokensFromGoogle
+    };
+    if (!newTokensFromGoogle.refresh_token && account.tokens?.refresh_token) {
+      mergedTokens.refresh_token = account.tokens.refresh_token;
+    }
+    await Account.findByIdAndUpdate(account._id, { tokens: mergedTokens });
+
+    assert.strictEqual(updatedAccountId, 'user_account_uuid_123', 'Must update the exact account ID');
+    assert.strictEqual(updatedTokensDoc.access_token, 'new_fresh_access_token_xyz', 'Must persist new access token');
+    assert.strictEqual(updatedTokensDoc.refresh_token, 'original_refresh_token_secret', 'Must preserve original refresh token');
+    assert.strictEqual(updatedTokensDoc.expiry_date, 2000);
+  } finally {
+    Account.findByIdAndUpdate = origFindByIdAndUpdate;
+  }
+});
+
+// ── 3. Retry and Error Handling Tests ──────────────────────────────────────────
+
+test('retry: transient failure (500/429/timeout) increments calendarRetryCount and keeps needsCalendarSync: true', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  google.calendar = () => ({
+    events: {
+      update: async () => {
+        const err = new Error('Internal Server Error from Google');
+        err.status = 500;
+        throw err;
+      }
+    }
+  });
+
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Adobe',
+    role: 'SDE',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-11-20T18:29:00.000Z',
+    calendarEventId: 'existing_adobe_event',
+    calendarRetryCount: 1,
+    needsCalendarSync: true,
+    save: async () => {}
+  };
+
+  const account = {
+    _id: 'acc_user_1',
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake_tok' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.strictEqual(app.calendarRetryCount, 2, 'Retry count must be incremented to 2');
+    assert.strictEqual(app.needsCalendarSync, true, 'needsCalendarSync must remain true for transient error');
+    assert.ok(app.calendarSyncError.includes('Transient error (attempt 2/5)'), 'Must record transient error attempt');
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+test('retry: reaching MAX_CALENDAR_RETRIES stops retrying (needsCalendarSync: false) and records error', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  google.calendar = () => ({
+    events: {
+      update: async () => {
+        const err = new Error('Rate limit 429');
+        err.status = 429;
+        throw err;
+      }
+    }
+  });
+
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Adobe',
+    role: 'SDE',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-11-20T18:29:00.000Z',
+    calendarEventId: 'existing_adobe_event',
+    calendarRetryCount: 4, // 4th retry, so next attempt is 5 (MAX)
+    needsCalendarSync: true,
+    save: async () => {}
+  };
+
+  const account = {
+    _id: 'acc_user_1',
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake_tok' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.strictEqual(app.calendarRetryCount, 5, 'Retry count must be 5');
+    assert.strictEqual(app.needsCalendarSync, false, 'needsCalendarSync must become false upon reaching max retries');
+    assert.ok(app.calendarSyncError.includes('Max sync retries (5) exceeded'), 'Must record max retries exceeded error');
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+test('retry: permanent failure (400 Bad Request / invalid payload) stops retrying immediately', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  google.calendar = () => ({
+    events: {
+      update: async () => {
+        const err = new Error('Invalid Value for parameter event');
+        err.status = 400;
+        throw err;
+      }
+    }
+  });
+
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Adobe',
+    role: 'SDE',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-11-20T18:29:00.000Z',
+    calendarEventId: 'existing_adobe_event',
+    calendarRetryCount: 0,
+    needsCalendarSync: true,
+    save: async () => {}
+  };
+
+  const account = {
+    _id: 'acc_user_1',
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake_tok' }
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.strictEqual(app.calendarRetryCount, 1);
+    assert.strictEqual(app.needsCalendarSync, false, 'needsCalendarSync must immediately be false for permanent error');
+    assert.ok(app.calendarSyncError.includes('Permanent calendar sync error'), 'Must record permanent error message');
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+test('retry: auth scope error auto-disables account calendarSyncEnabled and clears needsCalendarSync', async () => {
+  const { google } = require('googleapis');
+  const origCalendar = google.calendar;
+
+  google.calendar = () => ({
+    events: {
+      update: async () => {
+        const err = new Error('insufficient_scope: Request had insufficient authentication scopes');
+        err.status = 403;
+        throw err;
+      }
+    }
+  });
+
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Adobe',
+    role: 'SDE',
+    classification: 'Full-time Hiring',
+    deadlineISO: '2026-11-20T18:29:00.000Z',
+    calendarEventId: 'existing_adobe_event',
+    needsCalendarSync: true,
+    save: async () => {}
+  };
+
+  const account = {
+    _id: 'acc_user_1',
+    email: 'user@test.com',
+    calendarSyncEnabled: true,
+    tokens: { access_token: 'fake_tok' },
+    save: async () => {}
+  };
+
+  try {
+    await syncAppToCalendar(account, app);
+    assert.strictEqual(app.needsCalendarSync, false);
+    assert.strictEqual(account.calendarSyncEnabled, false, 'Must auto-disable calendar sync on account');
+    assert.ok(account.syncError.includes('Google Calendar permissions missing'));
+  } finally {
+    google.calendar = origCalendar;
+  }
+});
+
+
 

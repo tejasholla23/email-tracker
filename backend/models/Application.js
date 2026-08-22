@@ -64,6 +64,7 @@ const applicationSchema = new mongoose.Schema(
     needsCalendarSync: { type: Boolean, default: false },
     calendarLastSyncedAt: { type: Date, default: null },
     calendarSyncError: { type: String, default: null },
+    calendarRetryCount: { type: Number, default: 0 },
 
     // Pinning
     isPinned: { type: Boolean, default: false },

@@ -1,9 +1,43 @@
 const { google } = require("googleapis");
 const crypto = require("crypto");
 const Application = require("../models/Application");
+const Account = require("../models/Account");
 
 const CALENDAR_SYNC_VERSION = 2;
+const MAX_CALENDAR_RETRIES = 5;
 const activeCalendarSyncs = new Set();
+
+/**
+ * Creates an authenticated Google Calendar client with automatic token persistence.
+ */
+function createCalendarClient(account) {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+  oauth2Client.setCredentials(account.tokens);
+
+  oauth2Client.on("tokens", async (newTokens) => {
+    try {
+      const updatedTokens = {
+        ...(account.tokens || {}),
+        ...newTokens,
+      };
+      // Preserve existing refresh_token if Google does not return a replacement
+      if (!newTokens.refresh_token && account.tokens?.refresh_token) {
+        updatedTokens.refresh_token = account.tokens.refresh_token;
+      }
+      await Account.findByIdAndUpdate(account._id, { tokens: updatedTokens });
+      account.tokens = updatedTokens;
+      console.log(`[CALENDAR_TOKEN_REFRESH_PERSISTED] Refreshed tokens persisted for ${account.email}`);
+    } catch (tokenErr) {
+      console.error(`[CALENDAR_TOKEN_REFRESH_FAILED] Failed to persist tokens for ${account.email}:`, tokenErr.message);
+    }
+  });
+
+  return google.calendar({ version: "v3", auth: oauth2Client });
+}
 
 /**
  * Resolve which calendar ID to use for operations.
@@ -274,13 +308,7 @@ async function syncAppToCalendar(account, app) {
     return;
   }
 
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  );
-  oauth2Client.setCredentials(account.tokens);
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const calendar = createCalendarClient(account);
 
   // resolve calendar id to use for this account
   const calendarId = resolveCalendarId(account);
@@ -307,6 +335,7 @@ async function syncAppToCalendar(account, app) {
     app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarLastSyncedAt = new Date();
     app.calendarSyncError = null;
+    app.calendarRetryCount = 0;
     await app.save();
     console.log(`[CALENDAR_SYNC] Soft-deleted application ${app._id} retained in DB (calendar event removed)`);
     return;
@@ -342,6 +371,7 @@ async function syncAppToCalendar(account, app) {
     app.needsCalendarSync = false;
     app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = "No explicit deadline or event date found — skipping calendar event";
+    app.calendarRetryCount = 0;
     await app.save();
     console.log(`[CALENDAR_SYNC] Skipping ${app.company} (${app._id}): no meaningful date`);
     return;
@@ -353,6 +383,7 @@ async function syncAppToCalendar(account, app) {
     app.needsCalendarSync = false;
     app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = `Invalid date value: ${dateInput}`;
+    app.calendarRetryCount = 0;
     await app.save();
     return;
   }
@@ -363,6 +394,7 @@ async function syncAppToCalendar(account, app) {
     app.needsCalendarSync = false;
     app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = `Deadline/event date is in the past (${eventDate.toISOString().substring(0, 10)})`;
+    app.calendarRetryCount = 0;
     await app.save();
     console.log(`[CALENDAR_SYNC] Skipping ${app.company} (${app._id}): date in past (${eventDate.toISOString().substring(0, 10)})`);
     return;
@@ -373,6 +405,7 @@ async function syncAppToCalendar(account, app) {
     app.needsCalendarSync = false;
     app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
     app.calendarSyncError = "Failed to parse event time from date input";
+    app.calendarRetryCount = 0;
     await app.save();
     return;
   }
@@ -388,6 +421,7 @@ async function syncAppToCalendar(account, app) {
       console.log(`[CALENDAR_SYNC] Skipping sync for application ${app._id} - payload hash unchanged`);
       app.needsCalendarSync = false;
       app.calendarSyncError = null;
+      app.calendarRetryCount = 0;
       await app.save();
       return;
     }
@@ -418,18 +452,28 @@ async function syncAppToCalendar(account, app) {
     }
 
     if (!eventId) {
-      // Perform fingerprint lookup to prevent duplicate events on primary/target calendar
-      console.log(`[CALENDAR_SYNC] Checking fingerprint ${fingerprint} for application ${app._id}`);
-      const listResponse = await calendar.events.list({
+      // 1. Primary Lookup: Search by Application ID in privateExtendedProperties
+      console.log(`[CALENDAR_SYNC] Checking existing event by applicationId=${app._id} for application ${app._id}`);
+      const appLookupRes = await calendar.events.list({
         calendarId: calendarId,
-        privateExtendedProperty: `fingerprint=${fingerprint}`
+        privateExtendedProperty: `applicationId=${app._id.toString()}`
       });
 
-      const existingEvent = listResponse.data.items && listResponse.data.items[0];
+      let existingEvent = appLookupRes.data.items && appLookupRes.data.items[0];
+
+      // 2. Secondary Fallback Lookup: Search by fingerprint if not found by applicationId
+      if (!existingEvent && fingerprint) {
+        console.log(`[CALENDAR_SYNC] Checking fingerprint fallback ${fingerprint} for application ${app._id}`);
+        const fpLookupRes = await calendar.events.list({
+          calendarId: calendarId,
+          privateExtendedProperty: `fingerprint=${fingerprint}`
+        });
+        existingEvent = fpLookupRes.data.items && fpLookupRes.data.items[0];
+      }
 
       if (existingEvent) {
         eventId = existingEvent.id;
-        console.log(`[CALENDAR_SYNC] Found existing calendar event ${eventId} via fingerprint lookup`);
+        console.log(`[CALENDAR_SYNC] Found existing calendar event ${eventId} via extended property lookup`);
         await calendar.events.update({
           calendarId: calendarId,
           eventId: eventId,
@@ -446,7 +490,7 @@ async function syncAppToCalendar(account, app) {
       }
     }
 
-    // 6. Update database sync status fields
+    // 6. Update database sync status fields on success
     app.calendarEventId = eventId;
     app.calendarEventFingerprint = fingerprint;
     app.calendarPayloadHash = payloadHash;
@@ -454,29 +498,57 @@ async function syncAppToCalendar(account, app) {
     app.calendarLastSyncedAt = new Date();
     app.needsCalendarSync = false;
     app.calendarSyncError = null;
+    app.calendarRetryCount = 0;
     await app.save();
     console.log(`[CALENDAR_SYNC] Sync success for application ${app._id}`);
 
   } catch (err) {
     console.error(`[CALENDAR_SYNC] Error syncing application ${app._id}:`, err.message);
-    app.calendarSyncError = err.message;
+    const errLower = (err.message || "").toLowerCase();
+    const status = err.status || err.code;
     
     // Set to failed/disabled if user revoked permission or has insufficient scope
-    const errLower = (err.message || "").toLowerCase();
-    const isAuthError = err.status === 401 || 
-                        err.status === 403 || 
+    const isAuthError = status === 401 || 
+                        status === 403 || 
                         errLower.includes("invalid_grant") || 
                         errLower.includes("insufficient") || 
                         errLower.includes("scope");
                         
     if (isAuthError) {
       app.needsCalendarSync = false;
+      app.calendarSyncError = `Google Calendar auth error: ${err.message}`;
       
       // Auto-disable calendar sync on account level due to missing/revoked scopes
       account.calendarSyncEnabled = false;
       account.syncError = `Google Calendar permissions missing: ${err.message}`;
       await account.save().catch(saveErr => console.error("[CALENDAR_SYNC] Failed to update account sync status:", saveErr.message));
       console.log(`[CALENDAR_SYNC] Auto-disabled calendar sync for account: ${account.email} due to auth scope error`);
+    } else {
+      // Check if permanent client error (e.g. 400 Bad Request, invalid payload, malformed date)
+      const isPermanentError = status === 400 || 
+                               errLower.includes("invalid value") || 
+                               errLower.includes("bad request") || 
+                               errLower.includes("malformed");
+
+      if (isPermanentError) {
+        app.needsCalendarSync = false;
+        app.calendarRetryCount = (app.calendarRetryCount || 0) + 1;
+        app.calendarSyncError = `Permanent calendar sync error: ${err.message}`;
+        console.warn(`[CALENDAR_SYNC] Application ${app._id} encountered permanent error: ${err.message}. Stopping retries.`);
+      } else {
+        // Transient error (rate limit 429, 5xx server error, network timeout, ETIMEDOUT, ECONNRESET)
+        const currentRetries = (app.calendarRetryCount || 0) + 1;
+        app.calendarRetryCount = currentRetries;
+
+        if (currentRetries >= MAX_CALENDAR_RETRIES) {
+          app.needsCalendarSync = false;
+          app.calendarSyncError = `Max sync retries (${MAX_CALENDAR_RETRIES}) exceeded: ${err.message}`;
+          console.warn(`[CALENDAR_SYNC] Application ${app._id} exceeded max retries (${MAX_CALENDAR_RETRIES}). Stopping automatic retries.`);
+        } else {
+          app.needsCalendarSync = true;
+          app.calendarSyncError = `Transient error (attempt ${currentRetries}/${MAX_CALENDAR_RETRIES}): ${err.message}`;
+        }
+      }
     }
     await app.save();
   }
@@ -543,13 +615,7 @@ async function migrateAccountCalendar(account, sourceCalendarId = "primary") {
     return;
   }
 
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  );
-  oauth2Client.setCredentials(account.tokens);
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const calendar = createCalendarClient(account);
 
   const destCalendarId = resolveCalendarId(account);
   if (destCalendarId === sourceCalendarId) {
@@ -618,6 +684,7 @@ async function migrateAccountCalendar(account, sourceCalendarId = "primary") {
       app.calendarSyncVersion = CALENDAR_SYNC_VERSION;
       app.needsCalendarSync = false;
       app.calendarSyncError = null;
+      app.calendarRetryCount = 0;
       await app.save();
       console.log(`[CALENDAR_MIGRATE] Migrated app ${app._id} event ${srcEventId} -> ${newEventId}`);
 
@@ -633,7 +700,7 @@ async function migrateAccountCalendar(account, sourceCalendarId = "primary") {
 /**
  * Resolves the available Google Calendar list for an account based on granted OAuth scopes.
  * If user has calendar.readonly or calendar scope, queries Google Calendar API.
- * If user has calendar.events only, returns primary calendar fallback without calling calendarList.list().
+ * If user has calendar.events only, returns primary fallback without calling calendarList.list().
  * If user has no calendar scopes, returns empty array.
  */
 async function getCalendarListForAccount(account, calendarClient = null) {
@@ -654,15 +721,7 @@ async function getCalendarListForAccount(account, calendarClient = null) {
 
   // If user has granted the scope to list secondary calendars, query Google Calendar API
   if (hasListScope) {
-    const calendar = calendarClient || (() => {
-      const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
-      );
-      oauth2Client.setCredentials(account.tokens);
-      return google.calendar({ version: "v3", auth: oauth2Client });
-    })();
+    const calendar = calendarClient || createCalendarClient(account);
 
     const calendarListRes = await calendar.calendarList.list();
     const calendars = (calendarListRes.data.items || []).map(c => ({
@@ -682,6 +741,8 @@ module.exports = {
   syncAppToCalendar,
   processCalendarSyncQueue,
   CALENDAR_SYNC_VERSION,
+  MAX_CALENDAR_RETRIES,
+  createCalendarClient,
   migrateAccountCalendar,
   resolveCalendarId,
   parseEventTime,
