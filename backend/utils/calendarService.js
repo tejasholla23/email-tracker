@@ -193,65 +193,240 @@ function parseEventTime(dateInput, timeInput, eventType) {
   };
 }
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
 /**
- * Builds Google Calendar resource payload object.
+ * Formats a date (and optional time) into an absolute IST string.
+ * All computations are timezone-independent and explicitly projected into Asia/Kolkata (IST).
+ *
+ * @param {string|Date} dateInput - Raw date string or Date object
+ * @param {string|null} timeInput - Raw time string or text containing time
+ * @param {boolean} isTimed - Whether event is timed (if true, defaults to 9:00 AM if no time parsed)
+ * @returns {string} e.g. "August 22, 2026 · 12:30 PM IST" or "August 22, 2026"
  */
-function buildEventPayload(app, eventType, dateInfo, fingerprint) {
-  const role = getAppField(app, "Role", app.role);
-  
-  // Build a descriptive summary prefix based on event type
-  const typeEmoji = {
-    deadline: "📋",
-    interview: "🎤",
-    oa: "💻",
-    talk: "🎓"
-  };
-  const emoji = typeEmoji[eventType] || "📋";
-  const summary = `${emoji} [${app.company}] ${app.subtitle || role || "Hiring Event"}`;
-  
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-  const appDeepLink = `${frontendUrl}/?id=${app._id}`;
+function formatAbsoluteDateIST(dateInput, timeInput = null, isTimed = false) {
+  if (!dateInput) return "";
+  const baseDate = new Date(dateInput);
+  if (isNaN(baseDate.getTime())) return "";
 
-  let descriptionHtml = `<b>Company:</b> ${app.company}<br>`;
-  if (role) descriptionHtml += `<b>Role:</b> ${role}<br>`;
-  if (app.subtitle) descriptionHtml += `<b>Program Details:</b> ${app.subtitle}<br>`;
-  
-  const deadlineText = getAppField(app, "Deadline", app.deadlineText);
-  if (deadlineText) descriptionHtml += `<b>Deadline:</b> ${deadlineText}<br>`;
-  
-  const ctc = getAppField(app, "CTC", app.salaryText);
-  if (ctc) descriptionHtml += `<b>CTC:</b> ${ctc}<br>`;
+  // Project into IST (UTC+05:30) via pure UTC arithmetic
+  const istTimeMs = baseDate.getTime() + IST_OFFSET_MS;
+  const istDate = new Date(istTimeMs);
 
-  const venue = getAppField(app, "Location", getAppField(app, "Venue", app.venue));
-  if (venue) descriptionHtml += `<b>Venue/Location:</b> ${venue}<br>`;
-  
-  if (app.skills && app.skills.length > 0) {
-    descriptionHtml += `<b>Skills:</b> ${app.skills.join(", ")}<br>`;
-  }
+  const y = istDate.getUTCFullYear();
+  const m = MONTH_NAMES[istDate.getUTCMonth()];
+  const d = istDate.getUTCDate();
 
-  // Include displayFields excluding those already rendered explicitly above
-  if (Array.isArray(app.displayFields) && app.displayFields.length > 0) {
-    const skipLabels = new Set(["role", "venue", "location", "deadline", "ctc", "salary"]);
-    const extraFields = app.displayFields.filter(f => f.label && f.value && !skipLabels.has(f.label.trim().toLowerCase()));
+  let timeString = "";
 
-    if (extraFields.length > 0) {
-      descriptionHtml += `<br><b>Details:</b><br>`;
-      for (const f of extraFields) {
-        descriptionHtml += `• <b>${f.label}:</b> ${f.value}<br>`;
+  if (timeInput) {
+    const cleanedTimeInput = String(timeInput)
+      .replace(/\b\d{1,2}(st|nd|rd|th)\b/gi, "")
+      .replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/gi, "");
+
+    const timeMatch = cleanedTimeInput.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)/i) 
+      || cleanedTimeInput.match(/(\d{1,2}):(\d{2})/);
+
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      let min = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      const meridiem = timeMatch[3];
+      if (meridiem) {
+        if (meridiem.toLowerCase() === "pm" && h !== 12) h += 12;
+        if (meridiem.toLowerCase() === "am" && h === 12) h = 0;
+      }
+      if (h >= 0 && h < 24 && min >= 0 && min < 60) {
+        const hour12 = h % 12 === 0 ? 12 : h % 12;
+        const ampm = h >= 12 ? "PM" : "AM";
+        const minPad = String(min).padStart(2, "0");
+        timeString = ` · ${hour12}:${minPad} ${ampm} IST`;
       }
     }
   }
-  
-  descriptionHtml += `<br><a href=\"${appDeepLink}\">View in Email Tracker Dashboard</a>`;
-  if (app.link) {
-    descriptionHtml += ` | <a href=\"${app.link}\">Direct Registration/Application Link</a>`;
+
+  if (isTimed && !timeString) {
+    timeString = " · 9:00 AM IST";
   }
 
-  if (app.note) {
-    descriptionHtml += `<br><br><b>Personal Notes:</b><br>${app.note.replace(/\n/g, "<br>")}`;
+  return `${m} ${d}, ${y}${timeString}`;
+}
+
+/**
+ * Builds Google Calendar resource payload object with structured presentation.
+ */
+function buildEventPayload(app, eventType, dateInfo, fingerprint, dateInput = null, timeInput = null) {
+  const role = getAppField(app, "Role", app.role);
+  const effectiveDateInput = dateInput || (eventType === "deadline" ? app.deadlineISO : (app.testDate || app.eventDate || app.deadlineISO));
+  const effectiveTimeInput = timeInput || app.eventTime || app.reportingTime || app.deadlineText || null;
+
+  // ── 1. Event-Type-Aware Titles ────────────────────────────────────────────
+  const titlePrefixes = {
+    deadline: "⏰ Deadline",
+    oa: "🧪 Online Assessment",
+    interview: "🎤 Interview",
+    talk: "📢 PPT"
+  };
+  const prefix = titlePrefixes[eventType] || "📋 Hiring Event";
+  const programOrRole = app.subtitle || role || "";
+
+  let summary = "";
+  if (programOrRole && programOrRole.toLowerCase().trim() !== (app.company || "").toLowerCase().trim()) {
+    summary = `${prefix} · ${app.company} — ${programOrRole}`;
+  } else {
+    summary = `${prefix} · ${app.company}`;
   }
 
-  // Setup reminders based on event type
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const appDeepLink = `${frontendUrl}/?id=${app._id}`;
+
+  // ── 2. Event Description Hierarchy ────────────────────────────────────────
+  const typeHeaders = {
+    deadline: "APPLICATION DEADLINE",
+    interview: "INTERVIEW",
+    oa: "ONLINE ASSESSMENT",
+    talk: "PRE-PLACEMENT TALK"
+  };
+  const headerTitle = typeHeaders[eventType] || "RECRUITMENT EVENT";
+
+  let lines = [];
+  lines.push(`<b>${headerTitle}</b><br>`);
+
+  // Primary Information
+  if (app.company) {
+    lines.push(`<b>Company:</b> ${app.company}`);
+  }
+  if (role) {
+    lines.push(`<b>Role:</b> ${role}`);
+  }
+  if (app.subtitle && app.subtitle !== role && app.subtitle !== app.company) {
+    lines.push(`<b>Program:</b> ${app.subtitle}`);
+  }
+
+  // Primary Action / Date
+  if (eventType === "deadline") {
+    const formattedDeadline = formatAbsoluteDateIST(effectiveDateInput, effectiveTimeInput, false);
+    if (formattedDeadline) {
+      lines.push(`<b>Deadline:</b> ${formattedDeadline}`);
+    }
+  } else if (eventType === "interview") {
+    const formattedInterview = formatAbsoluteDateIST(effectiveDateInput, effectiveTimeInput, true);
+    if (formattedInterview) {
+      lines.push(`<b>Interview:</b> ${formattedInterview}`);
+    }
+  } else if (eventType === "oa") {
+    const formattedOa = formatAbsoluteDateIST(effectiveDateInput, effectiveTimeInput, true);
+    if (formattedOa) {
+      lines.push(`<b>Assessment:</b> ${formattedOa}`);
+    }
+  } else if (eventType === "talk") {
+    const formattedTalk = formatAbsoluteDateIST(effectiveDateInput, effectiveTimeInput, true);
+    if (formattedTalk) {
+      lines.push(`<b>Event:</b> ${formattedTalk}`);
+    }
+  }
+
+  // Primary Placement Details: CTC, Venue, Location
+  let keyDetails = [];
+  const ctc = getAppField(app, "CTC", app.salaryText);
+  if (ctc) {
+    keyDetails.push(`<b>CTC:</b> ${ctc}`);
+  }
+  const venue = getAppField(app, "Venue", app.venue);
+  if (venue) {
+    keyDetails.push(`<b>Venue:</b> ${venue}`);
+  }
+  const location = getAppField(app, "Location", "");
+  if (location && location !== venue) {
+    keyDetails.push(`<b>Location:</b> ${location}`);
+  }
+
+  if (keyDetails.length > 0) {
+    lines.push(""); // blank line
+    lines.push(...keyDetails);
+  }
+
+  // Additional Details Section
+  let additionalDetails = [];
+
+  // If this is a deadline event and there is an explicit recruitment event/test date
+  if (eventType === "deadline" && (app.eventDate || app.testDate)) {
+    const secondaryEventDate = app.eventDate || app.testDate;
+    const formattedSecDate = formatAbsoluteDateIST(secondaryEventDate, app.eventTime || app.reportingTime, true);
+    if (formattedSecDate && formattedSecDate !== formatAbsoluteDateIST(effectiveDateInput, effectiveTimeInput, false)) {
+      additionalDetails.push(`• <b>Recruitment Event:</b> ${formattedSecDate}`);
+    }
+  }
+
+  // If this is an interview/OA/talk event and there is a distinct application deadline
+  if (eventType !== "deadline" && app.deadlineISO) {
+    const formattedSecDeadline = formatAbsoluteDateIST(app.deadlineISO, app.deadlineText, false);
+    if (formattedSecDeadline && formattedSecDeadline !== formatAbsoluteDateIST(effectiveDateInput, effectiveTimeInput, true)) {
+      additionalDetails.push(`• <b>Application Deadline:</b> ${formattedSecDeadline}`);
+    }
+  }
+
+  const stipend = getAppField(app, "Stipend", app.programStipend);
+  if (stipend && stipend !== ctc) {
+    additionalDetails.push(`• <b>Stipend:</b> ${stipend}`);
+  }
+
+  const branches = getAppField(app, "Eligible Branches", getAppField(app, "Branches", ""));
+  if (branches) {
+    additionalDetails.push(`• <b>Eligible Branches:</b> ${branches}`);
+  }
+
+  if (Array.isArray(app.skills) && app.skills.length > 0) {
+    additionalDetails.push(`• <b>Skills:</b> ${app.skills.join(", ")}`);
+  }
+
+  // Remaining displayFields
+  if (Array.isArray(app.displayFields) && app.displayFields.length > 0) {
+    const skipLabels = new Set([
+      "company", "role", "program", "program details", "deadline", "ctc", "salary", "stipend",
+      "venue", "location", "date & time", "date", "time", "reporting time",
+      "event date", "test date", "eligible branches", "branches", "skills"
+    ]);
+
+    for (const f of app.displayFields) {
+      if (!f.label || !f.value) continue;
+      const cleanLabel = f.label.trim().toLowerCase();
+      if (skipLabels.has(cleanLabel)) continue;
+
+      additionalDetails.push(`• <b>${f.label}:</b> ${f.value}`);
+    }
+  }
+
+  if (additionalDetails.length > 0) {
+    lines.push(""); // blank line
+    lines.push("<b>Additional Details</b>");
+    lines.push(...additionalDetails);
+  }
+
+  // Personal Notes
+  if (app.note && app.note.trim()) {
+    lines.push("");
+    lines.push("<b>Personal Notes:</b>");
+    lines.push(app.note.trim().replace(/\n/g, "<br>"));
+  }
+
+  // Action Links
+  lines.push("");
+  lines.push(`📊 <a href="${appDeepLink}">Open in Email Tracker</a>`);
+  if (app.link && app.link.trim() && /^https?:\/\//i.test(app.link.trim())) {
+    lines.push(`🔗 <a href="${app.link.trim()}">Apply / Register</a>`);
+  }
+
+  // Provenance Footer
+  lines.push("");
+  lines.push("---");
+  lines.push("<i>Automatically created by Email Tracker</i>");
+
+  const descriptionHtml = lines.join("<br>");
+
+  // Reminders based on event type
   let reminderConfig = { useDefault: false, overrides: [] };
   if (eventType === "deadline") {
     reminderConfig.overrides = [
@@ -412,7 +587,7 @@ async function syncAppToCalendar(account, app) {
 
   // 5. Generate fingerprint and payload
   const fingerprint = generateEventFingerprint(app, eventType, eventDate.toISOString());
-  const payload = buildEventPayload(app, eventType, dateInfo, fingerprint);
+  const payload = buildEventPayload(app, eventType, dateInfo, fingerprint, dateInput, timeInput);
   const payloadHash = computePayloadHash(payload);
 
   try {
@@ -746,6 +921,7 @@ module.exports = {
   migrateAccountCalendar,
   resolveCalendarId,
   parseEventTime,
+  formatAbsoluteDateIST,
   buildEventPayload,
   getCalendarListForAccount
 };

@@ -708,5 +708,117 @@ test('retry: auth scope error auto-disables account calendarSyncEnabled and clea
   }
 });
 
+// ==========================================
+// Phase 3A: Event Presentation Tests
+// ==========================
+
+test('formatAbsoluteDateIST: formats absolute dates and times without relative keywords', () => {
+  const { formatAbsoluteDateIST } = require('../utils/calendarService');
+
+  // Date-only
+  const d1 = formatAbsoluteDateIST('2026-08-22T00:00:00.000Z', null, false);
+  assert.strictEqual(d1, 'August 22, 2026');
+
+  // Timed with "Today, 4 PM"
+  const d2 = formatAbsoluteDateIST('2026-08-22T00:00:00.000Z', 'Today, 4 PM', true);
+  assert.strictEqual(d2, 'August 22, 2026 · 4:00 PM IST');
+
+  // Timed with "12:30 PM, today"
+  const d3 = formatAbsoluteDateIST('2026-08-22T00:00:00.000Z', '12:30 PM, today', false);
+  assert.strictEqual(d3, 'August 22, 2026 · 12:30 PM IST');
+
+  // Timed event default fallback to 9:00 AM IST if no time parsed
+  const d4 = formatAbsoluteDateIST('2026-08-19T00:00:00.000Z', null, true);
+  assert.strictEqual(d4, 'August 19, 2026 · 9:00 AM IST');
+
+  // Timed with "10:00 AM"
+  const d5 = formatAbsoluteDateIST('2026-08-19T00:00:00.000Z', '10:00 AM', true);
+  assert.strictEqual(d5, 'August 19, 2026 · 10:00 AM IST');
+});
+
+test('buildEventPayload: generates event-type-aware titles for deadline, OA, interview, and PPT', () => {
+  const baseApp = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Cargill',
+    role: 'Campus Recruitment',
+    subtitle: 'Campus Recruitment',
+    deadlineISO: '2026-08-22T07:00:00.000Z',
+    deadlineText: '12:30 PM, today'
+  };
+
+  const dateInfo = parseEventTime('2026-08-22T00:00:00.000Z', null, 'deadline');
+
+  // 1. Deadline
+  const deadlinePayload = buildEventPayload(baseApp, 'deadline', dateInfo, 'fp-1');
+  assert.strictEqual(deadlinePayload.summary, '⏰ Deadline · Cargill — Campus Recruitment');
+
+  // 2. OA
+  const oaApp = { ...baseApp, company: 'Google', role: 'Software Engineering Intern', subtitle: 'Software Engineering Intern' };
+  const oaDateInfo = parseEventTime('2026-08-25T00:00:00.000Z', '2:00 PM', 'oa');
+  const oaPayload = buildEventPayload(oaApp, 'oa', oaDateInfo, 'fp-2');
+  assert.strictEqual(oaPayload.summary, '🧪 Online Assessment · Google — Software Engineering Intern');
+
+  // 3. Interview
+  const interviewApp = { ...baseApp, company: 'Jones Lang Lasalle (JLL)', role: 'Collaboration', subtitle: 'JLLT Interns' };
+  const interviewDateInfo = parseEventTime('2026-08-27T00:00:00.000Z', '9:00 AM', 'interview');
+  const interviewPayload = buildEventPayload(interviewApp, 'interview', interviewDateInfo, 'fp-3');
+  assert.strictEqual(interviewPayload.summary, '🎤 Interview · Jones Lang Lasalle (JLL) — JLLT Interns');
+
+  // 4. PPT
+  const pptApp = { ...baseApp, company: 'CynLr', role: 'Software Engineer', subtitle: 'Pre-Placement Talk' };
+  const pptDateInfo = parseEventTime('2026-08-20T00:00:00.000Z', '1:30 PM', 'talk');
+  const pptPayload = buildEventPayload(pptApp, 'talk', pptDateInfo, 'fp-4');
+  assert.strictEqual(pptPayload.summary, '📢 PPT · CynLr — Pre-Placement Talk');
+});
+
+test('buildEventPayload: structures description hierarchy cleanly with absolute dates and action links', () => {
+  const app = {
+    _id: '6a85817a2ed0d921d4cb5f4d',
+    company: 'Cargill',
+    role: 'Campus Recruitment',
+    deadlineISO: '2026-08-22T07:00:00.000Z',
+    deadlineText: '12:30 PM, today',
+    salaryText: '12–14 LPA',
+    venue: 'Apex Auditorium',
+    programStipend: '₹38K/month',
+    eventDate: '2026-08-19T04:30:00.000Z',
+    eventTime: '10:00 AM',
+    link: 'https://cargill.recsolu.com/apply',
+    displayFields: [
+      { label: 'Eligible Branches', value: 'BE-CS allied' },
+      { label: 'Deadline', value: '12:30 PM, today' }
+    ]
+  };
+
+  const dateInfo = parseEventTime('2026-08-22T00:00:00.000Z', null, 'deadline');
+  const payload = buildEventPayload(app, 'deadline', dateInfo, 'fp-full', app.deadlineISO, app.deadlineText);
+
+  // Check Header
+  assert.ok(payload.description.includes('<b>APPLICATION DEADLINE</b>'));
+
+  // Check Company, Role, Absolute Deadline
+  assert.ok(payload.description.includes('<b>Company:</b> Cargill'));
+  assert.ok(payload.description.includes('<b>Role:</b> Campus Recruitment'));
+  assert.ok(payload.description.includes('<b>Deadline:</b> August 22, 2026 · 12:30 PM IST'));
+  assert.ok(!payload.description.includes('Today'), 'Description must NOT contain relative word "today"');
+
+  // Check Key Details: CTC, Venue
+  assert.ok(payload.description.includes('<b>CTC:</b> 12–14 LPA'));
+  assert.ok(payload.description.includes('<b>Venue:</b> Apex Auditorium'));
+
+  // Check Additional Details
+  assert.ok(payload.description.includes('<b>Additional Details</b>'));
+  assert.ok(payload.description.includes('• <b>Recruitment Event:</b> August 19, 2026 · 10:00 AM IST'));
+  assert.ok(payload.description.includes('• <b>Stipend:</b> ₹38K/month'));
+  assert.ok(payload.description.includes('• <b>Eligible Branches:</b> BE-CS allied'));
+
+  // Check Action Links
+  assert.ok(payload.description.includes('📊 <a href="http://localhost:3000/?id=6a85817a2ed0d921d4cb5f4d">Open in Email Tracker</a>'));
+  assert.ok(payload.description.includes('🔗 <a href="https://cargill.recsolu.com/apply">Apply / Register</a>'));
+
+  // Check Provenance Footer
+  assert.ok(payload.description.includes('---<br><i>Automatically created by Email Tracker</i>'));
+});
+
 
 
