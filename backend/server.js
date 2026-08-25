@@ -1144,7 +1144,7 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
  * Evaluates any unprocessed .xlsx attachments in an application record for shortlist matches.
  * Uses the deterministic shortlistMatcher engine.
  */
-async function evaluateAppXLSXShortlists(app, acc, gmailClient) {
+async function evaluateAppXLSXShortlists(app, acc, defaultGmailClient) {
   if (!app || !Array.isArray(app.attachments) || app.attachments.length === 0) return false;
 
   const xlsxAttachments = app.attachments.filter(
@@ -1156,7 +1156,7 @@ async function evaluateAppXLSXShortlists(app, acc, gmailClient) {
 
   if (xlsxAttachments.length === 0) return false;
 
-  const linkedAccs = await LinkedGmailAccount.find({ parentAccountId: acc._id }, { email: 1 });
+  const linkedAccs = await LinkedGmailAccount.find({ parentAccountId: acc._id });
   const linkedEmails = linkedAccs.map((l) => l.email);
   const studentIdentity = buildStudentIdentity(acc, linkedEmails);
 
@@ -1164,7 +1164,26 @@ async function evaluateAppXLSXShortlists(app, acc, gmailClient) {
 
   for (const att of xlsxAttachments) {
     try {
-      const attRes = await gmailClient.users.messages.attachments.get({
+      let targetGmail = defaultGmailClient;
+      const targetMessageId = att.messageId;
+      const eventForMessage = (app.events || []).find((e) => e.messageId === targetMessageId);
+      const receivingEmail = (
+        eventForMessage?.accountEmail || app.accountEmail || acc.email || ""
+      ).toLowerCase().trim();
+
+      if (receivingEmail && receivingEmail !== (acc.email || "").toLowerCase().trim()) {
+        const linked = linkedAccs.find((l) => l.email.toLowerCase().trim() === receivingEmail);
+        if (linked?.tokens) {
+          const linkedOauth2 = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET
+          );
+          linkedOauth2.setCredentials(linked.tokens);
+          targetGmail = google.gmail({ version: "v1", auth: linkedOauth2 });
+        }
+      }
+
+      const attRes = await targetGmail.users.messages.attachments.get({
         userId: "me",
         messageId: att.messageId,
         id: att.attachmentId,
@@ -1714,7 +1733,16 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
         const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
         if (newAttachments.length > 0) {
-          updatePayload.attachments = [...existingAttachments, ...newAttachments];
+          contentExists.attachments = [...existingAttachments, ...newAttachments];
+          try {
+            await evaluateAppXLSXShortlists(contentExists, acc, gmail);
+          } catch (xlsxErr) {
+            console.error(`[SHORTLIST_COMPANY_MATCH_ERR] ${id}:`, xlsxErr.message);
+          }
+          recomputeApplicationShortlistState(contentExists);
+          updatePayload.attachments = contentExists.attachments;
+          updatePayload.isShortlisted = contentExists.isShortlisted;
+          updatePayload.shortlistSummary = contentExists.shortlistSummary;
         }
       }
 

@@ -345,7 +345,25 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
         for (const att of (app.attachments || [])) {
           if (!att.isInline && (att.filename || "").toLowerCase().endsWith(".xlsx")) {
             try {
-              const attRes = await gmail.users.messages.attachments.get({
+              let targetGmail = gmail;
+              const eventForAtt = (app.events || []).find((e) => e.messageId === att.messageId);
+              const attReceivingEmail = (
+                eventForAtt?.accountEmail || app.accountEmail || userAccount?.email || ""
+              ).toLowerCase().trim();
+
+              if (attReceivingEmail && attReceivingEmail !== (userAccount?.email || "").toLowerCase().trim()) {
+                const linked = linkedAccs.find((l) => l.email.toLowerCase().trim() === attReceivingEmail);
+                if (linked?.tokens) {
+                  const linkedOauth2 = new google.auth.OAuth2(
+                    process.env.GOOGLE_CLIENT_ID,
+                    process.env.GOOGLE_CLIENT_SECRET
+                  );
+                  linkedOauth2.setCredentials(linked.tokens);
+                  targetGmail = google.gmail({ version: "v1", auth: linkedOauth2 });
+                }
+              }
+
+              const attRes = await targetGmail.users.messages.attachments.get({
                 userId: "me",
                 messageId: att.messageId,
                 id: att.attachmentId,

@@ -261,3 +261,26 @@ test("recomputeApplicationShortlistState: correctly derives application-level st
   assert.equal(app.isShortlisted, false);
   assert.equal(app.shortlistSummary, null);
 });
+
+test("inspectAndMatchWorkbook: matches student Tejas Kumar Holla with USN 1MS23CI126 in hiring spreadsheet", () => {
+  const data = [
+    ["Sl. No", "University Seat Number", "Name of the Candidate", "Branch", "Status"],
+    [1, "1MS23CS001", "Aarav Sharma", "CSE", "Shortlisted"],
+    [2, "1MS23CI126", "Tejas Kumar Holla", "ISE", "Shortlisted"],
+    [3, "1MS23EC050", "Pooja Patel", "ECE", "Shortlisted"],
+  ];
+  const buffer = createXLSXBuffer(data);
+  const identity = {
+    usn: "1MS23CI126",
+    fullName: "tejas kumar holla",
+    collegeEmail: "1ms23ci126@msrit.edu",
+    personalEmail: "tejasholla23@gmail.com"
+  };
+
+  const result = inspectAndMatchWorkbook(buffer, identity, "Shortlisted.xlsx");
+  assert.equal(result.isShortlist, true);
+  assert.equal(result.status, "matched");
+  assert.equal(result.matchDetails.matchedIdentifierType, "usn");
+  assert.equal(result.matchDetails.sheetName, "Sheet1");
+});
+
