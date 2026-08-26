@@ -70,3 +70,18 @@ test('WorkIndia logo should resolve to workindia.in domain', () => {
   assert.strictEqual(expectedLogoUrl, "https://logo.clearbit.com/workindia.in");
   assert.strictEqual(expectedFaviconFallback, "https://www.google.com/s2/favicons?domain=workindia.in&sz=128");
 });
+
+test('resolveCompany should not treat placement department greeting as company and should extract Acme Technologies', () => {
+  const result = resolveCompany({
+    subject: "Campus Recruitment 2026 | Acme Technologies - Online Assessment & Registration",
+    body: `Dear Students,
+    Greetings from the Placement Department!
+    Acme Technologies is visiting our campus for recruitment.
+    Company Name: Acme Technologies
+    Regards,
+    Department of Training and Placement`,
+    sender: "placement@msrit.edu"
+  });
+  assert.strictEqual(result.company, "Acme Technologies");
+});
+

@@ -59,3 +59,26 @@ test('resolveDeadlineISO resolves EOD and End of Day to end of email date (23:59
   assert.strictEqual(isoToday, "2026-08-19T11:30:00.000Z"); // 17:00 IST is 11:30 UTC
 });
 
+test('extractFallbackDisplayFields extracts Job Role with hyphen and full details', () => {
+  const body = `
+  Dear Students,
+  Greetings from the Placement Department!
+  Acme Technologies is visiting our campus for the 2026 graduating batch recruitment drive.
+  
+  Company Name: Acme Technologies
+  Job Role: Software Development Engineer - Intern
+  Stipend: INR 50,000 / Month
+  CTC: 18 LPA
+  Job Location: Bangalore (Hybrid)
+  Registration Deadline: August 28, 2026, 5:00 PM IST
+  `;
+  const fields = extractFallbackDisplayFields(body, 'JOB_APPLICATION');
+  
+  assert.strictEqual(fields.find(f => f.label === 'Role')?.value, 'Software Development Engineer - Intern');
+  assert.strictEqual(fields.find(f => f.label === 'Stipend')?.value, 'INR 50,000 / Month');
+  assert.strictEqual(fields.find(f => f.label === 'CTC')?.value, '18 LPA');
+  assert.strictEqual(fields.find(f => f.label === 'Location')?.value, 'Bangalore (Hybrid)');
+  assert.strictEqual(fields.find(f => f.label === 'Deadline')?.value, 'August 28, 2026, 5:00 PM IST');
+});
+
+

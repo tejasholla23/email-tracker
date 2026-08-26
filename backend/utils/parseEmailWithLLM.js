@@ -660,15 +660,33 @@ function matchKnownCompany(text = "") {
 }
 
 function extractCompanyFromText(text = "") {
+  // Try line-by-line first for explicit Company Name / Company: patterns
+  const lines = (text || "").split(/[\r\n]+/);
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    const explicitMatch = trimmedLine.match(/^(?:Company(?:\s+Name)?|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z0-9][A-Za-z0-9&.\-\s]{1,60})/i);
+    if (explicitMatch && explicitMatch[1]) {
+      const candidate = sanitizeCompany(explicitMatch[1]);
+      if (candidate) return candidate;
+    }
+  }
+
   const cleanedText = cleanMarkdown(normalizeText(text));
   const aliasMatch = matchKnownCompany(cleanedText);
   if (aliasMatch) return aliasMatch;
 
   const patterns = [
+    // 1. Explicit Company Name / Organization label across line
+    /(?:Company(?:\s+Name)?|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z0-9][A-Za-z0-9&.\-\s]{1,50}?)(?=\s+(?:Job\s+Role|Role|Eligibility|Stipend|CTC|Location|Package|Duration|Salary|Selection|Process|Deadline|Registration|Branches|CGPA|Department)|[.,;]|$)/i,
+    // 2. Legal entities (Pvt Ltd, Inc, Corp)
     /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\s+(?:Pvt\b\.?\s*Ltd\b\.?|Private\s+Limited|Ltd\b\.?|Limited|Inc\b\.?|Incorporated|Corp\b\.?|Corporation|LLC|India\b\s+(?:Pvt\b\.?\s*Ltd\b\.?|Ltd\b\.?|Limited))\b/,
-    /(?:Company|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z][A-Za-z0-9&.\s]{1,80}?)(?:\s*(?:\.|,|;|$))/i,
+    // 3. Subject pipe / hyphen delimiters: e.g. "Campus Recruitment 2026 | Acme Technologies - Online Assessment"
+    /(?:\||\bfor\b|\bat\b)\s+([A-Z][A-Za-z0-9&.\s]{1,50}?)(?=\s*(?:-|–|—|\||Online Assessment|Registration|Recruitment|Drive|Interview|Hiring|Opportunity|test|\r|\n|$))/i,
+    // 4. Action verbs: "... Acme Technologies is visiting / invites / conducts ..."
+    /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is\s+visiting|is\s+hiring|is\s+conducting|has\s+scheduled|offers|invites|announces|conducts))/i,
+    // 5. Prepositions: from/by/at Company for/hiring
     /(?:from|by|at)\s+([A-Z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:for|about|regarding|hiring|is|offers?|invites?|interview|role|drive|program|placement|campus|job|internship))/i,
-    /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is|has|offers|invites|announces|conducts|hiring|drives|for|regarding|registered))/,
+    // 6. Common major tech brands fallback
     /\b(amazon|google|microsoft|tcs|deloitte|accenture|cognizant|infosys|wipro|blackrock|ibm|flipkart|uber|intel|capgemini|hcl|bosch|dell|nokia|haber|altair)\b/i,
   ];
 
@@ -708,11 +726,13 @@ function sanitizeCompany(raw = "") {
     "subject", "dear sir", "dear madam", "please find", "please register",
     "inbox", "forwarded message", "authorised signatory",
     "dear students", "kindly", "venue", "today", "tomorrow", "placement drive",
-    "campus recruitment"
+    "campus recruitment", "placement department", "training and placement",
+    "placement office", "department of training", "graduating batch"
   ];
   if (invalid.includes(lower)) return null;
   if (rejectIfContains.some((term) => lower.includes(term))) return null;
-  if (/\b(your|our|this|the)\s+(institution|college|university|institute)\b/.test(lower)) return null;
+  if (/\b(your|our|this|the)\s+(institution|college|university|institute|batch)\b/.test(lower)) return null;
+  if (/\b(placement|training)\s+(department|office|cell|division)\b/i.test(lower)) return null;
 
   // Reject sentence boundaries (exclamation/question mark or period followed by whitespace and a capital word)
   // Preserve domain names (POD.ai, unstop.com, etc.) and company abbreviations (Stellantis N.V.)
@@ -752,15 +772,18 @@ const SIGNATURE_COMPANY_BLOCKLIST = new Set([
   "regards", "sincerely", "best", "dear", "note", "invitation",
   "hi", "hello", "thanks", "thank", "hope", "trust", "warm",
   "enclosed", "attached", "forward", "forwarded", "partnership",
-  "students", "all", "sir", "madam", "team",
+  "students", "all", "sir", "madam", "team", "from", "the",
+  "department", "placement", "training", "office", "centre", "center",
+  "division", "cell", "rit", "msrit", "ramaiah", "coordinator", "head", "dean",
+  "university", "college", "institution", "faculty"
 ]);
 
 function extractCompanyFromSignature(body = "") {
   const sigMatches = [
-    /(?:regards|thanks|sincerely|best|greetings)\s*,?\s+(?:team\s+)?([A-Z][A-Za-z0-9&.\-\s]{2,40})/i,
+    /(?:regards|thanks|sincerely|best\s+regards|warm\s+regards|with\s+regards)\s*,?\s+(?:team\s+)?([A-Z][A-Za-z0-9&.\-\s]{2,40})/i,
     /\bteam\s+([A-Z][A-Za-z0-9&.\-\s]{2,40})/i
   ];
-  const lastPart = body.slice(-1000);
+  const lastPart = (body || "").slice(-1000);
   for (const regex of sigMatches) {
     const match = lastPart.match(regex);
     if (match && match[1]) {
@@ -808,17 +831,19 @@ function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }
     if (known) return { company: known, source: 'alias', confidence: 1.0 };
   }
 
+  // 3. Subject extraction (e.g. "Acme Technologies - Online Assessment" or "Hiring - Google")
+  const subjectCompany = extractCompanyFromText(cleanSubject || cleanFwdSubject);
+  if (subjectCompany) return { company: subjectCompany, source: 'subject', confidence: 0.85 };
+
+  // 4. Body explicit company patterns (e.g. "Company Name: Acme Technologies" or "Acme Technologies is hiring")
+  const bodyCompany = extractCompanyFromText(cleanBody || cleanFwdBody);
+  if (bodyCompany) return { company: bodyCompany, source: 'body', confidence: 0.80 };
+
+  // 5. Signature fallback
   const signatureCompany = extractCompanyFromSignature(cleanBody || cleanFwdBody);
   if (signatureCompany) {
-    return { company: signatureCompany, source: 'signature', confidence: 0.9 };
+    return { company: signatureCompany, source: 'signature', confidence: 0.65 };
   }
-
-  // 3/4. Regex fallbacks
-  const subjectCompany = extractCompanyFromText(cleanSubject || cleanFwdSubject);
-  if (subjectCompany) return { company: subjectCompany, source: 'subject', confidence: 0.7 };
-
-  const bodyCompany = extractCompanyFromText(cleanBody || cleanFwdBody);
-  if (bodyCompany) return { company: bodyCompany, source: 'body', confidence: 0.6 };
 
   return { company: "", source: 'none', confidence: 0.0 };
 }
@@ -1242,16 +1267,16 @@ function extractSalary(text = "") {
 function extractFallbackRole(subject = "", body = "") {
   // 1. Check subject for patterns like "Hiring for [Role]" or "Opportunity for [Role]"
   const subjectPatterns = [
+    /\b(?:job\s+role|job\s+title|role|profile|designation)\s*[:\-]\s*([A-Z0-9][a-zA-Z0-9&.\-\s]{2,60}?)(?:\s*(?:\.|,|;|$|\r|\n))/i,
     /(?:hiring|recruitment|opportunity for|opening for|requirement for)\s+([A-Z][a-zA-Z0-9&.\-\s]{2,50}?\s+Role)\b/i,
-    /(?:hiring|recruitment|opportunity for|opening for|requirement for)\s+([A-Z][a-zA-Z0-9&.\-\s]{2,50}?)(?=\s+(?:at|program|opportunity|hiring|drive|placement|campus|job|internship|with))/i,
-    /\b(?:role|profile|designation|job\s+title)\s*[:\-]\s*([A-Z][a-zA-Z0-9&.\-\s]{2,50}?)(?:\s*(?:\.|,|;|$|\r|\n))/i
+    /(?:hiring|recruitment|opportunity for|opening for|requirement for)\s+(?!drive\b|process\b|batch\b|candidates\b|students\b)([A-Z][a-zA-Z0-9&.\-\s]{2,50}?)(?=\s+(?:at|program|opportunity|hiring|drive|placement|campus|job|internship|with))/i,
   ];
 
   for (const pattern of subjectPatterns) {
     const match = subject.match(pattern);
     if (match && match[1]) {
       const cleaned = cleanProgramValue(match[1]);
-      if (cleaned && cleaned.length > 2 && !/^(?:intern|internship|job|opportunity|drive|hiring)$/i.test(cleaned)) {
+      if (cleaned && cleaned.length > 2 && !/^(?:intern|internship|job|opportunity|drive|hiring|drive for|batch for)$/i.test(cleaned)) {
         return cleaned;
       }
     }
@@ -1259,7 +1284,7 @@ function extractFallbackRole(subject = "", body = "") {
 
   // 2. Fall back to extracting roles from body
   const bodyRole = extractProgramRoles(body);
-  if (bodyRole && bodyRole !== "Internship" && bodyRole !== "Apprentice" && bodyRole.length > 3) {
+  if (bodyRole && bodyRole !== "Internship" && bodyRole !== "Apprentice" && bodyRole.length > 3 && !/^(?:drive for|drive|hiring for|batch for)$/i.test(bodyRole)) {
     return bodyRole;
   }
 
@@ -1269,19 +1294,23 @@ function extractFallbackRole(subject = "", body = "") {
 function extractProgramRoles(text = "") {
   const cleanedText = cleanMarkdown(text);
   const patterns = [
-    /(?:Roles|Positions|Openings)\s*[:\-]\s*([^\r\n]+?)(?:\s+(?:Branches|Department|CGPA|CTC|Package))/i,
-    /(?:Roles|Positions|Openings)\s*[:\-]\s*([^\r\n.!]+)/i,
-    /(?:Role|Position|Opening)\s*-\s*([^\r\n.!]+)/i,
-    /Job\s+Designation\s*[:\-]\s*([^\r\n.!]+)/i,
+    /(?:Job\s+Role|Job\s+Designation|Job\s+Title|Roles|Positions|Openings|Role|Position|Designation|Opening)\s*[:\-]\s*([^\r\n.!]+)/i,
     /(?:hiring|internship|apprentice)\s+(?:role|program|opening)s?\s*[:\-]\s*([^\r\n.!]+)/i,
   ];
   const headerSkip = ["details", "benefits", "criteria", "eligibility", "requirements", "description", "overview"];
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
     if (match && match[1]) {
-      const extracted = cleanProgramValue(match[1]);
+      let extracted = cleanProgramValue(match[1]);
+      // If another label starts inside the value (e.g. Branches/CGPA), truncate before it
+      const boundaryMatch = extracted.match(/\b(?:Branches|Department|CGPA|CTC|Package|Stipend|Location|Eligibility|Selection|Deadline)\s*[:\-]/i);
+      if (boundaryMatch) {
+        extracted = extracted.substring(0, boundaryMatch.index).trim();
+      }
       const lowerExtracted = extracted.toLowerCase();
-      if (extracted && extracted.length < 150 && !headerSkip.includes(lowerExtracted)) return extracted;
+      if (extracted && extracted.length < 150 && !headerSkip.includes(lowerExtracted) && !/^(?:drive for|drive|hiring for|batch for)$/i.test(extracted)) {
+        return extracted;
+      }
     }
   }
   if (/\binternship\b/i.test(cleanedText) || /\bintern\b/i.test(cleanedText)) return "Internship";
@@ -1814,13 +1843,13 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
     extract(/\b(?:registration closes|registration deadline|last date|register by)s?\b[ \t]*[:\-][ \t]*([^•*\n\r]+)/i, "Deadline");
   } else {
     // Default JOB_APPLICATION
-    extract(/\b(?:stipend|compensation)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Stipend");
-    extract(/\b(?:ctc|package|salary)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "CTC");
-    extract(/\b(?:duration|period)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Duration");
-    extract(/\b(?:location|job location|venue)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Location");
-    extract(/\b(?:deadline|last date(?: to apply| for registration)?|register before)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Deadline");
-    extract(/\b(?:role|designation|position)s?\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Role");
-    extract(/\b(?:joining(?: date)?)\b[ \t]*[:\-][ \t]*([^-|•*\n\r]+)/i, "Joining");
+    extract(/\b(?:stipend|compensation)s?\b[ \t]*[:\-][ \t]*([^|•*\n\r]+)/i, "Stipend");
+    extract(/\b(?:ctc|package|salary)s?\b[ \t]*[:\-][ \t]*([^|•*\n\r]+)/i, "CTC");
+    extract(/\b(?:duration|period)s?\b[ \t]*[:\-][ \t]*([^|•*\n\r]+)/i, "Duration");
+    extract(/\b(?:location|job location|venue)s?\b[ \t]*[:\-][ \t]*([^|•*\n\r]+)/i, "Location");
+    extract(/\b(?:registration deadline|submission deadline|last date(?: to apply| for registration)?|register before|deadline)s?\b[ \t]*[:\-][ \t]*([^|•*\n\r]+)/i, "Deadline");
+    extract(/\b(?:job\s+role|job\s+designation|job\s+title|role|designation|position)s?\b[ \t]*[:\-][ \t]*([^|•*\n\r]+)/i, "Role");
+    extract(/\b(?:joining(?: date)?)\b[ \t]*[:\-][ \t]*([^|•*\n\r]+)/i, "Joining");
   }
 
   // Deduplicate by label (just in case) and return top 5
@@ -2005,40 +2034,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
 
   console.log(`[CLASSIFICATION_DECISION] ${classificationReason}\nemailType="${emailType}" opportunityType="${finalOppType}" type="${finalType}"`);
 
-  // ── Step 5: Subtitle ────────────────────────────────────────────────────────
-  //   Gemini -> role extractor -> event name -> program/assessment/interview/
-  //   registration target -> empty string.
-  //   NEVER generates generic labels like "ABB Registration".
-  let subtitle, subtitleSource;
-  if (gemini?.subtitle) {
-    subtitle = gemini.subtitle;
-    subtitleSource = "llm";
-  } else {
-    const fallback = generateSubtitleFallback(sourceSubject, sourceBody, detClassification.category);
-    if (fallback) {
-      subtitle = fallback;
-      subtitleSource = "fallback_extractor";
-    } else {
-      subtitle = "";
-      subtitleSource = "none";
-    }
-  }
-  console.log(`[SUBTITLE_DECISION] subtitle="${subtitle}" source="${subtitleSource}"`);
-
-  // Keep generateTitle for the title field only (not subtitle)
-  const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, "", sourceBody);
-
-  // ── Step 6: role field (DB required) ──────────────────────────────────
-  // Derived from displayFields first (LLM-extracted), then regex fallback.
-  // For event emails: "Event" as a neutral placeholder.
-  const isJobEmail = emailType === "job";
-  const displayFieldsRole = (gemini?.displayFields || []).find(f =>
-    /^(role|roles|position|designation)$/i.test(f?.label)
-  )?.value || "";
-  const fallbackRole = displayFieldsRole || extractFallbackRole(sourceSubject, sourceBody);
-  const roleField = isJobEmail ? (fallbackRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
-
-  // ── Step 7: displayFields — flexible [{label,value}] from Gemini ─────────────
+  // ── Step 5: displayFields — flexible [{label,value}] from Gemini or fallback ───
   let displayFields = gemini?.displayFields || [];
   if (displayFields.length === 0) {
     displayFields = extractFallbackDisplayFields(sourceBody, detClassification.opportunityType);
@@ -2073,6 +2069,39 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     });
     displayFields = displayFields.slice(0, 5);
   }
+
+  // ── Step 6: role field (DB required) ──────────────────────────────────
+  // Derived from displayFields first (LLM or fallback-extracted), then regex fallback.
+  // For event emails: "Event" as a neutral placeholder.
+  const isJobEmail = emailType === "job";
+  const displayFieldsRole = (displayFields || []).find(f =>
+    /^(role|roles|position|designation|job\s*role|job\s*title)$/i.test(f?.label)
+  )?.value || "";
+  const fallbackRole = displayFieldsRole || extractFallbackRole(sourceSubject, sourceBody);
+  const roleField = isJobEmail ? (fallbackRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
+
+  // ── Step 7: Subtitle ────────────────────────────────────────────────────────
+  //   Gemini -> role extractor -> event name -> program/assessment/interview/
+  //   registration target -> empty string.
+  let subtitle, subtitleSource;
+  if (gemini?.subtitle) {
+    subtitle = gemini.subtitle;
+    subtitleSource = "llm";
+  } else {
+    const fallback = (roleField !== "Unknown Role" && isJobEmail ? roleField : "")
+      || generateSubtitleFallback(sourceSubject, sourceBody, detClassification.category);
+    if (fallback) {
+      subtitle = fallback;
+      subtitleSource = "fallback_extractor";
+    } else {
+      subtitle = "";
+      subtitleSource = "none";
+    }
+  }
+  console.log(`[SUBTITLE_DECISION] subtitle="${subtitle}" source="${subtitleSource}"`);
+
+  // Keep generateTitle for the title field only (not subtitle)
+  const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, roleField, sourceBody);
 
   // ── Step 7b: Extract deadlineISO from displayFields ───────────────────────
   // Look for deadline-like fields and resolve to ISO date for filter/urgency support.
