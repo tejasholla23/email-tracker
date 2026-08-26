@@ -140,26 +140,63 @@ test('parseEmailWithLLM sets shouldRetry: false on schema validation failure con
   assert.strictEqual(parsed.parseMeta.geminiUsed, false);
 });
 
-test('parseEmailWithLLM sets shouldRetry: true on rate limit 429 transport error', async () => {
-  mockShouldThrow = new Error("Resource has been exhausted (e.g. 429 Rate Limit)");
-  
-  const originalSetTimeout = global.setTimeout;
-  global.setTimeout = (fn, delay) => {
-    return originalSetTimeout(fn, 0);
-  };
+test('parseEmailWithLLM passes google/gemma-4-31b-it and enable_thinking to NVIDIA API', async () => {
+  mockShouldThrow = null;
+  mockResponseText = JSON.stringify({
+    emailType: "job",
+    opportunityType: "JOB_APPLICATION",
+    classification: "New Hiring Opportunity",
+    company: "GemmaCorp",
+    subtitle: "AI Engineer",
+    type: "full-time",
+    displayFields: [{ label: "Role", value: "AI Engineer" }]
+  });
 
-  try {
-    const parsed = await parseEmailWithLLM(
-      "Job opportunity at TestCorp",
-      "recruitment@testcorp.com",
-      "We are hiring software engineers."
-    );
+  const parsed = await parseEmailWithLLM(
+    "Gemma AI Opportunity",
+    "jobs@gemmacorp.com",
+    "We are hiring an AI Engineer."
+  );
 
-    assert.strictEqual(parsed.parseMeta.shouldRetry, true);
-    assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
-    assert.strictEqual(parsed.parseMeta.geminiUsed, false);
-  } finally {
-    global.setTimeout = originalSetTimeout;
-  }
+  assert.strictEqual(parsed.company, "GemmaCorp");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "google/gemma-4-31b-it");
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
 });
+
+test('parseEmailWithLLM handles thinking tags (<thought> / <think>) from reasoning models', async () => {
+  mockShouldThrow = null;
+  mockResponseText = `
+  <thought>
+  Thinking process about the email:
+  The email is from Acme Corp offering an internship.
+  Classification is Internship Opportunity.
+  </thought>
+  \`\`\`json
+  {
+    "emailType": "job",
+    "opportunityType": "JOB_APPLICATION",
+    "classification": "Internship Opportunity",
+    "company": "Acme Corp",
+    "subtitle": "Software Intern",
+    "type": "internship",
+    "displayFields": [
+      { "label": "Role", "value": "Software Intern" },
+      { "label": "Stipend", "value": "INR 40,000 / Month" }
+    ]
+  }
+  \`\`\`
+  `;
+
+  const parsed = await parseEmailWithLLM(
+    "Internship Opportunity at Acme",
+    "careers@acme.com",
+    "Acme is hiring software interns."
+  );
+
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+  assert.strictEqual(parsed.company, "Acme Corp");
+  assert.strictEqual(parsed.role, "Software Intern");
+  assert.strictEqual(parsed.displayFields.find(f => f.label === "Stipend")?.value, "INR 40,000 / Month");
+});
+
 

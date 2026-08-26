@@ -1694,7 +1694,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
               retryCount: 1,
               lastRetryAt: new Date(),
               nextRetryAt: nextRetry,
-              llmProvider: parsed?.parseMeta?.llmProvider || "meta/llama-3.1-70b-instruct",
+              llmProvider: parsed?.parseMeta?.llmProvider || "google/gemma-4-31b-it",
               llmStatus: parsed?.parseMeta?.llmStatus || "transport_error"
             }
           });

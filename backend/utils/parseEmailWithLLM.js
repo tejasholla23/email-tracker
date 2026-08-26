@@ -6,7 +6,7 @@ const nvidiaClient = new OpenAI({
   baseURL: "https://integrate.api.nvidia.com/v1",
 });
 
-const MODEL_NAME = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
+const MODEL_NAME = process.env.NVIDIA_MODEL || "google/gemma-4-31b-it";
 
 // ---------------------------------------------------------------------------
 // Text utilities
@@ -1530,7 +1530,7 @@ function generateSubtitleFallback(subject = "", body = "", category = "") {
 
 
 // ---------------------------------------------------------------------------
-// LLM structured call — primary LLM integration (NVIDIA / Llama 3.1 70B)
+// LLM structured call — primary LLM integration (NVIDIA / Google Gemma 4 31B)
 // ---------------------------------------------------------------------------
 
 /**
@@ -1649,7 +1649,7 @@ function validateLLMResponse(raw) {
 const validateGeminiResponse = validateLLMResponse;
 
 /**
- * Call LLM (Llama 3.1 70B) with a structured prompt that returns company, classification,
+ * Call LLM (Google Gemma 4 31B) with a structured prompt that returns company, classification,
  * subtitle, and a flexible displayFields array of {label, value} pairs.
  * Falls back to null on any error.
  */
@@ -1729,17 +1729,31 @@ Body: ${truncatedBody}`;
       const response = await nvidiaClient.chat.completions.create({
         model: MODEL_NAME,
         messages: [{ role: "user", content: prompt }],
-        temperature: 0,
-        max_tokens: 1000,
-        stream: false
+        temperature: 1,
+        top_p: 0.95,
+        max_tokens: 16384,
+        stream: false,
+        chat_template_kwargs: { enable_thinking: true },
       });
 
-      let jsonText = (response.choices[0]?.message?.content || "").trim();
-      jsonText = jsonText
-        .replace(/^```json\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/```$/i, "")
+      let rawContent = response.choices[0]?.message?.content || "";
+      // Strip thinking/reasoning tags if emitted in message.content
+      rawContent = rawContent
+        .replace(/<thought[\s\S]*?<\/thought>/gi, "")
+        .replace(/<think[\s\S]*?<\/think>/gi, "")
         .trim();
+
+      let jsonText = rawContent;
+      const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1].trim();
+      } else {
+        const firstBrace = jsonText.indexOf("{");
+        const lastBrace = jsonText.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          jsonText = jsonText.substring(firstBrace, lastBrace + 1).trim();
+        }
+      }
 
       let rawParsed;
       try {
@@ -1896,7 +1910,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     hasLink: !!linkInfo.primary,
   });
 
-  // ── Step 2: LLM Extraction (Llama 3.1 70B) ─────────────────────────
+  // ── Step 2: LLM Extraction (Google Gemma 4 31B) ─────────────────────────
   const llmResult = await callLLMStructured({
     subject: sourceSubject,
     sender,

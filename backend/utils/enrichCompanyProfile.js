@@ -6,7 +6,7 @@ const nvidiaClient = new OpenAI({
   baseURL: "https://integrate.api.nvidia.com/v1",
 });
 
-const MODEL_NAME = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
+const MODEL_NAME = process.env.NVIDIA_MODEL || "google/gemma-4-31b-it";
 
 /**
  * Enrich company profile using NVIDIA LLM.
@@ -58,14 +58,28 @@ Return ONLY valid raw JSON. No markdown code blocks, no preamble, no extra text.
     const response = await nvidiaClient.chat.completions.create({
       model: MODEL_NAME,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      max_tokens: 400,
+      temperature: 1,
+      top_p: 0.95,
+      max_tokens: 16384,
+      stream: false,
+      chat_template_kwargs: { enable_thinking: true },
     });
 
     const content = response.choices?.[0]?.message?.content || "";
-    let cleanJsonStr = content.trim();
-    if (cleanJsonStr.startsWith("```")) {
-      cleanJsonStr = cleanJsonStr.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+    let cleanJsonStr = content
+      .replace(/<thought[\s\S]*?<\/thought>/gi, "")
+      .replace(/<think[\s\S]*?<\/think>/gi, "")
+      .trim();
+
+    const jsonMatch = cleanJsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (jsonMatch) {
+      cleanJsonStr = jsonMatch[1].trim();
+    } else {
+      const firstBrace = cleanJsonStr.indexOf("{");
+      const lastBrace = cleanJsonStr.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        cleanJsonStr = cleanJsonStr.substring(firstBrace, lastBrace + 1).trim();
+      }
     }
 
     let parsed = {};

@@ -56,7 +56,7 @@ Email Tracker is a multi-user web application that automatically organizes place
 | **Backend** | Node.js, Express.js, Mongoose ODM |
 | **Database** | MongoDB Atlas |
 | **Authentication & Security** | Google OAuth 2.0, JWT, Express Rate Limit |
-| **AI & LLM** | Meta Llama 3.1 70B (NVIDIA NIM API) |
+| **AI & LLM** | Google Gemma 4 31B (NVIDIA NIM API) |
 | **External APIs** | Gmail API, Google Calendar API, Web Push API |
 | **Deployment** | Vercel (Frontend) |
 
@@ -87,7 +87,7 @@ flowchart TD
     subgraph External["External APIs & Services"]
         GMAIL["Gmail API"]
         GCAL["Google Calendar API"]
-        NVIDIA["NVIDIA NIM API (Llama 3.1 70B)"]
+        NVIDIA["NVIDIA NIM API (Gemma 4 31B)"]
         WEBPUSH["Web Push Relays"]
     end
 
@@ -212,9 +212,9 @@ GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
 
-# NVIDIA NIM API (Meta Llama 3.1 70B)
+# NVIDIA NIM API (Google Gemma 4 31B)
 NVIDIA_API_KEY=nvapi-your_nvidia_nim_api_key
-NVIDIA_MODEL=meta/llama-3.1-70b-instruct
+NVIDIA_MODEL=google/gemma-4-31b-it
 
 # Web Push VAPID Keys
 VAPID_SUBJECT=mailto:admin@example.com
@@ -245,7 +245,7 @@ sequenceDiagram
     participant FE as Frontend Dashboard
     participant BE as Express Backend
     participant Gmail as Gmail API
-    participant LLM as Meta Llama 3.1 70B
+    participant LLM as Google Gemma 4 31B
     participant DB as MongoDB Atlas
     participant GCal as Google Calendar API
 
