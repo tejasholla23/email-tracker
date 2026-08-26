@@ -41,6 +41,10 @@ const accountSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  gmailWatchExpiration: {
+    type: Date,
+    default: null,
+  },
   pushSubscriptions: {
     type: [{
       endpoint: { type: String, required: true },

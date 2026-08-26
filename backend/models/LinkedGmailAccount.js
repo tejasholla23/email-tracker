@@ -39,6 +39,10 @@ const linkedGmailAccountSchema = new mongoose.Schema(
       enum: ["full", "incremental"],
       default: "full",
     },
+    gmailWatchExpiration: {
+      type: Date,
+      default: null,
+    },
     connectedAt: {
       type: Date,
       default: Date.now,

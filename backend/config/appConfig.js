@@ -1,6 +1,6 @@
 "use strict";
 
-const config = Object.freeze({
+const config = {
   isAllowedEmail: (email) => {
     if (!email || typeof email !== "string") return false;
     const cleanEmail = email.trim().toLowerCase();
@@ -19,6 +19,16 @@ const config = Object.freeze({
     : ["placement@msrit.edu", "dean.tap@msrit.edu"],
   LLM_DELAY_MS: Number(process.env.LLM_DELAY_MS ?? process.env.GEMINI_DELAY_MS ?? 6500),
   MAX_EMAILS_PER_SYNC: Number(process.env.MAX_EMAILS_PER_SYNC ?? 10),
-});
+  GCP_PROJECT_ID: process.env.GCP_PROJECT_ID || null,
+  GMAIL_PUBSUB_TOPIC: process.env.GMAIL_PUBSUB_TOPIC || "gmail-push-notifications",
+  GMAIL_WEBHOOK_SECRET: process.env.GMAIL_WEBHOOK_SECRET || null,
+  GMAIL_WEBHOOK_AUDIENCE: process.env.GMAIL_WEBHOOK_AUDIENCE || null,
+  GMAIL_PUBSUB_SERVICE_ACCOUNT: process.env.GMAIL_PUBSUB_SERVICE_ACCOUNT || null,
+  GMAIL_PUBSUB_ENABLED: !!(
+    process.env.GCP_PROJECT_ID &&
+    process.env.GMAIL_WEBHOOK_AUDIENCE &&
+    process.env.GOOGLE_CLIENT_ID
+  ),
+};
 
 module.exports = config;

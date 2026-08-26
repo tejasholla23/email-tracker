@@ -31,6 +31,14 @@ const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 const { createLinkState, consumeLinkState } = require("./utils/linkStateStore");
 const { processCalendarSyncQueue, migrateAccountCalendar, getCalendarListForAccount } = require("./utils/calendarService");
 const {
+  getFullTopicName,
+  resolveEmailToAccount,
+  setupGmailWatch,
+  stopGmailWatch,
+  verifyPubSubRequest,
+  renewExpiringWatches,
+} = require("./utils/gmailWatchService");
+const {
   authLimiter,
   syncLimiter,
   calendarSyncLimiter,
@@ -214,6 +222,25 @@ mongoose
     } catch (err) {
       console.error("[STARTUP_RECOVERY_FAILED] Failed to clean up stale sync states:", err.message);
     }
+
+    // Schedule periodic watch renewal (every 6 hours)
+    cron.schedule("0 */6 * * *", async () => {
+      console.log("[CRON_WATCH_RENEWAL] Running scheduled Gmail watch renewal...");
+      try {
+        await renewExpiringWatches();
+      } catch (renewErr) {
+        console.error("[CRON_WATCH_RENEWAL_ERR]", renewErr.message);
+      }
+    });
+
+    // Initial watch check on startup (non-blocking)
+    if (config.GCP_PROJECT_ID) {
+      setTimeout(() => {
+        renewExpiringWatches().catch((startupWatchErr) => {
+          console.error("[STARTUP_WATCH_RENEWAL_ERR]", startupWatchErr.message);
+        });
+      }, 5000);
+    }
   })
   .catch((err) => console.error("Mongo error:", err.message));
 
@@ -370,7 +397,7 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
         mergedTokens.refresh_token = existingLinked.tokens.refresh_token;
       }
 
-      await LinkedGmailAccount.findOneAndUpdate(
+      const savedLinked = await LinkedGmailAccount.findOneAndUpdate(
         { parentAccountId, email: linkedEmail },
         {
           $set: {
@@ -386,6 +413,11 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
       );
 
       console.log(`[LINKED_ACCOUNT_SUCCESS] ${linkedEmail} linked to user ${parentAccount.email}`);
+
+      // Register Gmail push notification watch for linked account (non-blocking)
+      setupGmailWatch(mergedTokens, linkedEmail, "linked", savedLinked?._id).catch((watchErr) => {
+        console.error(`[LINKED_CALLBACK_WATCH_ERR] ${linkedEmail}:`, watchErr.message);
+      });
 
       fetchAndProcessEmails(parentAccountId).catch(err => {
         console.error(`[LINKED_INITIAL_SYNC_ERR] ${linkedEmail}:`, err.message);
@@ -474,11 +506,16 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
       updatePayload.calendarSyncEnabled = existingAccount ? wasCalendarEnabled : true;
     }
 
-    await Account.findOneAndUpdate(
+    const savedAccount = await Account.findOneAndUpdate(
       { email },
       { $set: updatePayload },
-      { upsert: true }
+      { upsert: true, returnDocument: 'after' }
     );
+
+    // Register Gmail push notification watch for primary account (non-blocking)
+    setupGmailWatch(mergedTokens, email, "primary", savedAccount?._id).catch((watchErr) => {
+      console.error(`[AUTH_CALLBACK_WATCH_ERR] ${email}:`, watchErr.message);
+    });
 
     // Generate short-lived auth code and redirect frontend
     const authCode = generateAuthCode(email);
@@ -585,6 +622,11 @@ app.delete("/auth/linked-accounts/:id", writeLimiter, authenticate, async (req, 
       }
     } catch (revokeErr) {
       console.warn(`[LINKED_ACCOUNT_REVOKE_WARN] Token revocation warning for ${linkedDoc.email}:`, revokeErr.message);
+    }
+
+    // Stop Gmail watch for linked account if tokens available
+    if (linkedDoc.tokens) {
+      stopGmailWatch(linkedDoc.tokens, linkedDoc.email).catch(() => {});
     }
 
     // Remove document (does NOT touch existing applications per requirement 5)
@@ -1077,7 +1119,19 @@ app.delete("/auth/account", writeLimiter, authenticate, async (req, res) => {
     const appsDeleteResult = await Application.deleteMany({ userId });
     console.log(`[ACCOUNT_DELETION] Deleted ${appsDeleteResult.deletedCount} applications for userId: ${userId}`);
 
-    // 2. Delete the account document
+    // 2. Stop active Gmail watches before deleting credentials
+    const accountToDelete = await Account.findById(userId);
+    if (accountToDelete?.tokens) {
+      stopGmailWatch(accountToDelete.tokens, accountToDelete.email).catch(() => {});
+    }
+    const linkedAccountsToDelete = await LinkedGmailAccount.find({ parentAccountId: userId });
+    for (const linked of linkedAccountsToDelete) {
+      if (linked.tokens) {
+        stopGmailWatch(linked.tokens, linked.email).catch(() => {});
+      }
+    }
+
+    // 3. Delete the account document
     const accountDeleteResult = await Account.findByIdAndDelete(userId);
     if (!accountDeleteResult) {
       console.warn(`[ACCOUNT_DELETION] Account not found for userId: ${userId}`);
@@ -2506,6 +2560,62 @@ app.get("/sync", syncLimiter, authenticate, (req, res) => {
   res.send("Sync triggered in background");
 });
 
+// ==========================
+// 📬 GMAIL PUB/SUB WEBHOOK
+// ==========================
+app.post("/webhooks/gmail", async (req, res) => {
+  // 1. Verify Pub/Sub request authenticity (OIDC JWT + optional query-string secret)
+  const authResult = await verifyPubSubRequest(req);
+  if (!authResult.valid) {
+    console.warn(`[GMAIL_WEBHOOK_DENIED] Request verification failed: ${authResult.reason}`);
+    return res.status(403).json({ success: false, message: "Forbidden" });
+  }
+
+  // 2. Immediate 200 acknowledgment to avoid Pub/Sub delivery timeout & retry storm
+  res.status(200).send("OK");
+
+  // 3. Process notification asynchronously
+  try {
+    const message = req.body?.message;
+    if (!message || !message.data) {
+      console.warn("[GMAIL_WEBHOOK_WARN] Received Pub/Sub message without data payload");
+      return;
+    }
+
+    // Base64-decode the message data
+    const rawData = Buffer.from(message.data, "base64").toString("utf-8");
+    let eventData;
+    try {
+      eventData = JSON.parse(rawData);
+    } catch (jsonErr) {
+      console.error("[GMAIL_WEBHOOK_PARSE_ERR] Failed to parse message.data as JSON:", rawData);
+      return;
+    }
+
+    const { emailAddress, historyId } = eventData || {};
+    if (!emailAddress) {
+      console.warn("[GMAIL_WEBHOOK_WARN] Received notification with missing emailAddress");
+      return;
+    }
+
+    console.log(`[GMAIL_WEBHOOK] Received mailbox change event for: ${emailAddress} (historyId: ${historyId || "N/A"})`);
+
+    // Resolve email to parent user ID
+    const resolved = await resolveEmailToAccount(emailAddress);
+    if (!resolved) {
+      console.log(`[GMAIL_WEBHOOK_IGNORE] Email ${emailAddress} not found in active accounts (may belong to deleted account).`);
+      return;
+    }
+
+    console.log(`[GMAIL_WEBHOOK_TRIGGER] Triggering sync for user: ${resolved.userId} (${resolved.accountType} account: ${emailAddress})`);
+    fetchAndProcessEmails(resolved.userId).catch((syncErr) => {
+      console.error(`[GMAIL_WEBHOOK_SYNC_ERR] Sync failed for user ${resolved.userId}:`, syncErr.message);
+    });
+  } catch (err) {
+    console.error("[GMAIL_WEBHOOK_UNEXPECTED_ERR]", err.message);
+  }
+});
+
 
 
 // ==========================
@@ -2549,5 +2659,10 @@ module.exports = {
   app,
   mergeAlternativeTexts,
   fetchAndProcessEmails,
-  syncLinkedAccountsForUser
+  syncLinkedAccountsForUser,
+  setupGmailWatch,
+  stopGmailWatch,
+  renewExpiringWatches,
+  verifyPubSubRequest,
+  resolveEmailToAccount
 };
