@@ -5025,7 +5025,7 @@ export default function JobTrackerDashboard() {
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. Tejas Holla"
+                          placeholder="e.g. John Doe"
                           value={studentProfile.fullName}
                           onChange={(e) => setStudentProfile({ ...studentProfile, fullName: e.target.value })}
                           style={{
@@ -5050,7 +5050,7 @@ export default function JobTrackerDashboard() {
                         </label>
                         <input
                           type="email"
-                          placeholder="e.g. tejasholla23@gmail.com"
+                          placeholder="e.g. yourname@gmail.com"
                           value={studentProfile.personalEmail}
                           onChange={(e) => setStudentProfile({ ...studentProfile, personalEmail: e.target.value })}
                           style={{
@@ -5075,7 +5075,7 @@ export default function JobTrackerDashboard() {
                         </label>
                         <input
                           type="tel"
-                          placeholder="e.g. 9876543210"
+                          placeholder="Enter 10-digit mobile number"
                           value={studentProfile.mobileNumber}
                           onChange={(e) => setStudentProfile({ ...studentProfile, mobileNumber: e.target.value })}
                           style={{
