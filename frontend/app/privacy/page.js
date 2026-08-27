@@ -73,7 +73,7 @@ export default function PrivacyPage() {
               The information obtained from Google APIs is used solely to provide the core functionality of Email Tracker, including:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Detecting placement-related emails and parsing their contents using AI (Google's Gemma 4 31B via NVIDIA NIM API).</li>
+              <li>Detecting placement-related emails and parsing their contents using AI (Google's Gemma 4 31B & NVIDIA's Nemotron 3.5 Lightning via NVIDIA NIM API).</li>
               <li>Extracting information such as company names, roles, deadlines, eligibility criteria, and application links.</li>
               <li>Organizing this information into your personal dashboard.</li>
               <li>Synchronizing placement deadlines and events with your primary Google Calendar (if enabled).</li>

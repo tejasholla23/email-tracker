@@ -1154,6 +1154,7 @@ app.delete("/auth/account", writeLimiter, authenticate, async (req, res) => {
 });
 
 const activeSyncs = new Set();
+const pendingSyncs = new Set();
 const activeClearRequests = new Set();
 let isCronProcessing = false;
 
@@ -2143,7 +2144,8 @@ async function fetchAndProcessEmails(targetUserId = null) {
   if (targetUserId) {
     const userIdStr = targetUserId.toString();
     if (activeSyncs.has(userIdStr)) {
-      console.log(`[SYNC] Blocked - sync already in progress for user: ${userIdStr}`);
+      pendingSyncs.add(userIdStr);
+      console.log(`[SYNC_QUEUED] Sync already active; queued catch-up for user: ${userIdStr}`);
       return;
     }
     activeSyncs.add(userIdStr);
@@ -2344,16 +2346,33 @@ async function fetchAndProcessEmails(targetUserId = null) {
 
         if (syncPath === "full") {
           // ── PATH 2: FULL SYNC (bootstrap or recovery) ──
-          console.log(`[FULL_SYNC] Starting full sync for ${acc.email}`);
+          const isFirstTimeUser = !acc.lastHistoryId;
+          const maxResults = isFirstTimeUser ? (config.MAX_EMAILS_PER_SYNC || 10) : 50;
+          const recency = isFirstTimeUser ? "30d" : "60d";
+
+          if (isFirstTimeUser) {
+            console.log(`[FULL_SYNC] First-time user detected | maxResults: ${maxResults} | recency: ${recency}`);
+          } else {
+            console.log(`[FULL_SYNC] Recovery full sync for ${acc.email} | maxResults: ${maxResults} | recency: ${recency}`);
+          }
+
+          // Capture baseline historyId from profile BEFORE/DURING bootstrap to ensure no message gaps
+          try {
+            const profileResponse = await gmail.users.getProfile({ userId: "me" });
+            newHistoryId = profileResponse.data.historyId;
+            console.log(`[FULL_SYNC] Captured baseline historyId from profile: ${newHistoryId}`);
+          } catch (profileErr) {
+            console.error(`[FULL_SYNC] Failed to get profile historyId: ${profileErr.message}`);
+          }
 
           const listController = new AbortController();
           const listTimeoutId = setTimeout(() => listController.abort(), 15000);
           let response;
           try {
-            const queryStr = `(${config.ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:90d`;
+            const queryStr = `(${config.ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:${recency}`;
             response = await gmail.users.messages.list({
               userId: "me",
-              maxResults: 250,
+              maxResults: maxResults,
               q: queryStr,
             }, {
               signal: listController.signal
@@ -2372,16 +2391,7 @@ async function fetchAndProcessEmails(targetUserId = null) {
           const messages = response.data.messages || [];
           messageIdsToProcess = messages.map(m => m.id);
 
-          // Capture historyId from the profile for bootstrapping
-          try {
-            const profileResponse = await gmail.users.getProfile({ userId: "me" });
-            newHistoryId = profileResponse.data.historyId;
-            console.log(`[FULL_SYNC] Captured historyId from profile: ${newHistoryId}`);
-          } catch (profileErr) {
-            console.error(`[FULL_SYNC] Failed to get profile historyId: ${profileErr.message}`);
-          }
-
-          console.log(`[FULL_SYNC] Messages listed: ${messageIdsToProcess.length} | historyId: ${newHistoryId || 'unavailable'}`);
+          console.log(`[FULL_SYNC] Messages listed: ${messageIdsToProcess.length} | Baseline historyId: ${newHistoryId || 'unavailable'}`);
         }
 
         let accInserted = 0;
@@ -2484,6 +2494,15 @@ async function fetchAndProcessEmails(targetUserId = null) {
       } finally {
         if (!targetUserId) {
           activeSyncs.delete(accIdStr);
+          if (pendingSyncs.has(accIdStr)) {
+            pendingSyncs.delete(accIdStr);
+            console.log(`[SYNC_DRAIN] Running pending incremental sync for user: ${accIdStr}`);
+            setImmediate(() => {
+              fetchAndProcessEmails(acc._id).catch(drainErr => {
+                console.error(`[SYNC_DRAIN_ERR] Failed pending sync for user ${accIdStr}:`, drainErr.message);
+              });
+            });
+          }
         }
       }
     }
@@ -2493,7 +2512,17 @@ async function fetchAndProcessEmails(targetUserId = null) {
     // Removed 'throw err' to prevent unhandled rejections in background execution
   } finally {
     if (targetUserId) {
-      activeSyncs.delete(targetUserId.toString());
+      const userIdStr = targetUserId.toString();
+      activeSyncs.delete(userIdStr);
+      if (pendingSyncs.has(userIdStr)) {
+        pendingSyncs.delete(userIdStr);
+        console.log(`[SYNC_DRAIN] Running pending incremental sync for user: ${userIdStr}`);
+        setImmediate(() => {
+          fetchAndProcessEmails(targetUserId).catch(drainErr => {
+            console.error(`[SYNC_DRAIN_ERR] Failed pending sync for user ${userIdStr}:`, drainErr.message);
+          });
+        });
+      }
     } else {
       isCronProcessing = false;
       const totalDuration = Date.now() - cronStartTime;
@@ -2657,6 +2686,8 @@ if (require.main === module) {
 
 module.exports = {
   app,
+  activeSyncs,
+  pendingSyncs,
   mergeAlternativeTexts,
   fetchAndProcessEmails,
   syncLinkedAccountsForUser,

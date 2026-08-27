@@ -43,11 +43,15 @@ test('extractFormLink should remove duplicates', () => {
 // Delete existing parseEmailWithLLM from cache so we can reload it with mocked SDK
 delete require.cache[require.resolve('../utils/parseEmailWithLLM')];
 
-// Setup Mock for openai
-let mockResponseText = "";
-let mockShouldThrow = null;
+// Setup Mock for openai with multi-model call inspection
+let mockModelBehavior = null; // function({ model, messages }) => { choices: ... } or throws
+let calledModels = [];
 
-const mockChatCompletionsCreate = async ({ model, messages }) => {
+const mockChatCompletionsCreate = async (params) => {
+  calledModels.push(params.model);
+  if (mockModelBehavior) {
+    return mockModelBehavior(params);
+  }
   if (mockShouldThrow) {
     throw mockShouldThrow;
   }
@@ -76,127 +80,281 @@ require.cache[require.resolve('openai')] = {
   }
 };
 
-// Re-require parseEmailWithLLM to use our mocked GoogleGenAI
+// Re-require parseEmailWithLLM to use our mocked OpenAI
 const { parseEmailWithLLM } = require('../utils/parseEmailWithLLM');
 
-test('parseEmailWithLLM sets shouldRetry: false on success', async () => {
+// ── Test 1: Primary success (Gemma 4) → No fallback ──
+test('1. Primary model (google/gemma-4-31b-it) success: returns primary llmProvider without invoking fallback', async () => {
   mockShouldThrow = null;
+  mockModelBehavior = null;
+  calledModels = [];
   mockResponseText = JSON.stringify({
     emailType: "job",
     opportunityType: "JOB_APPLICATION",
     classification: "New Hiring Opportunity",
-    company: "TestCorp",
-    subtitle: "Software Engineer Intern",
-    type: "internship",
-    link: "https://example.com/apply",
-    displayFields: [
-      { label: "Stipend", value: "INR 25,000" }
-    ]
-  });
-
-  const parsed = await parseEmailWithLLM(
-    "Job opportunity at TestCorp",
-    "recruitment@testcorp.com",
-    "We are hiring software engineers."
-  );
-
-  assert.strictEqual(parsed.parseMeta.shouldRetry, false);
-  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
-  assert.strictEqual(parsed.parseMeta.geminiUsed, true);
-  assert.strictEqual(parsed.company, "TestCorp");
-});
-
-test('parseEmailWithLLM sets shouldRetry: false on malformed JSON content error', async () => {
-  mockShouldThrow = null;
-  mockResponseText = "{ invalid json here... }";
-
-  const parsed = await parseEmailWithLLM(
-    "Job opportunity at TestCorp",
-    "recruitment@testcorp.com",
-    "We are hiring software engineers."
-  );
-
-  assert.strictEqual(parsed.parseMeta.shouldRetry, false);
-  assert.strictEqual(parsed.parseMeta.llmStatus, "content_error");
-  assert.strictEqual(parsed.parseMeta.geminiUsed, false);
-  assert.strictEqual(parsed.company, "Testcorp");
-});
-
-test('parseEmailWithLLM sets shouldRetry: false on schema validation failure content error', async () => {
-  mockShouldThrow = null;
-  mockResponseText = JSON.stringify({
-    emailType: "invalidType",
-    classification: "Invalid Classification"
-  });
-
-  const parsed = await parseEmailWithLLM(
-    "Job opportunity at TestCorp",
-    "recruitment@testcorp.com",
-    "We are hiring software engineers."
-  );
-
-  assert.strictEqual(parsed.parseMeta.shouldRetry, false);
-  assert.strictEqual(parsed.parseMeta.llmStatus, "content_error");
-  assert.strictEqual(parsed.parseMeta.geminiUsed, false);
-});
-
-test('parseEmailWithLLM passes google/gemma-4-31b-it and enable_thinking to NVIDIA API', async () => {
-  mockShouldThrow = null;
-  mockResponseText = JSON.stringify({
-    emailType: "job",
-    opportunityType: "JOB_APPLICATION",
-    classification: "New Hiring Opportunity",
-    company: "GemmaCorp",
-    subtitle: "AI Engineer",
+    company: "GemmaTech",
+    subtitle: "Staff Engineer",
     type: "full-time",
-    displayFields: [{ label: "Role", value: "AI Engineer" }]
+    displayFields: [{ label: "Role", value: "Staff Engineer" }]
   });
 
   const parsed = await parseEmailWithLLM(
-    "Gemma AI Opportunity",
-    "jobs@gemmacorp.com",
-    "We are hiring an AI Engineer."
+    "Hiring Staff Engineer at GemmaTech",
+    "careers@gemmatech.com",
+    "GemmaTech is hiring Staff Engineers."
   );
 
-  assert.strictEqual(parsed.company, "GemmaCorp");
+  assert.strictEqual(parsed.company, "GemmaTech");
   assert.strictEqual(parsed.parseMeta.llmProvider, "google/gemma-4-31b-it");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+  assert.strictEqual(calledModels.length, 1);
+  assert.strictEqual(calledModels[0], "google/gemma-4-31b-it");
 });
 
-test('parseEmailWithLLM handles thinking tags (<thought> / <think>) from reasoning models', async () => {
-  mockShouldThrow = null;
+// ── Test 2: Primary rate limit (429) → Secondary model fallback (Nemotron) ──
+test('2. Primary rate limit 429: seamlessly falls back to nvidia/nemotron-3.5-lightning-30b-a3b', async () => {
+  calledModels = [];
+  mockModelBehavior = (params) => {
+    if (params.model === "google/gemma-4-31b-it") {
+      const err = new Error("Rate limit exceeded (429)");
+      err.status = 429;
+      throw err;
+    }
+    return {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            emailType: "job",
+            opportunityType: "JOB_APPLICATION",
+            classification: "New Hiring Opportunity",
+            company: "NemotronCorp",
+            subtitle: "Backend Engineer",
+            type: "full-time",
+            displayFields: [{ label: "Role", value: "Backend Engineer" }]
+          })
+        }
+      }]
+    };
+  };
+
+  const parsed = await parseEmailWithLLM(
+    "Job Opening at NemotronCorp",
+    "hr@nemotroncorp.com",
+    "NemotronCorp is hiring backend engineers."
+  );
+
+  assert.strictEqual(parsed.company, "NemotronCorp");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+  assert.deepStrictEqual(calledModels, ["google/gemma-4-31b-it", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
+});
+
+// ── Test 3: Primary 503/timeout → Secondary model fallback (Nemotron) ──
+test('3. Primary 503 service unavailable: falls back to secondary model', async () => {
+  calledModels = [];
+  mockModelBehavior = (params) => {
+    if (params.model === "google/gemma-4-31b-it") {
+      const err = new Error("Service Unavailable (503)");
+      err.status = 503;
+      throw err;
+    }
+    return {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            emailType: "job",
+            opportunityType: "JOB_APPLICATION",
+            classification: "Internship Opportunity",
+            company: "FallbackCorp",
+            subtitle: "Summer Intern",
+            type: "internship",
+            displayFields: [{ label: "Role", value: "Summer Intern" }]
+          })
+        }
+      }]
+    };
+  };
+
+  const parsed = await parseEmailWithLLM(
+    "Summer Internships at FallbackCorp",
+    "jobs@fallbackcorp.com",
+    "Apply for our summer internship program."
+  );
+
+  assert.strictEqual(parsed.company, "FallbackCorp");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+});
+
+// ── Test 4: Primary malformed JSON → Secondary model fallback ──
+test('4. Primary malformed JSON: falls back to secondary model', async () => {
+  calledModels = [];
+  mockModelBehavior = (params) => {
+    if (params.model === "google/gemma-4-31b-it") {
+      return { choices: [{ message: { content: "{ bad json: none" } }] };
+    }
+    return {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            emailType: "job",
+            opportunityType: "JOB_APPLICATION",
+            classification: "New Hiring Opportunity",
+            company: "ValidJsonCorp",
+            subtitle: "Cloud Architect",
+            type: "full-time",
+            displayFields: [{ label: "Role", value: "Cloud Architect" }]
+          })
+        }
+      }]
+    };
+  };
+
+  const parsed = await parseEmailWithLLM(
+    "Cloud Architect Role at ValidJsonCorp",
+    "careers@validjsoncorp.com",
+    "Hiring Cloud Architects."
+  );
+
+  assert.strictEqual(parsed.company, "ValidJsonCorp");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+});
+
+// ── Test 5: Primary schema validation failure → Secondary model fallback ──
+test('5. Primary schema validation failure: falls back to secondary model', async () => {
+  calledModels = [];
+  mockModelBehavior = (params) => {
+    if (params.model === "google/gemma-4-31b-it") {
+      return {
+        choices: [{
+          message: {
+            content: JSON.stringify({ emailType: "invalidType", classification: "Invalid" })
+          }
+        }]
+      };
+    }
+    return {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            emailType: "job",
+            opportunityType: "JOB_APPLICATION",
+            classification: "New Hiring Opportunity",
+            company: "ValidSchemaCorp",
+            subtitle: "Security Analyst",
+            type: "full-time",
+            displayFields: [{ label: "Role", value: "Security Analyst" }]
+          })
+        }
+      }]
+    };
+  };
+
+  const parsed = await parseEmailWithLLM(
+    "Security Analyst at ValidSchemaCorp",
+    "info@validschemacorp.com",
+    "Hiring security analysts."
+  );
+
+  assert.strictEqual(parsed.company, "ValidSchemaCorp");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+});
+
+// ── Test 6: Primary 401/403 auth error → Fatal (No secondary retry loop) ──
+test('6. Primary 401/403 auth error: does not retry secondary model with bad credentials', async () => {
+  calledModels = [];
+  mockModelBehavior = (params) => {
+    const err = new Error("Unauthorized (401) Invalid API Key");
+    err.status = 401;
+    throw err;
+  };
+
+  const parsed = await parseEmailWithLLM(
+    "Test Auth Failure Email",
+    "jobs@authcorp.com",
+    "Company Name: AuthCorp\nJob Role: Software Engineer"
+  );
+
+  // Should have attempted ONLY primary model, not secondary
+  assert.strictEqual(calledModels.length, 1);
+  assert.strictEqual(calledModels[0], "google/gemma-4-31b-it");
+  assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
+  // Cleanly drops to deterministic fallback
+  assert.strictEqual(parsed.company, "Authcorp");
+});
+
+// ── Test 7: Both models fail → Deterministic regex fallback ──
+test('7. Both models fail: cleanly drops to deterministic fallback', async () => {
+  calledModels = [];
+  mockModelBehavior = (params) => {
+    const err = new Error("All endpoints overloaded (503)");
+    err.status = 503;
+    throw err;
+  };
+
+  const body = `
+  Dear Students,
+  Acme Technologies is visiting our campus for recruitment.
+  Company Name: Acme Technologies
+  Job Role: Software Development Engineer - Intern
+  Stipend: INR 50,000 / Month
+  CTC: 18 LPA
+  Location: Bangalore
+  `;
+
+  const parsed = await parseEmailWithLLM(
+    "Campus Recruitment 2026 | Acme Technologies",
+    "placement@msrit.edu",
+    body
+  );
+
+  assert.deepStrictEqual(calledModels, ["google/gemma-4-31b-it", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
+  assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "none");
+  assert.strictEqual(parsed.company, "Acme Technologies");
+  assert.strictEqual(parsed.role, "Software Development Engineer - Intern");
+  assert.strictEqual(parsed.displayFields.find(f => f.label === "CTC")?.value, "18 LPA");
+});
+
+// ── Test 8: Thinking tag sanitization ──
+test('8. Thinking tag sanitization (<thought> / <think>) from reasoning models', async () => {
+  calledModels = [];
+  mockModelBehavior = null;
   mockResponseText = `
   <thought>
-  Thinking process about the email:
-  The email is from Acme Corp offering an internship.
-  Classification is Internship Opportunity.
+  Internal model reasoning:
+  Analyzing placement email from ThinkCorp.
+  Extracting role and stipend.
   </thought>
   \`\`\`json
   {
     "emailType": "job",
     "opportunityType": "JOB_APPLICATION",
     "classification": "Internship Opportunity",
-    "company": "Acme Corp",
-    "subtitle": "Software Intern",
+    "company": "ThinkCorp",
+    "subtitle": "ML Research Intern",
     "type": "internship",
     "displayFields": [
-      { "label": "Role", "value": "Software Intern" },
-      { "label": "Stipend", "value": "INR 40,000 / Month" }
+      { "label": "Role", "value": "ML Research Intern" },
+      { "label": "Stipend", "value": "INR 60,000 / Month" }
     ]
   }
   \`\`\`
   `;
 
   const parsed = await parseEmailWithLLM(
-    "Internship Opportunity at Acme",
-    "careers@acme.com",
-    "Acme is hiring software interns."
+    "Internship Opportunity at ThinkCorp",
+    "careers@thinkcorp.com",
+    "ThinkCorp is hiring ML interns."
   );
 
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
-  assert.strictEqual(parsed.company, "Acme Corp");
-  assert.strictEqual(parsed.role, "Software Intern");
-  assert.strictEqual(parsed.displayFields.find(f => f.label === "Stipend")?.value, "INR 40,000 / Month");
+  assert.strictEqual(parsed.company, "ThinkCorp");
+  assert.strictEqual(parsed.role, "ML Research Intern");
+  assert.strictEqual(parsed.displayFields.find(f => f.label === "Stipend")?.value, "INR 60,000 / Month");
 });
+
 
 

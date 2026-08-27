@@ -1,4 +1,5 @@
 const { OpenAI } = require("openai");
+const config = require("../config/appConfig");
 const CompanyInfo = require("../models/CompanyInfo");
 
 const nvidiaClient = new OpenAI({
@@ -6,7 +7,7 @@ const nvidiaClient = new OpenAI({
   baseURL: "https://integrate.api.nvidia.com/v1",
 });
 
-const MODEL_NAME = process.env.NVIDIA_MODEL || "google/gemma-4-31b-it";
+const MODEL_NAME = config.NVIDIA_PRIMARY_MODEL || "google/gemma-4-31b-it";
 
 /**
  * Enrich company profile using NVIDIA LLM.

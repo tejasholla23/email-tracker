@@ -4587,7 +4587,7 @@ export default function JobTrackerDashboard() {
                             <span className="about-tech-tag">React</span>
                             <span className="about-tech-tag">Node.js</span>
                             <span className="about-tech-tag">MongoDB</span>
-                            <span className="about-tech-tag">Gemma 4 31B</span>
+                            <span className="about-tech-tag">Gemma 4 31B & Nemotron 3.5</span>
                             <span className="about-tech-tag">Google Calendar API</span>
                             <span className="about-tech-tag">Google OAuth</span>
                           </div>
@@ -4784,7 +4784,7 @@ export default function JobTrackerDashboard() {
 
                       <h2>4. AI processing</h2>
                       <p>
-                        When we sync your emails, relevant message content is sent to <strong>NVIDIA's NIM API (running Google's Gemma 4 31B model)</strong> for processing.
+                        When we sync your emails, relevant message content is sent to <strong>NVIDIA's NIM API (running Google's Gemma 4 31B and NVIDIA's Nemotron 3.5 Lightning models)</strong> for processing.
                         The AI extracts structured placement information — company name, role, deadline, application link, and so on.
                       </p>
                       <p>
@@ -4810,7 +4810,7 @@ export default function JobTrackerDashboard() {
                       <p>The only external services that interact with your data are:</p>
                       <ul>
                         <li><strong>Google OAuth, Gmail & Calendar APIs</strong> — to authenticate you, read your emails, and sync events (if enabled).</li>
-                        <li><strong>NVIDIA NIM API (Google Gemma 4 31B)</strong> — to parse email content into structured data.</li>
+                        <li><strong>NVIDIA NIM API (Gemma 4 31B & Nemotron 3.5 Lightning)</strong> — to parse email content into structured data.</li>
                         <li><strong>MongoDB Atlas</strong> — to store your data.</li>
                       </ul>
                       <p>These services are necessary for Email Tracker to function. We do not send your data anywhere else.</p>

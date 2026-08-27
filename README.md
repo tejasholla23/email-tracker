@@ -56,7 +56,7 @@ Email Tracker is a multi-user web application that automatically organizes place
 | **Backend** | Node.js, Express.js, Mongoose ODM |
 | **Database** | MongoDB Atlas |
 | **Authentication & Security** | Google OAuth 2.0, JWT, Express Rate Limit |
-| **AI & LLM** | Google Gemma 4 31B (NVIDIA NIM API) |
+| **AI & LLM** | Google Gemma 4 31B & NVIDIA Nemotron 3.5 Lightning (NVIDIA NIM API) |
 | **External APIs** | Gmail API, Google Calendar API, Web Push API |
 | **Deployment** | Vercel (Frontend) |
 
@@ -212,9 +212,10 @@ GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
 
-# NVIDIA NIM API (Google Gemma 4 31B)
+# NVIDIA NIM API (Primary: Google Gemma 4 31B, Fallback: NVIDIA Nemotron 3.5 Lightning)
 NVIDIA_API_KEY=nvapi-your_nvidia_nim_api_key
-NVIDIA_MODEL=google/gemma-4-31b-it
+NVIDIA_PRIMARY_MODEL=google/gemma-4-31b-it
+NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b
 
 # Web Push VAPID Keys
 VAPID_SUBJECT=mailto:admin@example.com

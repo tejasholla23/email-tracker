@@ -19,6 +19,8 @@ const config = {
     : ["placement@msrit.edu", "dean.tap@msrit.edu", "escnp.46@gmail.com"],
   LLM_DELAY_MS: Number(process.env.LLM_DELAY_MS ?? process.env.GEMINI_DELAY_MS ?? 6500),
   MAX_EMAILS_PER_SYNC: Number(process.env.MAX_EMAILS_PER_SYNC ?? 10),
+  NVIDIA_PRIMARY_MODEL: process.env.NVIDIA_PRIMARY_MODEL || process.env.NVIDIA_MODEL || "google/gemma-4-31b-it",
+  NVIDIA_FALLBACK_MODEL: process.env.NVIDIA_FALLBACK_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b",
   GCP_PROJECT_ID: process.env.GCP_PROJECT_ID || null,
   GMAIL_PUBSUB_TOPIC: process.env.GMAIL_PUBSUB_TOPIC || "gmail-push-notifications",
   GMAIL_WEBHOOK_SECRET: process.env.GMAIL_WEBHOOK_SECRET || null,

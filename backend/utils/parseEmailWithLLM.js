@@ -1,12 +1,14 @@
 const { OpenAI } = require("openai");
 const he = require("he");
+const config = require("../config/appConfig");
 
 const nvidiaClient = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY || "dummy_key",
   baseURL: "https://integrate.api.nvidia.com/v1",
 });
 
-const MODEL_NAME = process.env.NVIDIA_MODEL || "google/gemma-4-31b-it";
+const PRIMARY_MODEL = config.NVIDIA_PRIMARY_MODEL || "google/gemma-4-31b-it";
+const FALLBACK_MODEL = config.NVIDIA_FALLBACK_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 // ---------------------------------------------------------------------------
 // Text utilities
@@ -1649,9 +1651,106 @@ function validateLLMResponse(raw) {
 const validateGeminiResponse = validateLLMResponse;
 
 /**
- * Call LLM (Google Gemma 4 31B) with a structured prompt that returns company, classification,
- * subtitle, and a flexible displayFields array of {label, value} pairs.
- * Falls back to null on any error.
+ * Attempt structured extraction with a single model.
+ * Returns { success: true, data: validated } or { success: false, reason: string, errorType: "auth_error"|"transport_error"|"content_error" }
+ */
+async function executeSingleModelAttempt(modelName, prompt) {
+  try {
+    const response = await nvidiaClient.chat.completions.create({
+      model: modelName,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 1,
+      top_p: 0.95,
+      max_tokens: 16384,
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+    });
+
+    let rawContent = response.choices?.[0]?.message?.content || "";
+    // Strip thinking/reasoning tags if emitted in message.content
+    rawContent = rawContent
+      .replace(/<thought[\s\S]*?<\/thought>/gi, "")
+      .replace(/<think[\s\S]*?<\/think>/gi, "")
+      .trim();
+
+    let jsonText = rawContent;
+    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (jsonMatch) {
+      jsonText = jsonMatch[1].trim();
+    } else {
+      const firstBrace = jsonText.indexOf("{");
+      const lastBrace = jsonText.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1).trim();
+      }
+    }
+
+    let rawParsed;
+    try {
+      rawParsed = JSON.parse(jsonText);
+    } catch (parseErr) {
+      return {
+        success: false,
+        reason: `JSON parse failed: ${parseErr.message}`,
+        errorType: "content_error",
+      };
+    }
+
+    const validated = validateLLMResponse(rawParsed);
+    if (!validated) {
+      return {
+        success: false,
+        reason: "Schema validation failed (missing/invalid fields)",
+        errorType: "content_error",
+      };
+    }
+
+    return { success: true, data: validated };
+  } catch (err) {
+    const status = err?.status || err?.statusCode;
+    const errorMsg = (err?.message || err).toString();
+
+    // 401 / 403: Authentication / Permission failures
+    if (status === 401 || status === 403 || errorMsg.includes("401") || errorMsg.includes("403") || /unauthorized|forbidden|invalid api key/i.test(errorMsg)) {
+      return {
+        success: false,
+        reason: `Authentication/credential error (HTTP ${status || "401/403"})`,
+        errorType: "auth_error",
+      };
+    }
+
+    // 404 / 410: Model / endpoint unavailable or decommissioned
+    if (status === 404 || status === 410 || errorMsg.includes("404") || errorMsg.includes("410") || /not found|gone|deprecated/i.test(errorMsg)) {
+      return {
+        success: false,
+        reason: `Model/endpoint unavailable (HTTP ${status || "404/410"})`,
+        errorType: "transport_error",
+      };
+    }
+
+    // 429: Rate limit / quota
+    if (status === 429 || errorMsg.includes("429") || /quota|rate limit|too many requests/i.test(errorMsg)) {
+      return {
+        success: false,
+        reason: "Rate limit / quota exceeded (HTTP 429)",
+        errorType: "transport_error",
+      };
+    }
+
+    // 408 / 5xx / Network / Timeout
+    return {
+      success: false,
+      reason: `API/Network error (${errorMsg})`,
+      errorType: "transport_error",
+    };
+  }
+}
+
+/**
+ * Call LLM with a two-tier hierarchy:
+ * 1. Primary: Gemma 4 31B
+ * 2. Secondary Fallback: Nemotron 3.5 Lightning 30B-A3B
+ * Falls back to null/error status if both fail.
  */
 async function callLLMStructured({ subject = "", sender = "", body = "", opportunityType = "JOB_APPLICATION" }) {
   const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
@@ -1721,91 +1820,48 @@ Subject: ${subject}
 Sender: ${sender}
 Body: ${truncatedBody}`;
 
-  let retries = 3;
-  let delayMs = 6000;
+  // ── Tier 1: Primary Model (Gemma 4 31B) ──────────────────────────────────
+  console.log(`[NVIDIA_PRIMARY] Using ${PRIMARY_MODEL}`);
+  const primaryResult = await executeSingleModelAttempt(PRIMARY_MODEL, prompt);
 
-  while (retries > 0) {
-    try {
-      const response = await nvidiaClient.chat.completions.create({
-        model: MODEL_NAME,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 1,
-        top_p: 0.95,
-        max_tokens: 16384,
-        stream: false,
-        chat_template_kwargs: { enable_thinking: true },
-      });
-
-      let rawContent = response.choices[0]?.message?.content || "";
-      // Strip thinking/reasoning tags if emitted in message.content
-      rawContent = rawContent
-        .replace(/<thought[\s\S]*?<\/thought>/gi, "")
-        .replace(/<think[\s\S]*?<\/think>/gi, "")
-        .trim();
-
-      let jsonText = rawContent;
-      const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (jsonMatch) {
-        jsonText = jsonMatch[1].trim();
-      } else {
-        const firstBrace = jsonText.indexOf("{");
-        const lastBrace = jsonText.lastIndexOf("}");
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          jsonText = jsonText.substring(firstBrace, lastBrace + 1).trim();
-        }
-      }
-
-      let rawParsed;
-      try {
-        rawParsed = JSON.parse(jsonText);
-      } catch (parseErr) {
-        console.error(`[NVIDIA_STRUCTURED] JSON parse failed using ${MODEL_NAME}:`, parseErr.message);
-        return { status: "content_error" };
-      }
-
-      console.log("[LLM_RAW_RESPONSE]", JSON.stringify(rawParsed, null, 2));
-      
-      const validated = validateLLMResponse(rawParsed);
-
-      if (!validated) {
-        console.warn("[LLM_STRUCTURED] Response failed schema validation, discarding.");
-        return { status: "content_error" };
-      }
-
-      console.log(`[LLM_STRUCTURED] emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
-      
-      // Preserve geminiUsed key so we don't break existing UI checks for LLM parsing success
-      validated.parseMeta = {
-        llmUsed: true,
-        geminiUsed: true,
-        model: MODEL_NAME
-      };
-
-      return { status: "success", data: validated };
-
-    } catch (err) {
-      retries--;
-      const errorMsg = err?.message || err;
-      
-      if (errorMsg.toString().includes("429") || errorMsg.toString().toLowerCase().includes("quota") || errorMsg.toString().toLowerCase().includes("rate")) {
-        console.warn(`[NVIDIA_STRUCTURED] Rate limit hit (429). Retries left: ${retries}. Waiting ${delayMs}ms...`);
-      } else if (errorMsg.toString().includes("503") || errorMsg.toString().toLowerCase().includes("overloaded")) {
-        console.warn(`[NVIDIA_STRUCTURED] Service unavailable (503). Retries left: ${retries}. Waiting ${delayMs}ms...`);
-      } else {
-        console.error("[NVIDIA_STRUCTURED] Failed with unrecoverable error:", errorMsg);
-        return { status: "transport_error" };
-      }
-
-      if (retries > 0) {
-        await new Promise(r => setTimeout(r, delayMs));
-        delayMs += 4000;
-      } else {
-        console.error("[NVIDIA_STRUCTURED] Final failure after all retries.");
-        return { status: "transport_error" };
-      }
-    }
+  if (primaryResult.success) {
+    const validated = primaryResult.data;
+    console.log(`[LLM_STRUCTURED] Primary model (${PRIMARY_MODEL}) succeeded: emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+    validated.parseMeta = {
+      llmUsed: true,
+      geminiUsed: true,
+      model: PRIMARY_MODEL,
+      llmProvider: PRIMARY_MODEL,
+    };
+    return { status: "success", data: validated, modelUsed: PRIMARY_MODEL };
   }
-  return { status: "transport_error" };
+
+  console.warn(`[NVIDIA_PRIMARY_FAILED] Primary model (${PRIMARY_MODEL}) failed: ${primaryResult.reason}.`);
+
+  // If the failure is a fatal authentication error (401/403), do NOT cycle credentials to secondary model
+  if (primaryResult.errorType === "auth_error") {
+    console.error(`[NVIDIA_AUTH_ERROR] Authentication/credential failure. Skipping secondary model fallback.`);
+    return { status: "transport_error" };
+  }
+
+  // ── Tier 2: Secondary Fallback Model (Nemotron 3.5 Lightning) ─────────────
+  console.log(`[NVIDIA_FALLBACK] Using ${FALLBACK_MODEL}`);
+  const fallbackResult = await executeSingleModelAttempt(FALLBACK_MODEL, prompt);
+
+  if (fallbackResult.success) {
+    const validated = fallbackResult.data;
+    console.log(`[NVIDIA_FALLBACK_SUCCESS] Secondary model (${FALLBACK_MODEL}) succeeded: emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+    validated.parseMeta = {
+      llmUsed: true,
+      geminiUsed: true,
+      model: FALLBACK_MODEL,
+      llmProvider: FALLBACK_MODEL,
+    };
+    return { status: "success", data: validated, modelUsed: FALLBACK_MODEL };
+  }
+
+  console.warn(`[NVIDIA_FALLBACK_FAILED] Secondary model (${FALLBACK_MODEL}) failed: ${fallbackResult.reason}. Dropping to deterministic fallback.`);
+  return { status: fallbackResult.errorType || primaryResult.errorType || "transport_error" };
 }
 
 const callGeminiStructured = callLLMStructured;
@@ -2248,7 +2304,8 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       companyConfidence,
       hasLink:              !!linkInfo.primary,
       shouldRetry,
-      llmProvider:          MODEL_NAME,
+      llmProvider:          llmResult.modelUsed || (llmResult.status === "success" ? PRIMARY_MODEL : "none"),
+      model:                llmResult.modelUsed || "none",
       llmStatus:            llmResult.status,
       llmUsed:              llmResult.status === "success",
       geminiUsed:           llmResult.status === "success",
