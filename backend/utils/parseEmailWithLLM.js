@@ -5,10 +5,60 @@ const config = require("../config/appConfig");
 const nvidiaClient = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY || "dummy_key",
   baseURL: "https://integrate.api.nvidia.com/v1",
+  timeout: 25000, // 25s timeout for fast bounded failure
+  maxRetries: 1,  // Prevent excessive retries
 });
 
 const PRIMARY_MODEL = config.NVIDIA_PRIMARY_MODEL || "google/gemma-4-31b-it";
 const FALLBACK_MODEL = config.NVIDIA_FALLBACK_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b";
+
+// ---------------------------------------------------------------------------
+// In-flight Single-Flight Promise Coalescing Map
+// ---------------------------------------------------------------------------
+const inFlightParses = new Map();
+
+async function parseEmailWithSingleFlight(cacheKey, parseFn) {
+  if (!cacheKey) {
+    return await parseFn();
+  }
+  if (inFlightParses.has(cacheKey)) {
+    console.log(`[PARSE_INFLIGHT_JOIN] Awaiting in-flight parse for Message-ID: ${cacheKey}`);
+    const shared = await inFlightParses.get(cacheKey);
+    return shared ? JSON.parse(JSON.stringify(shared)) : null;
+  }
+
+  console.log(`[PARSE_INFLIGHT_START] Started single-flight parse for Message-ID: ${cacheKey}`);
+  const promise = (async () => {
+    return await parseFn();
+  })();
+
+  inFlightParses.set(cacheKey, promise);
+  try {
+    const result = await promise;
+    console.log(`[PARSE_INFLIGHT_COMPLETE] Completed single-flight parse for Message-ID: ${cacheKey}`);
+    return result ? JSON.parse(JSON.stringify(result)) : null;
+  } catch (err) {
+    console.error(`[PARSE_INFLIGHT_ERROR] Single-flight parse failed for Message-ID: ${cacheKey}:`, err.message);
+    throw err;
+  } finally {
+    inFlightParses.delete(cacheKey);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Time validation helper
+// ---------------------------------------------------------------------------
+function isValidTimeString(val) {
+  if (!val || typeof val !== "string") return false;
+  const str = val.trim();
+  if (str.length < 2 || str.length > 50) return false;
+  // Reject compensation, salary, currency, or non-time keywords
+  if (/₹|\b(?:lpa|ctc|stipend|salary|package|per\s+(?:month|annum|year|hr|hour)|rupees|rs\.?|inr|bonus|shares|equity|k|per)\b/i.test(str)) {
+    return false;
+  }
+  // Must match standard time expressions: 10:00 AM, 10 AM, 2 PM, 14:30, 2:30 PM - 4:00 PM, etc.
+  return /\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{1,2}:\d{2})\b/i.test(str);
+}
 
 // ---------------------------------------------------------------------------
 // Text utilities
@@ -199,15 +249,25 @@ function deriveFromDisplayFields(displayFields = []) {
       );
       if (fExact?.value) return fExact.value;
     }
-    // 2. Fallback to flexible substring match
+    // 2. Fallback to whole-word boundary label match (excluding "full-time" / "part-time" for Time)
     for (const label of labels) {
-      const fSub = displayFields.find(f =>
-        f?.label && f.label.toLowerCase().includes(label.toLowerCase())
-      );
+      const isTimeQuery = /^time$/i.test(label);
+      const fSub = displayFields.find(f => {
+        if (!f?.label) return false;
+        if (isTimeQuery && /\b(?:full-time|part-time|full\s+time|part\s+time|lifetime)\b/i.test(f.label)) {
+          return false;
+        }
+        const labelRegex = new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        return labelRegex.test(f.label);
+      });
       if (fSub?.value) return fSub.value;
     }
     return "";
   };
+
+  const rawTime = get("Time", "Event Time", "Reporting Time", "Schedule Time", "PPT Time");
+  const validTime = isValidTimeString(rawTime) ? rawTime : "";
+
   return {
     role:            get("Role", "Roles", "Position", "Designation") || "Unknown Role",
     salaryText:      get("CTC", "Salary", "Compensation", "Package"),
@@ -217,7 +277,7 @@ function deriveFromDisplayFields(displayFields = []) {
     deadlineText:    get("Deadline", "Last Date", "Due Date", "Closing Date"),
     programRoles:    get("Role", "Roles"),
     eventDateText:   get("Event Date", "Event Dates", "Dates", "Date", "Interview Date", "Presentation Date", "PPT Date", "Talk Date"),
-    eventTime:       get("Time", "Event Time", "Reporting Time", "Schedule Time", "PPT Time"),
+    eventTime:       validTime,
   };
 }
 
@@ -639,6 +699,8 @@ const KNOWN_COMPANY_ALIASES = {
   mindtree: "Mindtree",
   lnt: "L&T",
   "larsen and toubro": "L&T",
+  primenumbers: "Prime Numbers",
+  "prime numbers": "Prime Numbers",
 };
 
 const INVALID_TITLE_FRAGMENTS = [
@@ -661,6 +723,39 @@ function matchKnownCompany(text = "") {
   return "";
 }
 
+const PLATFORM_TERMS = [
+  "microsoft teams",
+  "ms teams",
+  "google forms",
+  "google form",
+  "google doc",
+  "google docs",
+  "google drive",
+  "google sheet",
+  "google sheets",
+  "google meet",
+  "zoom meeting",
+  "zoom",
+  "webex",
+  "cisco webex",
+  "brazen",
+  "calendly",
+  "unstop",
+  "forms.gle",
+  "docs.google.com",
+  "drive.google.com"
+];
+
+function stripPlatformReferences(text = "") {
+  let cleaned = text || "";
+  cleaned = cleaned.replace(/https?:\/\/[^\s<>"']+/gi, "");
+  for (const term of PLATFORM_TERMS) {
+    const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    cleaned = cleaned.replace(regex, " ");
+  }
+  return cleaned.replace(/\s+/g, " ").trim();
+}
+
 function extractCompanyFromText(text = "") {
   // Try line-by-line first for explicit Company Name / Company: patterns
   const lines = (text || "").split(/[\r\n]+/);
@@ -669,27 +764,26 @@ function extractCompanyFromText(text = "") {
     const explicitMatch = trimmedLine.match(/^(?:Company(?:\s+Name)?|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z0-9][A-Za-z0-9&.\-\s]{1,60})/i);
     if (explicitMatch && explicitMatch[1]) {
       const candidate = sanitizeCompany(explicitMatch[1]);
-      if (candidate) return candidate;
+      if (candidate && !isGenericCompanyName(candidate)) {
+        const alias = matchKnownCompany(candidate);
+        return alias || candidate;
+      }
     }
   }
 
-  const cleanedText = cleanMarkdown(normalizeText(text));
-  const aliasMatch = matchKnownCompany(cleanedText);
-  if (aliasMatch) return aliasMatch;
+  const cleanedText = stripPlatformReferences(cleanMarkdown(normalizeText(text)));
 
   const patterns = [
     // 1. Explicit Company Name / Organization label across line
     /(?:Company(?:\s+Name)?|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z0-9][A-Za-z0-9&.\-\s]{1,50}?)(?=\s+(?:Job\s+Role|Role|Eligibility|Stipend|CTC|Location|Package|Duration|Salary|Selection|Process|Deadline|Registration|Branches|CGPA|Department)|[.,;]|$)/i,
     // 2. Legal entities (Pvt Ltd, Inc, Corp)
     /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\s+(?:Pvt\b\.?\s*Ltd\b\.?|Private\s+Limited|Ltd\b\.?|Limited|Inc\b\.?|Incorporated|Corp\b\.?|Corporation|LLC|India\b\s+(?:Pvt\b\.?\s*Ltd\b\.?|Ltd\b\.?|Limited))\b/,
-    // 3. Subject pipe / hyphen delimiters: e.g. "Campus Recruitment 2026 | Acme Technologies - Online Assessment"
-    /(?:\||\bfor\b|\bat\b)\s+([A-Z][A-Za-z0-9&.\s]{1,50}?)(?=\s*(?:-|–|—|\||Online Assessment|Registration|Recruitment|Drive|Interview|Hiring|Opportunity|test|\r|\n|$))/i,
+    // 3. Subject / drive delimiters: e.g. "Campus Drive for Prime Numbers - 2027" or "Campus Recruitment 2026 | Acme Technologies - Online Assessment"
+    /(?:\||\b(?:campus\s+drive\s+(?:for|by|at)|recruitment\s+drive\s+(?:for|by|at)|drive\s+(?:for|by|at)|hiring\s+(?:for|by|at)|for|at)\b)\s+([A-Z][A-Za-z0-9&.\s]{1,50}?)(?=\s*(?:-|–|—|\||Online Assessment|Registration|Recruitment|Drive|Interview|Hiring|Opportunity|Batch|test|\r|\n|$))/i,
     // 4. Action verbs: "... Acme Technologies is visiting / invites / conducts ..."
     /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is\s+visiting|is\s+hiring|is\s+conducting|has\s+scheduled|offers|invites|announces|conducts))/i,
     // 5. Prepositions: from/by/at Company for/hiring
     /(?:from|by|at)\s+([A-Z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:for|about|regarding|hiring|is|offers?|invites?|interview|role|drive|program|placement|campus|job|internship))/i,
-    // 6. Common major tech brands fallback
-    /\b(amazon|google|microsoft|tcs|deloitte|accenture|cognizant|infosys|wipro|blackrock|ibm|flipkart|uber|intel|capgemini|hcl|bosch|dell|nokia|haber|altair)\b/i,
   ];
 
   for (const pattern of patterns) {
@@ -699,7 +793,8 @@ function extractCompanyFromText(text = "") {
       if (candidate && !isGenericCompanyName(candidate)) {
         const lowerCand = candidate.toLowerCase();
         if (lowerCand !== "here" && lowerCand !== "there" && lowerCand !== "this" && !lowerCand.startsWith("potential")) {
-          return candidate;
+          const alias = matchKnownCompany(candidate);
+          return alias || candidate;
         }
       }
     }
@@ -729,7 +824,8 @@ function sanitizeCompany(raw = "") {
     "inbox", "forwarded message", "authorised signatory",
     "dear students", "kindly", "venue", "today", "tomorrow", "placement drive",
     "campus recruitment", "placement department", "training and placement",
-    "placement office", "department of training", "graduating batch"
+    "placement office", "department of training", "graduating batch",
+    "google form", "google forms", "google doc", "google drive", "microsoft teams", "zoom"
   ];
   if (invalid.includes(lower)) return null;
   if (rejectIfContains.some((term) => lower.includes(term))) return null;
@@ -742,27 +838,6 @@ function sanitizeCompany(raw = "") {
   if (/\.\s+[A-Z][a-z]{3,}/.test(trimmed)) return null;
 
   return trimmed;
-}
-
-const PLATFORM_TERMS = [
-  "microsoft teams",
-  "google forms",
-  "google meet",
-  "zoom meeting",
-  "webex",
-  "brazen",
-  "calendly",
-  "unstop"
-];
-
-function stripPlatformReferences(text = "") {
-  let cleaned = text;
-  cleaned = cleaned.replace(/https?:\/\/[^\s<>"']+/gi, "");
-  for (const term of PLATFORM_TERMS) {
-    const regex = new RegExp(`\\b${term}\\b`, 'gi');
-    cleaned = cleaned.replace(regex, "");
-  }
-  return cleaned;
 }
 
 /**
@@ -826,22 +901,15 @@ function resolveCompany({ subject = "", body = "", sender = "", forwarded = {} }
     }
   }
 
-  // 2. Verified sender/signature information / aliases
-  const candidates = [cleanFwdSubject, forwarded.from, cleanSubject, cleanBody, sender].filter(Boolean);
-  for (const candidate of candidates) {
-    const known = matchKnownCompany(candidate);
-    if (known) return { company: known, source: 'alias', confidence: 1.0 };
-  }
-
-  // 3. Subject extraction (e.g. "Acme Technologies - Online Assessment" or "Hiring - Google")
+  // 2. Subject extraction (e.g. "Campus Drive for Prime Numbers - 2027" or "Acme Technologies - Online Assessment")
   const subjectCompany = extractCompanyFromText(cleanSubject || cleanFwdSubject);
   if (subjectCompany) return { company: subjectCompany, source: 'subject', confidence: 0.85 };
 
-  // 4. Body explicit company patterns (e.g. "Company Name: Acme Technologies" or "Acme Technologies is hiring")
+  // 3. Body explicit company patterns (e.g. "Company Name: Prime Numbers" or "Acme Technologies is hiring")
   const bodyCompany = extractCompanyFromText(cleanBody || cleanFwdBody);
   if (bodyCompany) return { company: bodyCompany, source: 'body', confidence: 0.80 };
 
-  // 5. Signature fallback
+  // 4. Signature fallback
   const signatureCompany = extractCompanyFromSignature(cleanBody || cleanFwdBody);
   if (signatureCompany) {
     return { company: signatureCompany, source: 'signature', confidence: 0.65 };
@@ -1798,18 +1866,28 @@ DISPLAY FIELDS RULES:
 SUBTITLE RULES (what shows as the tagline below the company name):
   Internship Opportunity    → program/team name (e.g. "IS Team Internship")
   New Hiring Opportunity    → role or position name
-  Hackathon / Event Invitation → event name (e.g. "InnoVent-27", "HackVega 2.0")
-  Workshop / Webinar        → session/program name (e.g. "Ericsson Edge Academy")
-  Expert Talk Series        → full series name (e.g. "POD Expert Talk Series on Databases")
-  Registration Link         → concise description of what to register for
-  Non-Recruitment Email     → empty string""
+  Registration Link         → role or event name
+  Assessment Announcement   → assessment type / platform (e.g. "Online Assessment on HackerEarth")
+  Interview Schedule        → interview round (e.g. "Technical Interview Round 1")
+  Interview Result          → shortlist/result milestone (e.g. "Final Selects")
+  PPT Announcement          → presentation topic or "Pre-Placement Talk"
+  Venue Update              → updated location/mode (e.g. "LHC Seminar Hall 1")
+  Application Reminder      → role / opportunity name
+  Deadline Reminder         → role / opportunity name
+  Generic Placement Notice  → notice topic
+  Hackathon / Event Invitation → event/competition name
+  Workshop / Webinar        → workshop/webinar topic
+  Expert Talk Series        → talk topic/theme
+  Scholarship               → scholarship name
+  Non-Recruitment Email     → main subject topic
 
 COMPANY RULES:
-1. Use the ACTUAL ORGANIZING ENTITY — not the forwarding institution.
-2. For forwarded emails, use original sender company from the "Forwarded message From:" or signature.
-3. NEVER use: MSRIT, RIT, Ramaiah Institute, Placement Department, Dean.
-4. NEVER use generic phrases: "Here", "Seeking", "Potential opportunities", "Greetings".
-5. Ignore platform names (Teams, Zoom, Google Forms, Unstop, Brazen) when identifying company.
+- Return the actual hiring/organizing company name.
+- NEVER return "Placement Department", "RIT", "MSRIT", "Ramaiah", "Training and Placement Cell", or any variation of the college placement department.
+- If forwarded from an external HR/recruiter email (e.g. "...@wipro.com"), the company is "Wipro".
+- If forwarded with a subject like "Campus Recruitment 2026 | Acme Technologies - ...", the company is "Acme Technologies".
+- If no company is mentioned and it is an event, use the organizing body or domain.
+- Clean up suffixes: return "Google" not "Google India Pvt Ltd", "Amazon" not "Amazon Development Centre India".
 
 CLASSIFICATION GUIDE:
   emailType "job"   → hiring, internship, placement, recruitment, assessment, interview
@@ -1822,7 +1900,7 @@ Body: ${truncatedBody}`;
 
   // ── Tier 1: Primary Model (Gemma 4 31B) ──────────────────────────────────
   console.log(`[NVIDIA_PRIMARY] Using ${PRIMARY_MODEL}`);
-  const primaryResult = await executeSingleModelAttempt(PRIMARY_MODEL, prompt);
+  const primaryResult = await executeSingleModelAttempt(PRIMARY_MODEL, prompt, 25000);
 
   if (primaryResult.success) {
     const validated = primaryResult.data;
@@ -1846,7 +1924,7 @@ Body: ${truncatedBody}`;
 
   // ── Tier 2: Secondary Fallback Model (Nemotron 3.5 Lightning) ─────────────
   console.log(`[NVIDIA_FALLBACK] Using ${FALLBACK_MODEL}`);
-  const fallbackResult = await executeSingleModelAttempt(FALLBACK_MODEL, prompt);
+  const fallbackResult = await executeSingleModelAttempt(FALLBACK_MODEL, prompt, 20000);
 
   if (fallbackResult.success) {
     const validated = fallbackResult.data;
@@ -1896,6 +1974,9 @@ function extractFallbackDisplayFields(body, opportunityType = "JOB_APPLICATION")
       let val = match[1].trim();
       val = val.replace(/\s+/g, " ");
       if (val.length > 60) val = val.substring(0, 60).trim() + "...";
+      if (label === "Time" && !isValidTimeString(val)) {
+        return;
+      }
       if (val) fields.push({ label, value: val });
     }
   };
@@ -1993,11 +2074,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     const directAlias = matchKnownCompany(snd);
     if (directAlias) { senderAliasCompany = directAlias; break; }
   }
-  if (!senderAliasCompany) {
-    const aliasHint = `${forwarded.from || ""} ${sourceSubject}`;
-    const subjectAlias = matchKnownCompany(aliasHint);
-    if (subjectAlias) senderAliasCompany = subjectAlias;
-  }
 
   const detCompanyObj = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
 
@@ -2041,54 +2117,61 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
 
   if (!resolvedCompany) { companySource = "none"; companyConfidence = 0; }
 
-  // â”€â”€ // ── Step 4: Classification arbitration (relative confidence) ──────────────
-  //   Normalize both confidences to the same 0-1 scale.
-  //   Use relative comparison: one source must be proportionally stronger to win.
-  //   When similar, prefer Gemini (richer semantic understanding).
+  // ── Step 4: Classification arbitration (relative confidence) ──────────────
   const detConf = detClassification.confidence || 0;
-  const geminiClassConf = (gemini?.classificationConfidence || 0) / 100; // normalize 0-100 to 0-1
+  const effectiveLlmConf = gemini?.classification
+    ? (gemini.classificationConfidence ? gemini.classificationConfidence / 100 : 0.85)
+    : 0;
 
   let finalClassification, classificationReason;
-  let emailType, finalType;
+  let emailType, finalType, finalConfidence;
 
   if (gemini?.classification && gemini?.emailType) {
-    // Both sources available — compare relative confidence
     const detIsPrimary = INTENT_TIER[detClassification.category] === "primary";
-    const detProportionallyStronger = detConf > 0 && geminiClassConf > 0 && (detConf / geminiClassConf) > 1.5;
-    const geminiProportionallyStronger = geminiClassConf > 0 && detConf > 0 && (geminiClassConf / detConf) > 1.3;
+    const detIsSecondaryOrGeneric = INTENT_TIER[detClassification.category] === "secondary" || detClassification.category === "genericNotice";
 
-    if (detProportionallyStronger && detIsPrimary) {
-      // Deterministic is proportionally stronger AND a high-specificity primary intent
+    if (detIsPrimary && detConf >= 0.90 && effectiveLlmConf < 0.80) {
       finalClassification = detClassification.classification;
       emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
                   detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
       finalType = detClassification.type;
-      classificationReason = `deterministic preserved: "${detClassification.classification}" (det=${detConf.toFixed(2)}) is primary-tier and proportionally stronger than llm="${gemini.classification}" (llm=${geminiClassConf.toFixed(2)})`;
-    } else {
-      // LLM is stronger, similar, or deterministic is not primary — prefer LLM semantics
+      finalConfidence = detConf;
+      classificationReason = `deterministic preserved: "${detClassification.classification}" (det=${detConf.toFixed(2)}) is high-confidence primary-tier`;
+    } else if (detIsSecondaryOrGeneric && effectiveLlmConf >= 0.70) {
       finalClassification = gemini.classification;
       emailType = gemini.emailType;
       finalType = gemini.type ?? detClassification.type;
-      classificationReason = geminiProportionallyStronger
-        ? `llm override: "${gemini.classification}" (llm=${geminiClassConf.toFixed(2)}) proportionally stronger than det="${detClassification.classification}" (det=${detConf.toFixed(2)})`
-        : `llm preferred: "${gemini.classification}" (llm=${geminiClassConf.toFixed(2)}) vs det="${detClassification.classification}" (det=${detConf.toFixed(2)}) — similar confidence, preferring semantic richness`;
+      finalConfidence = effectiveLlmConf;
+      classificationReason = `llm preferred: "${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)}) supersedes secondary deterministic "${detClassification.classification}" (det=${detConf.toFixed(2)})`;
+    } else if (effectiveLlmConf >= detConf) {
+      finalClassification = gemini.classification;
+      emailType = gemini.emailType;
+      finalType = gemini.type ?? detClassification.type;
+      finalConfidence = effectiveLlmConf;
+      classificationReason = `llm preferred: "${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)}) >= det="${detClassification.classification}" (det=${detConf.toFixed(2)})`;
+    } else {
+      finalClassification = detClassification.classification;
+      emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
+                  detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
+      finalType = detClassification.type;
+      finalConfidence = detConf;
+      classificationReason = `deterministic preferred: "${detClassification.classification}" (det=${detConf.toFixed(2)}) > llm="${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)})`;
     }
   } else if (gemini?.classification) {
-    // LLM available but no confidence score — still prefer LLM
     finalClassification = gemini.classification;
     emailType = gemini.emailType ?? (detClassification.category === "hackathonEvent" ? "event" : "job");
     finalType = gemini.type ?? detClassification.type;
-    classificationReason = `llm only (no confidence score): "${gemini.classification}"`;
+    finalConfidence = effectiveLlmConf;
+    classificationReason = `llm only: "${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)})`;
   } else {
-    // LLM failed — use deterministic
     finalClassification = detClassification.classification;
     emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
                 detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
     finalType = detClassification.type;
+    finalConfidence = detConf;
     classificationReason = `deterministic fallback (llm unavailable): "${detClassification.classification}" (det=${detConf.toFixed(2)})`;
   }
 
-  // opportunityType consistency: ensure it matches the chosen classification
   const CLASSIFICATION_TO_OPP_TYPE = {
     "Hackathon / Event Invitation": "HACKATHON",
     "Workshop / Webinar": "WEBINAR",
@@ -2104,13 +2187,11 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
 
   console.log(`[CLASSIFICATION_DECISION] ${classificationReason}\nemailType="${emailType}" opportunityType="${finalOppType}" type="${finalType}"`);
 
-  // ── Step 5: displayFields — flexible [{label,value}] from Gemini or fallback ───
   let displayFields = gemini?.displayFields || [];
   if (displayFields.length === 0) {
     displayFields = extractFallbackDisplayFields(sourceBody, detClassification.opportunityType);
   }
 
-  // Sanitize and validate all display fields
   displayFields = displayFields
     .map(f => {
       let val = (f.value || "").trim().replace(/\s+/g, " ");
@@ -2125,8 +2206,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     })
     .filter(Boolean);
 
-  // Priority-based selection: ONLY when more than 5 valid fields exist.
-  // When ≤5, preserve Gemini's original order.
   if (displayFields.length > 5) {
     const oppType = detClassification.opportunityType || "JOB_APPLICATION";
     const priorities = FIELD_PRIORITY[oppType] || FIELD_PRIORITY.JOB_APPLICATION;
@@ -2140,9 +2219,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     displayFields = displayFields.slice(0, 5);
   }
 
-  // ── Step 6: role field (DB required) ──────────────────────────────────
-  // Derived from displayFields first (LLM or fallback-extracted), then regex fallback.
-  // For event emails: "Event" as a neutral placeholder.
   const isJobEmail = emailType === "job";
   const displayFieldsRole = (displayFields || []).find(f =>
     /^(role|roles|position|designation|job\s*role|job\s*title)$/i.test(f?.label)
@@ -2150,9 +2226,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   const fallbackRole = displayFieldsRole || extractFallbackRole(sourceSubject, sourceBody);
   const roleField = isJobEmail ? (fallbackRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
 
-  // ── Step 7: Subtitle ────────────────────────────────────────────────────────
-  //   Gemini -> role extractor -> event name -> program/assessment/interview/
-  //   registration target -> empty string.
   let subtitle, subtitleSource;
   if (gemini?.subtitle) {
     subtitle = gemini.subtitle;
@@ -2170,11 +2243,8 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   }
   console.log(`[SUBTITLE_DECISION] subtitle="${subtitle}" source="${subtitleSource}"`);
 
-  // Keep generateTitle for the title field only (not subtitle)
   const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, roleField, sourceBody);
 
-  // ── Step 7b: Extract deadlineISO from displayFields ───────────────────────
-  // Look for deadline-like fields and resolve to ISO date for filter/urgency support.
   const deadlineField = displayFields.find(f =>
     /deadline|due date|last date|closing date/i.test(f.label)
   );
@@ -2182,7 +2252,6 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     ? resolveDeadlineISO(deadlineField.value, referenceDate)
     : "";
 
-  // ── Step 8: Dev-mode trace with structured reasoning ───────────────────────
   const isDev = process.env.NODE_ENV !== "production";
   const parseTrace = isDev ? {
     preprocessing: {
@@ -2209,24 +2278,15 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       senderAlias:    senderAliasCompany     || null,
     },
     reasoning: {
-      classification: {
-        chosen: finalClassification,
-        reason: classificationReason,
-        detConf: detConf.toFixed(2),
-        geminiConf: geminiClassConf.toFixed(2),
-      },
       company: {
-        chosen: resolvedCompany || null,
-        source: companySource,
+        winner: companySource,
+        resolvedCompany,
         confidence: companyConfidence,
-        reason: companySource === "sender_alias"
-          ? `Known alias (1.0): "${senderAliasCompany}"`
-          : companySource === "gemini"
-          ? "Gemini primary source"
-          : `Deterministic fallback (source: ${companySource})`,
+      },
+      classification: {
+        reason: classificationReason,
       },
       subtitle: {
-        chosen: subtitle || null,
         source: subtitleSource,
       },
       displayFields: {
@@ -2236,36 +2296,28 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     },
   } : undefined;
 
-  // // ── Step 9: Build parsed output ──────────────────────────────────────────
   const parsed = {
-    // Core
     emailType,
     opportunityType: finalOppType,
     isRelevant:     emailType !== "nonRecruitment",
     classification: finalClassification,
     type:           finalType,
     status:         finalStatus,
-    confidenceScore: Math.min(1, detClassification.confidence + (resolvedCompany ? 0.05 : 0)),
+    confidenceScore: typeof finalConfidence === "number" ? finalConfidence : Math.min(1, detClassification.confidence + (resolvedCompany ? 0.05 : 0)),
     timelineTitle:   gemini?.timelineTitle   || "",
     timelineSummary: gemini?.timelineSummary || "",
 
-    // Identity
     company:  resolvedCompany,
     domain:   gemini?.domain || "",
     subtitle,
-    role:     roleField,  // DB required field — actual role placeholder
+    role:     roleField,
     title:    subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
     processId:   buildProcessId(resolvedCompany),
     processName: `${resolvedCompany || "Unknown Company"} hiring process`,
 
-    // ── NEW: flexible display fields from Gemini ─────────────────────────
-    // This is the primary source of card details for new records.
     displayFields,
     skills: gemini?.skills || [],
 
-    // ────────────────── LEGACY: derived from displayFields (single source of truth).
-    // These fields are kept for backward compatibility, search, calendar, and indexing.
-    // They mirror displayFields so all consumers see consistent data.
     ...(() => {
       const derived = deriveFromDisplayFields(displayFields);
       const resolvedEventDate = resolveEventDateISO(derived.eventDateText, derived.eventTime, referenceDate);
@@ -2274,12 +2326,10 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
         programRoles:    derived.programRoles,
         programStipend:  derived.programStipend,
         programDuration: derived.programDuration,
-        deadlineText:    derived.deadlineText,
-        deadline:        deadlineField?.value || derived.deadlineText || "",
-        deadlineISO:     resolvedDeadlineISO,
-        venue:           derived.venue,
-        durationText:    derived.programDuration,
         salaryText:      derived.salaryText,
+        venue:           derived.venue,
+        deadlineText:    derived.deadlineText,
+        deadlineISO:     resolvedDeadlineISO,
         eventDate:       resolvedEventDate,
         eventTime:       derived.eventTime,
         reportingTime:   derived.eventTime,
@@ -2415,8 +2465,13 @@ function getFullBodyText(payload) {
 
 module.exports = {
   parseEmailWithLLM,
-  extractFormLink,
+  parseEmailWithSingleFlight,
+  inFlightParses,
+  isValidTimeString,
+  matchKnownCompany,
+  classifyEmail,
   resolveCompany,
+  extractFormLink,
   extractFallbackDisplayFields,
   preprocessBody,
   cleanDisplayFieldValue,
@@ -2425,5 +2480,6 @@ module.exports = {
   resolveEventDateISO,
   deriveFromDisplayFields,
   mergeAlternativeTexts,
-  getFullBodyText
+  getFullBodyText,
+  sanitizeCompany
 };

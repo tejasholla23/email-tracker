@@ -12,8 +12,7 @@ const Application = require("./models/Application");
 const Account = require("./models/Account");
 const LinkedGmailAccount = require("./models/LinkedGmailAccount");
 const applicationRoutes = require("./routes/applicationRoutes");
-const { parseEmailWithLLM, mergeAlternativeTexts } = require("./utils/parseEmailWithLLM");
-const { enrichApplicationRecord } = require("./utils/enrichmentService");
+const { parseEmailWithLLM, parseEmailWithSingleFlight, inFlightParses, mergeAlternativeTexts } = require("./utils/parseEmailWithLLM");
 const { getCompanyInfo } = require("./utils/companyInfoService");
 const { enrichCompanyProfile } = require("./utils/enrichCompanyProfile");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
@@ -1447,7 +1446,14 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         }
 
         if (!parsed) {
-          parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+          const cacheKey = internetMessageId || id;
+          parsed = await parseEmailWithSingleFlight(cacheKey, async () => {
+            const res = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+            if (res && res.parseMeta) {
+              res.parseMeta.internetMessageId = internetMessageId;
+            }
+            return res;
+          });
           // Sleep to safely respect LLM RPM limits
           await new Promise(r => setTimeout(r, config.LLM_DELAY_MS));
           usedLLM = true;
@@ -1654,7 +1660,14 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
     if (!parsed) {
       console.log(`[PARSE_START] ${id}`);
-      parsed = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+      const cacheKey = internetMessageId || id;
+      parsed = await parseEmailWithSingleFlight(cacheKey, async () => {
+        const res = await parseEmailWithLLM(rawText, fromHeader, fullBodyText, new Date(parseInt(email.data.internalDate)));
+        if (res && res.parseMeta) {
+          res.parseMeta.internetMessageId = internetMessageId;
+        }
+        return res;
+      });
       // Sleep to safely respect LLM RPM limits
       await new Promise(r => setTimeout(r, config.LLM_DELAY_MS));
       usedLLM = true;
@@ -2688,6 +2701,8 @@ module.exports = {
   app,
   activeSyncs,
   pendingSyncs,
+  inFlightParses,
+  parseEmailWithSingleFlight,
   mergeAlternativeTexts,
   fetchAndProcessEmails,
   syncLinkedAccountsForUser,

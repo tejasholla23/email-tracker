@@ -5,6 +5,8 @@ const CompanyInfo = require("../models/CompanyInfo");
 const nvidiaClient = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY || "dummy_key",
   baseURL: "https://integrate.api.nvidia.com/v1",
+  timeout: 20000, // 20s timeout
+  maxRetries: 1,
 });
 
 const MODEL_NAME = config.NVIDIA_PRIMARY_MODEL || "google/gemma-4-31b-it";

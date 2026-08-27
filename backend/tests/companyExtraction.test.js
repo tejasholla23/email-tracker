@@ -85,3 +85,28 @@ test('resolveCompany should not treat placement department greeting as company a
   assert.strictEqual(result.company, "Acme Technologies");
 });
 
+test('resolveCompany should correctly identify Prime Numbers from placement email with Google Form link', () => {
+  const result = resolveCompany({
+    subject: "Campus Drive for Primenumbers - 2027",
+    body: `Dear Students,
+Campus Drive for Prime Numbers – 2027 Batch
+Students interested in the below opportunity are requested to fill out the Google by EOD.
+Google Form:
+https://forms.gle/HaSF5SzSaJSk8RB36
+Eligibility: This opportunity is open only to CS allied branches.
+Internship & Compensation
+Stipend: ₹35k
+Full-Time CTC: ₹15 LPA
+Backlogs - Not allowed
+CGPA - 7.5
+Location: Bangalore
+The internship has the potential to be converted into a full-time position based on performance.
+Please find attached the JD.
+Interested and eligible students are requested to fill out the Google Form without fail.
+Thanks,
+Placement Department`,
+    sender: "Placement Officer MSRIT <placement@msrit.edu>"
+  });
+  assert.strictEqual(result.company, "Prime Numbers");
+});
+

@@ -356,5 +356,129 @@ test('8. Thinking tag sanitization (<thought> / <think>) from reasoning models',
   assert.strictEqual(parsed.displayFields.find(f => f.label === "Stipend")?.value, "INR 60,000 / Month");
 });
 
+// ── Test 9: Prime Numbers company retention (Google Form link doesn't overwrite with Google) ──
+test('9. Prime Numbers email: company remains Prime Numbers even when Google Form is mentioned in placement email', async () => {
+  calledModels = [];
+  mockModelBehavior = null;
+  mockResponseText = JSON.stringify({
+    emailType: "job",
+    opportunityType: "JOB_APPLICATION",
+    classification: "Internship Opportunity",
+    company: "Prime Numbers",
+    domain: "primenumbers.io",
+    subtitle: "Campus Drive - 2027 Batch",
+    type: "internship",
+    link: "https://forms.gle/HaSF5SzSaJSk8RB36",
+    displayFields: [
+      { label: "Stipend", value: "₹35k" },
+      { label: "CTC", value: "₹15 LPA" },
+      { label: "Location", value: "Bangalore" }
+    ]
+  });
 
+  const body = `Dear Students,
+Campus Drive for Prime Numbers – 2027 Batch
+Students interested in the below opportunity are requested to fill out the Google by EOD.
+Google Form:
+https://forms.gle/HaSF5SzSaJSk8RB36
+Eligibility: This opportunity is open only to CS allied branches.
+Internship & Compensation
+Stipend: ₹35k
+Full-Time CTC: ₹15 LPA
+Backlogs - Not allowed
+CGPA - 7.5
+Location: Bangalore
+The internship has the potential to be converted into a full-time position based on performance.
+Please find attached the JD.
+Interested and eligible students are requested to fill out the Google Form without fail.
+Thanks,
+Placement Department`;
 
+  const parsed = await parseEmailWithLLM(
+    "Campus Drive for Primenumbers - 2027",
+    "Placement Officer MSRIT <placement@msrit.edu>",
+    body
+  );
+
+  assert.strictEqual(parsed.company, "Prime Numbers");
+  assert.strictEqual(parsed.emailType, "job");
+  assert.strictEqual(parsed.link, "https://forms.gle/HaSF5SzSaJSk8RB36");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "google/gemma-4-31b-it");
+});
+
+// ── Test 10: Deterministic time extraction: CTC/compensation does not bleed into eventTime ──
+test('10. CTC / compensation fields do not bleed into eventTime or reportingTime', () => {
+  const { deriveFromDisplayFields, isValidTimeString } = require('../utils/parseEmailWithLLM');
+
+  assert.strictEqual(isValidTimeString("₹ 15 LPA"), false);
+  assert.strictEqual(isValidTimeString("₹35k"), false);
+  assert.strictEqual(isValidTimeString("15 LPA"), false);
+  assert.strictEqual(isValidTimeString("INR 50,000 / Month"), false);
+  assert.strictEqual(isValidTimeString("10:00 AM"), true);
+  assert.strictEqual(isValidTimeString("2:30 PM"), true);
+  assert.strictEqual(isValidTimeString("14:30"), true);
+  assert.strictEqual(isValidTimeString("10 AM - 1 PM"), true);
+
+  const displayFields = [
+    { label: "Full-Time CTC", value: "₹ 15 LPA" },
+    { label: "Stipend", value: "₹35k" },
+    { label: "Location", value: "Bangalore" }
+  ];
+
+  const derived = deriveFromDisplayFields(displayFields);
+  assert.strictEqual(derived.salaryText, "₹ 15 LPA");
+  assert.strictEqual(derived.eventTime, "");
+});
+
+// ── Test 11: In-flight Single-Flight Promise Coalescing ──
+test('11. Single-Flight Coalescing: concurrent identical message parses trigger exactly 1 execution', async () => {
+  const { parseEmailWithSingleFlight, inFlightParses } = require('../utils/parseEmailWithLLM');
+  const cacheKey = "<msg-12345@msrit.edu>";
+
+  let executionCount = 0;
+  const mockSlowParse = async () => {
+    executionCount++;
+    await new Promise(r => setTimeout(r, 50));
+    return {
+      company: "Prime Numbers",
+      classification: "Internship Opportunity",
+      uniqueId: Math.random()
+    };
+  };
+
+  // Launch 4 concurrent parse requests for the same message ID
+  const promises = [
+    parseEmailWithSingleFlight(cacheKey, mockSlowParse),
+    parseEmailWithSingleFlight(cacheKey, mockSlowParse),
+    parseEmailWithSingleFlight(cacheKey, mockSlowParse),
+    parseEmailWithSingleFlight(cacheKey, mockSlowParse)
+  ];
+
+  const results = await Promise.all(promises);
+
+  assert.strictEqual(executionCount, 1, "Exactly 1 parse execution should occur");
+  assert.strictEqual(results.length, 4);
+  assert.strictEqual(results[0].company, "Prime Numbers");
+  assert.strictEqual(results[1].company, "Prime Numbers");
+  assert.strictEqual(results[2].company, "Prime Numbers");
+  assert.strictEqual(results[3].company, "Prime Numbers");
+  assert.strictEqual(inFlightParses.has(cacheKey), false, "inFlightParses map should be cleared after execution");
+});
+
+// ── Test 12: In-flight Single-Flight Error Cleanup ──
+test('12. Single-Flight Coalescing: errors clean up in-flight map and reject callers', async () => {
+  const { parseEmailWithSingleFlight, inFlightParses } = require('../utils/parseEmailWithLLM');
+  const cacheKey = "<error-msg@msrit.edu>";
+
+  const failingParse = async () => {
+    await new Promise(r => setTimeout(r, 20));
+    throw new Error("Simulated LLM network error");
+  };
+
+  const p1 = parseEmailWithSingleFlight(cacheKey, failingParse);
+  const p2 = parseEmailWithSingleFlight(cacheKey, failingParse);
+
+  await assert.rejects(p1, /Simulated LLM network error/);
+  await assert.rejects(p2, /Simulated LLM network error/);
+  assert.strictEqual(inFlightParses.has(cacheKey), false, "inFlightParses map should be cleaned up on failure");
+});
