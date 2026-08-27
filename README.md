@@ -7,7 +7,7 @@
 [![Google Cloud](https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=googlecloud)](https://cloud.google.com/)
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel)](https://email-tracker-seven-rho.vercel.app/)
 
-> 🚀 **Live Application:** [https://email-tracker-seven-rho.vercel.app/](https://email-tracker-seven-rho.vercel.app/)
+> **Live Application:** [https://email-tracker-seven-rho.vercel.app/](https://email-tracker-seven-rho.vercel.app/)
 
 ---
 
@@ -181,115 +181,6 @@ email-tracker/
 └── README.md
 ```
 
----
-
-## Installation & Setup
-
-### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm**: v9.0.0 or higher
-- **MongoDB**: Local MongoDB or MongoDB Atlas instance
-- **Google Cloud Project**: OAuth 2.0 Client ID with **Gmail API**, **Google Calendar API**, and **Google Cloud Pub/Sub** enabled
-- **NVIDIA NIM API Key**: For Gemma 4 31B and Nemotron 3.5 access
-
----
-
-### Step-by-Step Installation
-
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/tejasholla23/email-tracker.git
-   cd email-tracker
-   ```
-
-2. **Backend Setup:**
-   ```bash
-   cd backend
-   npm install
-   ```
-
-3. **Frontend Setup:**
-   ```bash
-   cd ../frontend
-   npm install
-   ```
-
----
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-
-```env
-# Server Configuration
-PORT=5000
-FRONTEND_URL=http://localhost:3000
-
-# Database
-MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/email-tracker?retryWrites=true&w=majority
-
-# JWT Security
-JWT_SECRET=your_jwt_secret_key
-
-# Google OAuth 2.0
-GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
-GOOGLE_LINK_REDIRECT_URI=http://localhost:5000/auth/google/link-callback
-
-# Google Cloud Pub/Sub
-PUBSUB_TOPIC_NAME=projects/your-project-id/topics/gmail-notifications
-PUBSUB_VERIFICATION_TOKEN=your_random_verification_token
-
-# NVIDIA NIM API (Dual-LLM Pipeline)
-NVIDIA_API_KEY=nvapi-your_nvidia_api_key
-NVIDIA_PRIMARY_MODEL=google/gemma-4-31b-it
-NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b
-
-# Web Push VAPID Keys
-VAPID_SUBJECT=mailto:admin@example.com
-VAPID_PUBLIC_KEY=your_vapid_public_key
-VAPID_PRIVATE_KEY=your_vapid_private_key
-
-# External Cron Key
-CRON_API_KEY=your_cron_secret_api_key
-```
-
-### Frontend (`frontend/.env.local`)
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:5000
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
-```
-
----
-
-## Running the Application
-
-### 1. Start the Backend Server
-```bash
-cd backend
-npm start
-```
-
-### 2. Start the Frontend Next.js Server
-```bash
-cd frontend
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
----
-
-## Running Automated Tests
-
-The test suite covers LLM fallbacks, single-flight coalescing, persistent retry bounds, linked accounts, attachment parsing, and calendar sync:
-
-```bash
-cd backend
-npm test
-```
 
 ---
 
