@@ -7,11 +7,15 @@
 [![Google Cloud](https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=googlecloud)](https://cloud.google.com/)
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel)](https://email-tracker-seven-rho.vercel.app/)
 
+> 🚀 **Live Application:** [https://email-tracker-seven-rho.vercel.app/](https://email-tracker-seven-rho.vercel.app/)
+
 ---
 
-## Project Description
+## Overview
 
-Email Tracker is a multi-user web application that automatically organizes placement-related Gmail emails into a centralized dashboard. It uses Google OAuth for secure authentication, AI-powered email parsing with deterministic fallbacks, incremental Gmail synchronization, Google Calendar integration, and Web Push notifications to help students never miss recruitment deadlines.
+**Email Tracker** is a production-grade, multi-user web application designed to automatically track, parse, and organize campus placement communications into a sleek, centralized dashboard.
+
+Powered by a **Pure Dual-LLM Ingestion Pipeline** (Google Gemma 4 31B + NVIDIA Nemotron 3.5 Lightning), **Google Pub/Sub real-time webhooks**, **Linked Gmail accounts**, **Spreadsheet Shortlist Parsing**, **Google Calendar auto-synchronization**, and **Web Push alerts**, Email Tracker ensures students never miss a registration deadline, test announcement, or shortlist update.
 
 ---
 
@@ -21,30 +25,39 @@ Email Tracker is a multi-user web application that automatically organizes place
 
 ---
 
-## Features
+## Key Features
 
-### Email Ingestion & AI Parsing
-- **Automated Extraction:** Converts unstructured email content into structured application details, including company name, role, stipend, location, links, duration, and required skills.
-- **Reliable Fallbacks:** Uses pattern matching to ensure data extraction continues smoothly even if API limits are reached.
-- **Company Normalization:** Standardizes company names and displays matching logos automatically.
+### 1. Pure Dual-LLM Ingestion & In-Flight Coalescing
+- **Primary & Fallback Models:** Employs **Google Gemma 4 31B** as the primary structured extractor with automatic fallback to **NVIDIA Nemotron 3.5 Lightning** via NVIDIA NIM API.
+- **Single-Flight Coalescing:** When hundreds of students receive the same placement broadcast simultaneously, the backend coalesces concurrent parses into **exactly one LLM request**, caching the structured result by `Message-ID` across all users in milliseconds.
+- **Structured Schema Extraction:** Accurately extracts company name, role, CTC, stipend, location, deadline, eligibility criteria, registration links, and interview rounds without brittle regex guessing.
 
-### Multiuser Data Isolation
-- **OAuth Authentication:** Connects users via Google OAuth with minimal read-only Gmail and Calendar permissions.
-- **Per-User Isolation:** Ensures every user only sees their own emails, applications, and calendar events.
+### 2. Bounded Persistent Retry Queue & Backoff
+- **Freshness-First Guarantee:** Fresh inbox messages always take absolute priority.
+- **Exponential Backoff Ladder:** Transient provider failures are deferred on an exponential schedule (+15m $\rightarrow$ +1h $\rightarrow$ +4h $\rightarrow$ +12h $\rightarrow$ +24h) with a maximum of 5 automated attempts.
+- **Strict Budgeting:** Retries are bounded to at most 2 items per sync cycle, ensuring old retries never starve incoming placement emails.
 
-### Google Calendar Events
-- **Deadline Synchronization:** Automatically adds and updates deadlines, interview schedules, online assessments, and talk sessions on the user's Google Calendar.
-- **Smart Change Detection:** Avoids duplicate calendar events and unnecessary API calls when updates occur.
+### 3. Linked Gmail Accounts (Multi-Inbox Sync)
+- **Unified Multi-Account Support:** Connect up to 3 secondary Google accounts (e.g., personal Gmail + college institutional email).
+- **Independent Checkpoints:** Each linked inbox maintains isolated `historyId` tracking, token refresh management, and sender-level query filtering.
 
-### Web Push Notifications
-- **Instant Browser Alerts:** Sends real-time notifications to user devices for critical deadlines, assessment links, and interview updates using Service Workers.
-- **Priority Alerts:** Categorizes notifications based on event importance.
+### 4. Attachment Ingestion & Spreadsheet Shortlist Detection
+- **Multi-Attachment Support:** Automatically ingests and indexes attached JDs, schedules, and circulars (`.pdf`, `.xlsx`, `.xls`, `.csv`, images).
+- **Automated Shortlist Matching:** Parses embedded Excel rosters and candidate lists using `xlsx`, matching against the student's configured Profile (Name, USN / Roll Number).
+- **Visual Shortlist Badges:** Highlights whether the student is shortlisted directly on the event timeline card and triggers instant high-priority alerts.
 
-### Dashboard & Timeline Tracking
-- **Unified Timeline:** Groups follow-up emails for the same company under a single application card to display communication history sequentially.
-- **Activity-Based Sorting:** Sorts application cards automatically by the date of the most recent email received.
-- **Status Workflow:** Moves applications through stages such as New, Unmarked, Applied, and Done.
-- **Custom Overrides:** Allows manual editing of application details while preserving manual choices during future syncs.
+### 5. Google Calendar Auto-Synchronization
+- **Automatic Event Creation:** Synchronizes drive deadlines, PPTs, assessments, and interviews directly into the user's primary Google Calendar.
+- **Idempotent Hashing:** Employs SHA-256 fingerprinting and MD5 payload diffing to prevent duplicate calendar entries and minimize external API calls.
+
+### 6. Real-Time Push Notifications & Live Webhooks
+- **Google Cloud Pub/Sub Webhooks:** Listens for instant mailbox changes via `/notifications/gmail` push endpoints.
+- **Browser Push Notifications:** Delivers real-time notifications for critical deadlines, registration reminders, and shortlist results via Service Workers.
+
+### 7. Unified Timeline & Application Management
+- **Company Grouping:** Chronologically groups multiple emails from the same recruitment drive under a single interactive application card.
+- **Workflow Stages:** Supports status transitions (`New`, `Applied`, `Interviewing`, `Offered`, `Rejected`, `Archived`).
+- **Student Profile Management:** Allows users to configure target roles, USN/Roll Number, and degree info for personalized matching.
 
 ---
 
@@ -52,13 +65,14 @@ Email Tracker is a multi-user web application that automatically organizes place
 
 | Layer | Technologies Used |
 |---|---|
-| **Frontend** | Next.js, React, CSS Modules / Design System, Service Workers |
+| **Frontend** | Next.js 14, React, CSS Modules / CSS Variables Design System, Service Workers |
 | **Backend** | Node.js, Express.js, Mongoose ODM |
 | **Database** | MongoDB Atlas |
-| **Authentication & Security** | Google OAuth 2.0, JWT, Express Rate Limit |
-| **AI & LLM** | Google Gemma 4 31B & NVIDIA Nemotron 3.5 Lightning (NVIDIA NIM API) |
-| **External APIs** | Gmail API, Google Calendar API, Web Push API |
-| **Deployment** | Vercel (Frontend) |
+| **Authentication & Security** | Google OAuth 2.0 (PKCE), JWT Access/Refresh Rotation, Rate Limiters |
+| **AI & LLM Pipeline** | Google Gemma 4 31B & NVIDIA Nemotron 3.5 Lightning (NVIDIA NIM API) |
+| **Spreadsheet & Attachment Engine** | SheetJS (`xlsx`), Gmail Attachment API |
+| **External APIs** | Gmail API (Push & History API), Google Calendar API, Web Push API |
+| **Deployment** | Vercel (Frontend), Node.js Cloud Platform (Backend) |
 
 ---
 
@@ -66,7 +80,7 @@ Email Tracker is a multi-user web application that automatically organizes place
 
 ```mermaid
 flowchart TD
-    subgraph Client["Frontend (Next.js & Browser)"]
+    subgraph Client["Frontend (Next.js & PWA)"]
         UI["React Dashboard UI"]
         SW["Service Worker (sw.js)"]
     end
@@ -74,8 +88,11 @@ flowchart TD
     subgraph Server["Backend Server (Node.js & Express)"]
         AUTH["Auth Middleware (JWT & OAuth2)"]
         LIMIT["Express Rate Limiters"]
-        SYNC["Sync Engine & Scheduler"]
-        PARSER["AI & Hybrid Parser"]
+        PUBSUB["Gmail Pub/Sub Webhook Handler"]
+        SYNC["Freshness-First Sync Engine"]
+        SINGLEFLIGHT["Single-Flight Coalescer"]
+        PARSER["Dual-LLM Extractor (Gemma 4 / Nemotron 3.5)"]
+        EXCEL["Attachment & Shortlist Engine (xlsx)"]
         CAL_SERVICE["Google Calendar Service"]
         PUSH_SERVICE["Web Push Service"]
     end
@@ -85,26 +102,31 @@ flowchart TD
     end
 
     subgraph External["External APIs & Services"]
-        GMAIL["Gmail API"]
+        GMAIL["Gmail API (History & Attachments)"]
         GCAL["Google Calendar API"]
-        NVIDIA["NVIDIA NIM API (Gemma 4 31B)"]
+        NVIDIA["NVIDIA NIM API"]
         WEBPUSH["Web Push Relays"]
+        GCP_PUBSUB["Google Cloud Pub/Sub"]
     end
 
+    GCP_PUBSUB -->|Push Notification| PUBSUB
+    PUBSUB --> SYNC
     UI -->|HTTPS / REST API| AUTH
     AUTH --> LIMIT
     LIMIT --> SYNC
-    SYNC -->|Fetch Emails| GMAIL
-    SYNC -->|Raw Text| PARSER
-    PARSER -->|Prompt| NVIDIA
-    NVIDIA -->|JSON Schema| PARSER
-    SYNC -->|Persist Apps & Events| MONGO
-    SYNC -->|Trigger Sync| CAL_SERVICE
-    CAL_SERVICE -->|Update Events| GCAL
-    SYNC -->|Trigger Push| PUSH_SERVICE
-    PUSH_SERVICE -->|Deliver Alert| WEBPUSH
-    WEBPUSH -->|Push Notification| SW
-    SW -->|Display Alert| UI
+    SYNC -->|Fetch Messages| GMAIL
+    SYNC -->|Check Single-Flight| SINGLEFLIGHT
+    SINGLEFLIGHT -->|Deduplicated LLM Request| PARSER
+    PARSER -->|Structured Prompt| NVIDIA
+    NVIDIA -->|JSON Data| PARSER
+    SYNC -->|Fetch Attachments| EXCEL
+    SYNC -->|Upsert Applications & Events| MONGO
+    SYNC -->|Sync Deadlines| CAL_SERVICE
+    CAL_SERVICE -->|Update Calendar| GCAL
+    SYNC -->|Trigger Alerts| PUSH_SERVICE
+    PUSH_SERVICE -->|Deliver Notification| WEBPUSH
+    WEBPUSH -->|Push Event| SW
+    SW -->|Visual Toast Alert| UI
 ```
 
 ---
@@ -115,60 +137,64 @@ flowchart TD
 email-tracker/
 ├── backend/
 │   ├── config/
-│   │   └── appConfig.js            # Email domain allowlists & settings
+│   │   └── appConfig.js            # Configuration, models, and domain allowlists
 │   ├── middleware/
-│   │   ├── authenticate.js         # JWT authentication middleware
-│   │   └── rateLimiters.js         # Rate limiting configurations
+│   │   ├── authenticate.js         # JWT verification & token rotation
+│   │   └── rateLimiters.js         # Endpoint rate limiting
 │   ├── models/
-│   │   ├── Account.js              # User account & token schema
-│   │   ├── Application.js          # Application & event timeline schema
+│   │   ├── Account.js              # User account, tokens & sync state
+│   │   ├── LinkedGmailAccount.js   # Secondary linked Gmail accounts
+│   │   ├── Application.js          # Applications, attachments & timeline events
 │   │   └── CompanyInfo.js          # Shared company metadata & logo cache
 │   ├── routes/
-│   │   └── applicationRoutes.js    # Application REST endpoints
+│   │   └── applicationRoutes.js    # REST endpoints for applications, sync & profile
 │   ├── utils/
-│   │   ├── authCodeStore.js        # Authentication code helper
-│   │   ├── calendarService.js      # Google Calendar synchronization
-│   │   ├── companyInfoService.js   # Company logo fetcher
-│   │   ├── jwt.js                  # Token utilities & hashing
-│   │   ├── normalizeCompany.js     # Company name normalizer
-│   │   ├── parseEmailWithLLM.js    # AI email parser & fallbacks
+│   │   ├── attachmentUtils.js      # Attachment downloading & formatting
+│   │   ├── calendarService.js      # Google Calendar synchronization & diffing
+│   │   ├── companyInfoService.js   # Company logo & domain resolution
+│   │   ├── gmailWatchService.js    # Gmail Pub/Sub watch renewal & verification
+│   │   ├── jwt.js                  # JWT issuance & refresh token rotation
+│   │   ├── normalizeCompany.js     # Company name canonicalization
+│   │   ├── parseEmailWithLLM.js    # Pure Dual-LLM extraction & single-flight
 │   │   ├── pushService.js          # Web Push notification dispatcher
-│   │   └── statusMachine.js        # Application status logic
+│   │   ├── shortlistMatcher.js     # Excel/Spreadsheet applicant shortlist detection
+│   │   └── statusMachine.js        # Application status transitions
+│   ├── tests/                      # Comprehensive test suite (40+ automated tests)
 │   ├── package.json
-│   └── server.js                   # Express server entry point
+│   └── server.js                   # Express server, Pub/Sub webhook & cron engine
 │
 ├── frontend/
 │   ├── app/
+│   │   ├── components/             # Reusable UI components
+│   │   ├── offline/page.js         # Offline fallback page
 │   │   ├── privacy/page.js         # Privacy Policy page
 │   │   ├── terms/page.js           # Terms of Service page
-│   │   ├── utils/pushManager.js    # Web Push subscription helper
-│   │   ├── layout.js               # Root Layout
-│   │   └── page.js                 # Main Dashboard view
+│   │   ├── utils/pushManager.js    # Service worker push registration
+│   │   ├── layout.js               # Root layout & meta tags
+│   │   └── page.js                 # Main responsive dashboard
 │   ├── public/
-│   │   ├── dashboard-preview.png   # Dashboard preview image
-│   │   ├── manifest.json           # Web App Manifest
-│   │   └── sw.js                   # Service Worker implementation
+│   │   ├── dashboard-preview.png   # Dashboard preview asset
+│   │   ├── manifest.json           # Web App Manifest (PWA)
+│   │   └── sw.js                   # Web Push & Service Worker implementation
 │   ├── next.config.mjs
 │   └── package.json
-│
-├── docs/
-│   └── dashboard-preview.png       # Documentation preview image
 └── README.md
 ```
 
 ---
 
-## Installation
+## Installation & Setup
 
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher
 - **npm**: v9.0.0 or higher
-- **MongoDB**: Local instance or MongoDB Atlas account
-- **Google Cloud Console Project**: OAuth 2.0 Client ID with **Gmail API** and **Google Calendar API** enabled
+- **MongoDB**: Local MongoDB or MongoDB Atlas instance
+- **Google Cloud Project**: OAuth 2.0 Client ID with **Gmail API**, **Google Calendar API**, and **Google Cloud Pub/Sub** enabled
+- **NVIDIA NIM API Key**: For Gemma 4 31B and Nemotron 3.5 access
 
 ---
 
-### Step-by-Step Setup
+### Step-by-Step Installation
 
 1. **Clone the Repository:**
    ```bash
@@ -192,9 +218,7 @@ email-tracker/
 
 ## Environment Variables
 
-### Required Backend Environment Variables (`backend/.env`)
-
-Create a `.env` file in `backend/`:
+### Backend (`backend/.env`)
 
 ```env
 # Server Configuration
@@ -211,9 +235,14 @@ JWT_SECRET=your_jwt_secret_key
 GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
+GOOGLE_LINK_REDIRECT_URI=http://localhost:5000/auth/google/link-callback
 
-# NVIDIA NIM API (Primary: Google Gemma 4 31B, Fallback: NVIDIA Nemotron 3.5 Lightning)
-NVIDIA_API_KEY=nvapi-your_nvidia_nim_api_key
+# Google Cloud Pub/Sub
+PUBSUB_TOPIC_NAME=projects/your-project-id/topics/gmail-notifications
+PUBSUB_VERIFICATION_TOKEN=your_random_verification_token
+
+# NVIDIA NIM API (Dual-LLM Pipeline)
+NVIDIA_API_KEY=nvapi-your_nvidia_api_key
 NVIDIA_PRIMARY_MODEL=google/gemma-4-31b-it
 NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b
 
@@ -226,9 +255,7 @@ VAPID_PRIVATE_KEY=your_vapid_private_key
 CRON_API_KEY=your_cron_secret_api_key
 ```
 
-### Required Frontend Environment Variables (`frontend/.env.local`)
-
-Create a `.env.local` file in `frontend/`:
+### Frontend (`frontend/.env.local`)
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:5000
@@ -237,41 +264,31 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
 
 ---
 
-## How It Works
+## Running the Application
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant FE as Frontend Dashboard
-    participant BE as Express Backend
-    participant Gmail as Gmail API
-    participant LLM as Google Gemma 4 31B
-    participant DB as MongoDB Atlas
-    participant GCal as Google Calendar API
+### 1. Start the Backend Server
+```bash
+cd backend
+npm start
+```
 
-    User->>FE: Click "Connect Gmail"
-    FE->>BE: Initiate OAuth Flow
-    BE->>User: Redirect to Google Login
-    User->>BE: Authorize Permissions
-    BE->>DB: Save User Account & Tokens
-    BE->>FE: Issue JWT & Refresh Token
+### 2. Start the Frontend Next.js Server
+```bash
+cd frontend
+npm run dev
+```
 
-    loop Incremental Sync (/run-cron)
-        BE->>Gmail: Fetch placement emails (History ID)
-        Gmail-->>BE: Return email messages
-        BE->>LLM: Parse email body into JSON
-        LLM-->>BE: Return structured application data
-        BE->>DB: Upsert application card & timeline event
-        BE->>GCal: Create/update calendar event
-        BE->>FE: Trigger Web Push notification
-    end
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-    User->>FE: Load Dashboard
-    FE->>BE: GET /applications (Bearer Token)
-    BE->>DB: Fetch isolated user applications sorted by latest email date
-    DB-->>BE: Return application records
-    BE-->>FE: Render application cards
+---
+
+## Running Automated Tests
+
+The test suite covers LLM fallbacks, single-flight coalescing, persistent retry bounds, linked accounts, attachment parsing, and calendar sync:
+
+```bash
+cd backend
+npm test
 ```
 
 ---
@@ -279,22 +296,21 @@ sequenceDiagram
 ## Deployment
 
 ### Frontend (Vercel)
-The frontend is hosted live on Vercel:
-- **Live Demo:** [https://email-tracker-seven-rho.vercel.app/](https://email-tracker-seven-rho.vercel.app/)
+- Live Deployment: **[https://email-tracker-seven-rho.vercel.app/](https://email-tracker-seven-rho.vercel.app/)**
+- Connect your GitHub repository to Vercel and configure `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
 
-### Backend Deployment
-- Deploy the `backend/` directory to your preferred Node.js hosting platform (such as Render, Railway, or AWS).
-- Set `FRONTEND_URL` to `https://email-tracker-seven-rho.vercel.app`.
-- Update `GOOGLE_REDIRECT_URI` in Google Cloud Console to match your production backend URL.
-- Use a periodic cron trigger (e.g., cron-job.org) pointing to `GET https://<your-backend-domain>/run-cron?cron_key=<CRON_API_KEY>` to run background synchronization.
+### Backend (Cloud / Container)
+- Deploy `backend/` to your preferred cloud provider (Render, Railway, AWS ECS).
+- Configure all environment variables in the provider dashboard.
+- Set up an automated periodic cron (e.g. `cron-job.org` every 1 hour) hitting `GET https://<your-backend>/run-cron?cron_key=<CRON_API_KEY>` for backup maintenance syncs.
+- Register your webhook URL `https://<your-backend>/notifications/gmail` as a push subscription in Google Cloud Pub/Sub.
 
 ---
 
-## Security & Implementation Details
+## Security & Tenant Isolation
 
-- **Google OAuth 2.0 Flow:** Tokens are acquired and stored securely server-side.
-- **Refresh Token Rotation:** Access tokens are short-lived. Refresh tokens are hashed using SHA-256 before storage in MongoDB and rotated on every refresh call.
-- **Query-Level Data Isolation:** Every database operation scopes queries with `{ userId: req.userId }` to ensure complete tenant separation.
-- **Smart Calendar Syncing:** Uses SHA-256 fingerprinting for event deduplication and MD5 payload hashing to prevent redundant Google Calendar API updates.
-- **VAPID Web Push:** Secures notification transmission using VAPID key pairs and background Service Workers.
-- **Rate Limiting:** Protects endpoints against abuse using `express-rate-limit` middleware across auth, sync, read, and write operations.
+- **Scoped Tenant Isolation:** Every database operation is strictly scoped to `{ userId: req.userId }`.
+- **SHA-256 Refresh Token Rotation:** Refresh tokens are hashed using SHA-256 before persistence and rotated on every authorization cycle.
+- **Zero-Storage Attachment Processing:** Spreadsheet attachments for shortlist detection are parsed in-memory during sync and never stored as raw files on the host disk.
+- **Minimal Permissions:** Connects via Google OAuth with minimal read-only Gmail access (`gmail.readonly`) and Calendar write scope (`calendar.events`).
+- **Comprehensive Rate Limiting:** Tiered `express-rate-limit` guards against auth, read, write, and sync abuse.

@@ -4577,19 +4577,21 @@ export default function JobTrackerDashboard() {
                     <div className="settings-about-card" style={{ marginBottom: '24px' }}>
                       <div className="about-info-box">
                         <h3>About Email Tracker</h3>
-                        <span className="about-version-badge">VERSION 2.0.0 STABLE</span>
+                        <span className="about-version-badge">VERSION 2.5.0 STABLE</span>
                         <p className="about-desc">
-                          Email Tracker automatically tracks and organizes emails from the placement department. It extracts important information such as company details, deadlines, eligibility criteria, and application form links, presenting everything in a centralized dashboard and synchronizing key deadlines directly into your Google Calendar for quick access and easy tracking.
+                          Email Tracker is an intelligent, multi-user campus recruitment companion designed to ensure you never miss a career opportunity. It connects securely to your primary and linked Gmail inboxes, uses an advanced Dual-LLM pipeline (Google Gemma 4 31B & NVIDIA Nemotron 3.5 Lightning) to extract structured job details, parses attached spreadsheets to instantly detect if you are shortlisted, and synchronizes recruitment deadlines directly to your Google Calendar with real-time push alerts.
                         </p>
                         <div className="about-tech-container">
                           <span className="about-tech-label">Built with:</span>
                           <div className="about-tech-tags">
-                            <span className="about-tech-tag">React</span>
-                            <span className="about-tech-tag">Node.js</span>
-                            <span className="about-tech-tag">MongoDB</span>
-                            <span className="about-tech-tag">Gemma 4 31B & Nemotron 3.5</span>
+                            <span className="about-tech-tag">Next.js 14</span>
+                            <span className="about-tech-tag">Node.js & Express</span>
+                            <span className="about-tech-tag">MongoDB Atlas</span>
+                            <span className="about-tech-tag">Dual-LLM (Gemma 4 & Nemotron 3.5)</span>
+                            <span className="about-tech-tag">Gmail Pub/Sub & History API</span>
                             <span className="about-tech-tag">Google Calendar API</span>
-                            <span className="about-tech-tag">Google OAuth</span>
+                            <span className="about-tech-tag">Spreadsheet Shortlist Engine</span>
+                            <span className="about-tech-tag">Web Push Notifications</span>
                           </div>
                         </div>
                       </div>
@@ -4749,100 +4751,51 @@ export default function JobTrackerDashboard() {
                       ❮ Back to Settings
                     </button>
                     <h3 className="settings-title">Privacy Policy</h3>
-                    <p className="legal-last-updated">Last updated: June 2026</p>
+                    <p className="legal-last-updated">Last updated: August 27, 2026</p>
                     <div className="legal-content">
                       <h2>1. What is Email Tracker?</h2>
                       <p>
-                        Email Tracker is an AI-powered tool that helps students track placement-related emails.
-                        It connects to your Gmail account, identifies emails from your college placement department,
-                        and organizes them into an actionable dashboard — so you never miss a deadline or opportunity.
+                        Email Tracker is an AI-powered placement tracking platform designed to help students stay organized during campus placements.
+                        It connects securely to your primary and linked Gmail inboxes, identifies recruitment communications, parses schedules and job details, and presents everything in an actionable dashboard with Google Calendar integration and real-time push alerts.
                       </p>
 
-                      <h2>2. What information do we collect?</h2>
-                      <p>When you use Email Tracker, we collect and store the following:</p>
+                      <h2>2. What information do we access and collect?</h2>
+                      <p>When you use Email Tracker, we process only the data necessary to deliver your placement workflow:</p>
                       <ul>
-                        <li><strong>Your Google account email address</strong> — used to identify your account.</li>
-                        <li><strong>Google OAuth credentials</strong> — securely stored tokens that let us access your Gmail and Google Calendar (if enabled) on your behalf. We never see or store your Google password.</li>
-                        <li><strong>Placement-related Gmail messages</strong> — we read emails matching specific criteria (e.g., from your placement department) to extract application details.</li>
-                        <li><strong>Google Calendar events metadata</strong> — if you enable Google Calendar integration, we store event identifiers and hashes to sync and update placement deadlines directly on your calendar.</li>
-                        <li><strong>Parsed application data</strong> — company names, roles, deadlines, stipends, and other structured information extracted from your emails.</li>
-                        <li><strong>Personal notes</strong> — any notes you add to applications within the dashboard.</li>
-                        <li><strong>Synchronization metadata</strong> — timestamps and history IDs that help us sync efficiently without re-processing old emails.</li>
+                        <li><strong>Google Account Information</strong> — your email address and profile info to authenticate your account.</li>
+                        <li><strong>OAuth Credentials</strong> — securely encrypted and hashed tokens allowing access to your primary and linked Gmail inboxes and Google Calendar (if enabled). We never handle or store your Google password.</li>
+                        <li><strong>Placement Emails & Attachments</strong> — messages and circular attachments (PDF job descriptions, Excel candidate rosters) to extract placement metadata.</li>
+                        <li><strong>Student Profile</strong> — candidate name, USN / Roll Number, and target roles used for local shortlist matching.</li>
+                        <li><strong>Google Calendar Metadata</strong> — event identifiers and hashes to sync drive deadlines without creating duplicate events.</li>
+                        <li><strong>Web Push Tokens</strong> — browser push tokens used to deliver critical deadline alerts.</li>
                       </ul>
 
-                      <h2>3. How do we use your information?</h2>
-                      <p>Everything we collect serves one purpose: making your placement tracking easier. Specifically, we use your data to:</p>
+                      <h2>3. How do we process and use your data?</h2>
+                      <p>All data processed serves one direct purpose: simplifying your placement tracking:</p>
                       <ul>
-                        <li>Synchronize placement emails from your Gmail inbox.</li>
-                        <li>Extract and organize application details using AI.</li>
-                        <li>Display your applications on a personal dashboard.</li>
-                        <li>Synchronize placement deadlines and events with your primary Google Calendar (if enabled).</li>
-                        <li>Show summary statistics (total applications, upcoming deadlines, etc.).</li>
-                        <li>Let you add notes, mark applications as done, and manage your workflow.</li>
+                        <li><strong>Dual-LLM AI Parsing</strong> — unstructured emails are parsed using Google Gemma 4 31B and NVIDIA Nemotron 3.5 Lightning (via NVIDIA NIM API) into clean application cards.</li>
+                        <li><strong>Spreadsheet Shortlist Detection</strong> — attached candidate rosters are parsed in-memory during sync to determine if your name or USN is shortlisted.</li>
+                        <li><strong>Multi-Inbox Sync</strong> — coordinating primary and secondary linked accounts seamlessly.</li>
+                        <li><strong>Calendar Integration</strong> — synchronizing deadlines, PPTs, assessments, and interviews to your Google Calendar.</li>
                       </ul>
-                      <p>We do not use your emails for advertising, profiling, or any purpose unrelated to placement tracking.</p>
+                      <p>We do <strong>not</strong> sell, rent, monetize, or use your data for advertising, profiling, or training public AI models.</p>
 
-                      <h2>4. AI processing</h2>
+                      <h2>4. Zero-Storage Attachment Policy</h2>
                       <p>
-                        When we sync your emails, relevant message content is sent to <strong>NVIDIA's NIM API (running Google's Gemma 4 31B and NVIDIA's Nemotron 3.5 Lightning models)</strong> for processing.
-                        The AI extracts structured placement information — company name, role, deadline, application link, and so on.
-                      </p>
-                      <p>
-                        This processing happens solely to turn unstructured email text into organized application cards.
-                        We do not use your email content for training AI models, advertising, or any other purpose.
+                        Email attachments and candidate rosters are parsed strictly in-memory during synchronization. Raw files and resumes are never stored permanently on the server disk.
                       </p>
 
-                      <h2>5. Where is your data stored?</h2>
+                      <h2>5. Data Storage and Tenant Isolation</h2>
                       <p>
-                        Your account and application data is stored in <strong>MongoDB Atlas</strong>, a cloud-hosted database service.
-                        Authentication is handled using <strong>JWT (JSON Web Tokens)</strong> — your session is verified on every request.
-                      </p>
-                      <p>
-                        Each user's application data is fully isolated. One user cannot access another user's applications, notes, or sync history.
-                      </p>
-                      <p>
-                        We do maintain a shared cache of company metadata (logos, domains) to improve loading performance.
-                        This cache contains no user-specific information.
+                        Your structured applications and timeline events are stored in <strong>MongoDB Atlas</strong>. Every database query is strictly scoped to your authenticated account ID (`userId`), guaranteeing complete tenant separation.
                       </p>
 
-                      <h2>6. Do we share your data?</h2>
-                      <p><strong>No.</strong> We do not sell your data. We do not share it with third parties for their own purposes.</p>
-                      <p>The only external services that interact with your data are:</p>
-                      <ul>
-                        <li><strong>Google OAuth, Gmail & Calendar APIs</strong> — to authenticate you, read your emails, and sync events (if enabled).</li>
-                        <li><strong>NVIDIA NIM API (Gemma 4 31B & Nemotron 3.5 Lightning)</strong> — to parse email content into structured data.</li>
-                        <li><strong>MongoDB Atlas</strong> — to store your data.</li>
-                      </ul>
-                      <p>These services are necessary for Email Tracker to function. We do not send your data anywhere else.</p>
-
-                      <h2>7. Deleting your account</h2>
+                      <h2>6. Your Controls and Account Deletion</h2>
                       <p>
-                        You can delete your account at any time. When you do, we permanently remove:
-                      </p>
-                      <ul>
-                        <li>Your account information and OAuth credentials.</li>
-                        <li>All synchronized applications.</li>
-                        <li>All personal notes.</li>
-                        <li>All synchronization history and metadata.</li>
-                      </ul>
-                      <p>
-                        Globally cached company metadata (logos, domains) is retained because it contains no user-specific information and is shared across the platform.
+                        You can disconnect any linked secondary account at any time, toggle calendar and notification features, or permanently delete your Email Tracker account from Settings to erase all stored applications, notes, and credentials.
                       </p>
 
-                      <h2>8. Security</h2>
-                      <p>We take reasonable steps to protect your data:</p>
-                      <ul>
-                        <li>Authentication uses <strong>JWT tokens</strong> with short-lived access tokens and secure refresh rotation.</li>
-                        <li>Google OAuth follows the standard secure authorization code flow — we never handle your Google password.</li>
-                        <li>All API endpoints verify your identity before returning data.</li>
-                        <li>User data is isolated at the database level — queries are scoped to your account.</li>
-                      </ul>
-                      <p>
-                        That said, no system is perfectly secure. We do our best, but we cannot guarantee absolute security.
-                        If you discover a vulnerability, please let us know.
-                      </p>
-
-                      <h2>9. Contact</h2>
+                      <h2>7. Contact</h2>
                       <p>
                         If you have questions about this Privacy Policy or how your data is handled, reach out to us at{" "}
                         <strong>tejasholla23@gmail.com</strong>.
@@ -4857,71 +4810,44 @@ export default function JobTrackerDashboard() {
                       ❮ Back to Settings
                     </button>
                     <h3 className="settings-title">Terms of Service</h3>
-                    <p className="legal-last-updated">Last updated: July 2, 2026</p>
+                    <p className="legal-last-updated">Last updated: August 27, 2026</p>
                     <div className="legal-content">
                       <h2>1. Acceptance of These Terms</h2>
                       <p>
                         By creating an account or using Email Tracker, you agree to these Terms. If you do not agree, please do not use the application.
                       </p>
 
-                      <h2>2. Eligibility and Account Access</h2>
+                      <h2>2. Eligibility and Linked Inboxes</h2>
                       <p>
-                        Access to Email Tracker may be restricted to users from approved educational institutions. We reserve the right to accept or reject registrations based on supported email domains.
+                        You represent that you own and are authorized to connect all primary and linked secondary Gmail accounts. You may unlink secondary inboxes or revoke permissions at any time.
                       </p>
 
-                      <h2>3. Acceptable Use</h2>
-                      <p>You are responsible for:</p>
-                      <ul>
-                        <li>Maintaining the security of your Google account</li>
-                        <li>Ensuring information you provide is accurate</li>
-                        <li>Complying with applicable laws and institutional policies while using Email Tracker</li>
-                      </ul>
+                      <h2>3. AI Parsing & Shortlist Verification Notice</h2>
                       <p>
-                        You agree not to misuse the service or interfere with the operation or security of the service.
+                        Email Tracker uses advanced Dual-LLM extraction (Gemma 4 & Nemotron 3.5) and automated spreadsheet parsing to organize recruitment communications and detect candidate shortlist status.
+                        <br />
+                        <strong>Important:</strong> AI and automated extractors can occasionally misinterpret ambiguous notices. <strong>You are solely responsible for independently verifying all critical deadlines, eligibility criteria, assessment links, and interview schedules with the official communications from your institution or employer.</strong>
                       </p>
 
-                      <h2>4. Google Account Authorization</h2>
-                      <p>
-                        Your use of Email Tracker is also governed by our Privacy Policy, which explains how we collect, use, and protect your information. Email Tracker accesses Gmail only with your explicit authorization through Google's OAuth authentication system.
-                      </p>
+                      <h2>4. Acceptable Use</h2>
+                      <p>You agree not to misuse the service, connect unauthorized student profiles or accounts, or attempt to disrupt application operations or security mechanisms.</p>
 
                       <h2>5. Service Availability</h2>
                       <p>
-                        Email Tracker is provided on an "as is" and "as available" basis. We may modify, suspend, or discontinue parts of the service at any time without prior notice.
+                        Email Tracker is provided on an "as is" and "as available" basis. We may modify or temporarily update components of the service to perform maintenance and improvements.
                       </p>
 
-                      <h2>6. Intellectual Property</h2>
+                      <h2>6. Limitation of Liability</h2>
                       <p>
-                        Email Tracker — including its design, branding, code, and user interface — belongs to its developer. You may not copy, redistribute, or create derivative works from the application without permission. Your data remains yours.
+                        To the maximum extent permitted by law, Email Tracker shall not be liable for any direct or indirect loss arising from missed application deadlines, parsing discrepancies, or service interruptions.
                       </p>
 
-                      <h2>7. Disclaimer of Warranties</h2>
-                      <p>While we strive for accuracy and reliability, we do not guarantee that:</p>
-                      <ul>
-                        <li>Email synchronization will always succeed</li>
-                        <li>Extracted information will always be complete or accurate</li>
-                        <li>The service will be available without interruption</li>
-                      </ul>
+                      <h2>7. Termination</h2>
                       <p>
-                        Users should always verify important deadlines and application details using official communications from employers or their institution.
+                        You may stop using Email Tracker at any time by deleting your account from Settings.
                       </p>
 
-                      <h2>8. Limitation of Liability</h2>
-                      <p>
-                        To the maximum extent permitted by law, Email Tracker shall not be responsible for any loss arising from reliance on information displayed by the application, including missed deadlines, inaccurate parsing results, or service interruptions.
-                      </p>
-
-                      <h2>9. Termination</h2>
-                      <p>
-                        We reserve the right to suspend or terminate access to Email Tracker if these Terms are violated or if continued access would compromise the security or operation of the service.
-                      </p>
-
-                      <h2>10. Changes to These Terms</h2>
-                      <p>
-                        We may update these Terms from time to time to reflect changes to the service, legal requirements, or operational practices. Continued use of Email Tracker after updated Terms become effective constitutes acceptance of the revised Terms.
-                      </p>
-
-                      <h2>11. Contact Information</h2>
+                      <h2>8. Contact Information</h2>
                       <p>
                         If you have any questions about these Terms, please contact us at:
                         <br />

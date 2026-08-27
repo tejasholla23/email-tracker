@@ -587,6 +587,125 @@ test("7. Restart Resilience: Pending record persisted in MongoDB is discovered u
   assert.strictEqual(matchesStatus && matchesRetry && matchesTime && notDeleted, true, "Persisted pending record must be discoverable across process restarts");
 });
 
+// ── Test 8: Hard Cutoff after 5 Failed Attempts → Sets shouldRetry: false & status: 'failed' ──
+test("8. Retry Exhaustion: 5th failure transitions to status: 'failed', shouldRetry: false, and stops automated retries", async () => {
+  const fakeUserId = "507f191e810c19729de860f6";
+  const docId = "exhausted_doc_id";
+
+  const fourthAttemptDoc = {
+    _id: docId,
+    userId: fakeUserId,
+    messageId: "msg_attempt_5",
+    company: null,
+    role: "Pending Analysis",
+    status: "pending",
+    isDeleted: false,
+    parserVersion: "v1",
+    parseMeta: {
+      shouldRetry: true,
+      status: "pending",
+      retryCount: 4, // 4 prior attempts; this sync will be the 5th attempt!
+      nextRetryAt: new Date(Date.now() - 10000)
+    }
+  };
+
+  const fakeAccount = {
+    _id: fakeUserId,
+    email: "exhaustuser@msrit.edu",
+    tokens: { access_token: "fake_token", refresh_token: "fake_refresh", scope: "https://www.googleapis.com/auth/gmail.readonly" },
+    lastHistoryId: "500000",
+    syncStatus: "idle",
+  };
+
+  const mockGmail = {
+    users: {
+      history: {
+        list: async () => ({
+          data: {
+            historyId: "500010",
+            history: [],
+          },
+        }),
+      },
+      messages: {
+        get: async () => ({
+          data: {
+            id: "msg_attempt_5",
+            internalDate: "1700000000000",
+            payload: {
+              headers: [
+                { name: "From", value: "placement@msrit.edu" },
+                { name: "Subject", value: "Corrupted Email Payload" },
+                { name: "Message-ID", value: "<msg_attempt_5@msrit.edu>" },
+              ],
+              body: { data: Buffer.from("Corrupted or unparseable text").toString("base64url") },
+            },
+          },
+        }),
+      },
+    },
+  };
+
+  // LLM continues to fail
+  mockLLMBehavior = () => {
+    const err = new Error("Provider overloaded");
+    err.status = 503;
+    throw err;
+  };
+
+  let updatedPayload = null;
+
+  const originalFind = Account.find;
+  const originalFindOneAndUpdate = Account.findOneAndUpdate;
+  const originalLinkedFind = LinkedGmailAccount.find;
+  const originalAppFind = Application.find;
+  const originalAppFindOne = Application.findOne;
+  const originalAppFindByIdAndUpdate = Application.findByIdAndUpdate;
+  const originalGoogleGmail = google.gmail;
+
+  google.gmail = () => mockGmail;
+  Account.find = async () => [fakeAccount];
+  Account.findOneAndUpdate = async (query, update) => {
+    Object.assign(fakeAccount, update.$set || update);
+    return fakeAccount;
+  };
+  LinkedGmailAccount.find = async () => [];
+
+  Application.find = async (query) => {
+    if (query?.userId) {
+      return [fourthAttemptDoc];
+    }
+    return [];
+  };
+  Application.findOne = async () => fourthAttemptDoc;
+
+  Application.findByIdAndUpdate = async (id, update) => {
+    assert.strictEqual(id, docId);
+    updatedPayload = update;
+    Object.assign(fourthAttemptDoc, update);
+    return fourthAttemptDoc;
+  };
+
+  try {
+    await fetchAndProcessEmails(fakeUserId);
+
+    assert.ok(updatedPayload, "Document must be updated in MongoDB");
+    assert.strictEqual(fourthAttemptDoc.parseMeta.retryCount, 5, "retryCount must reach 5");
+    assert.strictEqual(fourthAttemptDoc.parseMeta.shouldRetry, false, "shouldRetry must be false after reaching max attempts");
+    assert.strictEqual(fourthAttemptDoc.parseMeta.status, "failed", "parseMeta.status must be 'failed'");
+    assert.strictEqual(fourthAttemptDoc.status, "failed", "Document status must be 'failed'");
+    assert.strictEqual(fourthAttemptDoc.parseMeta.nextRetryAt, null, "nextRetryAt must be cleared (null)");
+  } finally {
+    Account.find = originalFind;
+    Account.findOneAndUpdate = originalFindOneAndUpdate;
+    LinkedGmailAccount.find = originalLinkedFind;
+    Application.find = originalAppFind;
+    Application.findOne = originalAppFindOne;
+    Application.findByIdAndUpdate = originalAppFindByIdAndUpdate;
+    google.gmail = originalGoogleGmail;
+  }
+});
+
 test.after(() => {
   process.exit(0);
 });

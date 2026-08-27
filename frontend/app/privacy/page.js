@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         maxWidth: "680px",
         background: "rgba(17, 24, 39, 0.7)",
         backdropFilter: "blur(16px)",
-        webkitBackdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         border: "1px solid #1f2937",
         borderRadius: "20px",
         padding: "48px 40px",
@@ -41,129 +41,95 @@ export default function PrivacyPage() {
 
         <div style={{ fontSize: "14.5px", color: "#94a3b8", lineHeight: "1.7", display: "flex", flexDirection: "column", gap: "24px" }}>
           <p>
-            Last Updated: July 2, 2026
+            <strong>Last Updated:</strong> August 27, 2026
           </p>
 
           <p>
-            Email Tracker respects your privacy and is committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have regarding your data when using our application.
+            Email Tracker ("we", "our", or "the application") is committed to protecting your privacy and handling your data transparently. This Privacy Policy explains what information we access, how it is processed to deliver placement tracking features, and how you can manage or delete your data at any time.
           </p>
 
           <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>1. Information We Collect</h2>
+            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>1. Information We Access and Collect</h2>
             <p style={{ marginBottom: "12px" }}>
-              When you sign in using your Google account and authorize scopes, we request permission to access your Gmail inbox and Google Calendar (if enabled) through Google's OAuth authentication system.
-            </p>
-            <p style={{ marginBottom: "12px" }}>
-              Depending on the permissions you grant, we may collect and store:
+              When you sign in using Google OAuth and connect your primary or secondary linked Gmail accounts, we request authorization with minimal, necessary permissions:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Your Google account email address.</li>
-              <li>Gmail messages matching specific criteria (e.g. from your placement department) to extract application details.</li>
-              <li>Google Calendar event identifiers and hashes required to synchronize and update placement deadlines directly on your primary calendar.</li>
-              <li>Metadata associated with those emails and calendar events (such as timestamps, sender info, event fingerprints, and hashes).</li>
+              <li><strong>Google Account Information:</strong> Your email address and basic profile info to authenticate your account.</li>
+              <li><strong>Gmail Messages & Attachments:</strong> Placement-related emails and circular attachments (such as PDF job descriptions and Excel candidate shortlist rosters) to extract recruitment details.</li>
+              <li><strong>Google Calendar Data (Optional):</strong> If Calendar integration is enabled, we create and maintain placement event reminders and drive deadlines on your primary calendar.</li>
+              <li><strong>Student Profile Data:</strong> Configurable student attributes (such as Candidate Name, USN / Roll Number, and target roles) used exclusively for local shortlist matching.</li>
+              <li><strong>Web Push Tokens:</strong> Browser push subscriptions to deliver real-time notifications for drive deadlines and assessment alerts.</li>
             </ul>
-            <p>
-              Email Tracker only processes email and calendar content necessary to identify placement opportunities, extract details, and maintain your calendar sync.
-            </p>
           </section>
 
           <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>2. How We Use Your Information</h2>
+            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>2. How We Process and Use Your Information</h2>
             <p style={{ marginBottom: "12px" }}>
-              The information obtained from Google APIs is used solely to provide the core functionality of Email Tracker, including:
+              Data accessed via Google APIs is used strictly to power the core functionality of Email Tracker:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Detecting placement-related emails and parsing their contents using AI (Google's Gemma 4 31B & NVIDIA's Nemotron 3.5 Lightning via NVIDIA NIM API).</li>
-              <li>Extracting information such as company names, roles, deadlines, eligibility criteria, and application links.</li>
-              <li>Organizing this information into your personal dashboard.</li>
-              <li>Synchronizing placement deadlines and events with your primary Google Calendar (if enabled).</li>
-              <li>Maintaining the status of your applications and handling soft-deletions safely.</li>
-              <li>Synchronizing newly received placement emails.</li>
+              <li><strong>Dual-LLM AI Parsing:</strong> Converting unstructured placement emails into structured application records using Google Gemma 4 31B with automatic fallback to NVIDIA Nemotron 3.5 Lightning (via NVIDIA NIM API).</li>
+              <li><strong>Spreadsheet Shortlist Detection:</strong> Inspecting attached candidate lists (`.xlsx`, `.xls`, `.csv`) in-memory during sync to determine if your name or USN appears on the shortlist.</li>
+              <li><strong>Multi-Inbox Coordination:</strong> Synchronizing both your institutional and linked secondary accounts seamlessly without mixing credentials.</li>
+              <li><strong>Automated Calendar Scheduling:</strong> Creating and updating calendar events for drive deadlines, online tests, PPTs, and interview schedules.</li>
+              <li><strong>Real-Time Delivery:</strong> Sending browser notifications when new placement drives or shortlist announcements arrive.</li>
             </ul>
             <p>
-              We do not use your Gmail or Calendar data for advertising, marketing, profiling, or any unrelated purpose.
+              We do <strong>not</strong> sell, rent, monetize, or use your email content for advertising, marketing, or training commercial AI models.
             </p>
           </section>
 
           <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>3. Data Storage</h2>
+            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>3. Data Storage and Retention</h2>
             <p style={{ marginBottom: "12px" }}>
-              To provide the application's functionality, we store certain information associated with your account in our MongoDB database, including:
+              We store only structured metadata necessary to maintain your timeline in a secure MongoDB Atlas cluster:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Extracted application details and statuses.</li>
-              <li>Personal notes you choose to add.</li>
-              <li>Google OAuth credentials (access/refresh tokens) required to maintain authorized API connection.</li>
-              <li>Google Calendar event IDs and hashes for synchronization integrity.</li>
-              <li>Basic account details such as your email address.</li>
+              <li>Parsed application records (Company, Role, Deadline, Status, Eligibility, and Form Links).</li>
+              <li>Encrypted and hashed OAuth credentials (short-lived access tokens and SHA-256 hashed refresh tokens).</li>
+              <li>Calendar synchronization hashes to prevent duplicate entries.</li>
             </ul>
             <p>
-              Raw email content is processed temporarily only as necessary to perform parsing and extraction.
+              <strong>Zero-Storage Attachment Policy:</strong> Email attachments and spreadsheets are processed strictly in-memory during sync for metadata and shortlist matching; raw files and resumes are never stored permanently on the server disk.
             </p>
           </section>
 
           <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>4. Data Sharing</h2>
+            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>4. Third-Party Services</h2>
             <p style={{ marginBottom: "12px" }}>
-              We do not sell, rent, or share your personal information or Gmail data with advertisers or third parties.
-            </p>
-            <p>
-              Information obtained through Google APIs is used only to provide and improve the user-facing features of Email Tracker.
-            </p>
-          </section>
-
-          <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>5. Data Security</h2>
-            <p style={{ marginBottom: "12px" }}>
-              We implement reasonable technical and organizational measures to help protect your information from unauthorized access, modification, disclosure, or loss.
-            </p>
-            <p>
-              While we strive to protect your data, no method of electronic storage or transmission over the Internet can be guaranteed to be completely secure.
-            </p>
-          </section>
-
-          <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>6. Your Choices</h2>
-            <p style={{ marginBottom: "12px" }}>
-              You remain in control of your information at all times.
-            </p>
-            <p style={{ marginBottom: "12px" }}>
-              You may:
+              Email Tracker integrates with trusted industry providers solely to deliver service features:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li>Disconnect your Google account by revoking Email Tracker's access through your Google Account settings.</li>
-              <li>Delete your Email Tracker account from within the application.</li>
-              <li>Request that your stored application data be removed.</li>
+              <li><strong>Google Cloud & Gmail APIs:</strong> For OAuth 2.0 authentication, mailbox change notifications (Pub/Sub), and calendar sync.</li>
+              <li><strong>NVIDIA NIM API:</strong> For structured LLM extraction (Gemma 4 31B & Nemotron 3.5 Lightning) with strict privacy agreements.</li>
+              <li><strong>MongoDB Atlas:</strong> For secure, encrypted database storage with strict per-tenant scoping.</li>
             </ul>
-            <p>
-              Deleting your account removes your application data and associated authentication information from our active systems.
-            </p>
           </section>
 
           <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>7. Google API Services</h2>
+            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>5. Your Rights and Data Control</h2>
             <p style={{ marginBottom: "12px" }}>
-              Email Tracker accesses Gmail and Google Calendar only with your explicit authorization.
+              You maintain complete ownership and control over your data:
             </p>
-            <p>
-              Our use of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.
-            </p>
+            <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
+              <li><strong>Unlink Accounts:</strong> Disconnect any linked secondary Gmail account at any time with one click.</li>
+              <li><strong>Toggle Features:</strong> Enable or disable Google Calendar synchronization and Web Push alerts independently.</li>
+              <li><strong>Account Deletion:</strong> Permanently delete your account from Settings, which removes all stored applications, notes, credentials, and sync history.</li>
+              <li><strong>Revoke Permissions:</strong> Revoke Email Tracker's access directly via your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" style={{ color: "#14b8a6" }}>Google Account Security</a> settings.</li>
+            </ul>
           </section>
 
           <section>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>8. Changes to This Policy</h2>
-            <p style={{ marginBottom: "12px" }}>
-              We may update this Privacy Policy from time to time to reflect changes in the application or legal requirements.
-            </p>
+            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>6. Google API Limited Use Disclosure</h2>
             <p>
-              The "Last Updated" date at the top of this page will always indicate the most recent revision.
+              Email Tracker's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" style={{ color: "#14b8a6" }}>Google API Services User Data Policy</a>, including the Limited Use requirements.
             </p>
           </section>
 
           <section style={{ borderTop: "1px solid #374151", paddingTop: "24px", marginTop: "12px" }}>
-            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>9. Contact</h2>
+            <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>7. Contact Us</h2>
             <p>
-              If you have any questions about this Privacy Policy or how your information is handled, please contact:
+              If you have any questions or requests regarding your data and privacy, please contact:
             </p>
             <p style={{ marginTop: "8px", fontWeight: "600", color: "#14b8a6" }}>
               Email: tejasholla23@gmail.com

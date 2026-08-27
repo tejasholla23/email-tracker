@@ -49,6 +49,7 @@ const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 const CURRENT_PARSER_VERSION = "v4";
 const MAX_LINKED_ACCOUNTS = 3;
 const MAX_PENDING_RETRIES_PER_SYNC = 2;
+const MAX_PARSE_RETRY_ATTEMPTS = 5;
 
 function getLinkRedirectUri() {
   if (process.env.GOOGLE_LINK_REDIRECT_URI) {
@@ -1501,16 +1502,17 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             if (!parsed || !parsed.company) {
               if (shouldRetry) {
                 const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
-                const nextRetry = getNextRetryDate(currentAttempts);
+                const isExhausted = currentAttempts >= MAX_PARSE_RETRY_ATTEMPTS;
+                const nextRetry = isExhausted ? null : getNextRetryDate(currentAttempts);
                 
                 const updateObj = {
                   "parseMeta.retryCount": currentAttempts,
                   "parseMeta.lastRetryAt": new Date(),
                   "parseMeta.nextRetryAt": nextRetry,
-                  "parseMeta.shouldRetry": true,
-                  "parseMeta.status": "pending",
+                  "parseMeta.shouldRetry": !isExhausted,
+                  "parseMeta.status": isExhausted ? "failed" : "pending",
                   "parseMeta.lastRetryError": parsed?.parseMeta?.error || "Dual-model failure",
-                  status: currentAttempts >= 5 ? "failed_retryable" : "pending",
+                  status: isExhausted ? "failed" : "pending",
                   isDeleted: false
                 };
                 if (eventAdded) {
@@ -1525,7 +1527,11 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
                   }
                 }
                 await Application.findByIdAndUpdate(exists._id, updateObj, { returnDocument: 'after' });
-                console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
+                if (isExhausted) {
+                  console.log(`[REPARSE_EXHAUSTED] ${id} | Exceeded maximum retry attempts (${MAX_PARSE_RETRY_ATTEMPTS}). Marked as failed.`);
+                } else {
+                  console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}/${MAX_PARSE_RETRY_ATTEMPTS}). Deferred until ${nextRetry.toISOString()}`);
+                }
               } else {
                 // Fatal parsing error / explicit non-recruitment
                 const updatePayload = { parserVersion: CURRENT_PARSER_VERSION };
@@ -1573,16 +1579,17 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             }
           } else {
             const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
-            const nextRetry = getNextRetryDate(currentAttempts);
+            const isExhausted = currentAttempts >= MAX_PARSE_RETRY_ATTEMPTS;
+            const nextRetry = isExhausted ? null : getNextRetryDate(currentAttempts);
             
             const updateObj = {
               "parseMeta.retryCount": currentAttempts,
               "parseMeta.lastRetryAt": new Date(),
               "parseMeta.nextRetryAt": nextRetry,
-              "parseMeta.shouldRetry": true,
-              "parseMeta.status": "pending",
+              "parseMeta.shouldRetry": !isExhausted,
+              "parseMeta.status": isExhausted ? "failed" : "pending",
               "parseMeta.lastRetryError": parsed?.parseMeta?.error || "Dual-model failure",
-              status: currentAttempts >= 5 ? "failed_retryable" : "pending",
+              status: isExhausted ? "failed" : "pending",
               isDeleted: false
             };
             if (eventAdded) {
@@ -1597,7 +1604,11 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
               }
             }
             await Application.findByIdAndUpdate(exists._id, updateObj, { returnDocument: 'after' });
-            console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
+            if (isExhausted) {
+              console.log(`[REPARSE_EXHAUSTED] ${id} | Exceeded maximum retry attempts (${MAX_PARSE_RETRY_ATTEMPTS}). Marked as failed.`);
+            } else {
+              console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}/${MAX_PARSE_RETRY_ATTEMPTS}). Deferred until ${nextRetry.toISOString()}`);
+            }
           }
         } else {
           // Fatal parsing error (parseEmailWithLLM returned null or fatal exception)
