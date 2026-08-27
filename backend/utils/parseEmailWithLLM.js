@@ -2047,7 +2047,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     hasLink: !!linkInfo.primary,
   });
 
-  // ── Step 2: LLM Extraction (Google Gemma 4 31B) ─────────────────────────
+  // ── Step 2: LLM Extraction (Primary: Gemma 4 31B, Fallback: Nemotron 3.5) ──
   const llmResult = await callLLMStructured({
     subject: sourceSubject,
     sender,
@@ -2057,12 +2057,71 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
 
   const llmData = llmResult.status === "success" ? llmResult.data : null;
   const gemini = llmData; // alias for internal references
-  const shouldRetry = llmResult.status === "transport_error";
+  const shouldRetry = llmResult.status === "transport_error" || !llmData;
 
-  // ── Step 3: Three-tier company resolution ──────────────────────────────────
-  //   Tier 1 (1.0)  — known alias from sender domain
-  //   Tier 2 (0.85) — LLM company
-  //   Tier 3 (var.) — deterministic fallback
+  // ── PURE DUAL-LLM ARCHITECTURE: If both models fail, defer for retry ───────
+  if (!llmData) {
+    console.warn(`[PARSE_FAILED] Both primary (${PRIMARY_MODEL}) and secondary (${FALLBACK_MODEL}) LLM models failed. Deferring parse for retry.`);
+    return {
+      emailType: "job",
+      opportunityType: "JOB_APPLICATION",
+      isRelevant: true,
+      classification: "Pending Analysis",
+      type: "unknown",
+      status: "pending",
+      confidenceScore: 0,
+      timelineTitle: "",
+      timelineSummary: "",
+      company: null,
+      domain: "",
+      subtitle: "",
+      role: "Pending Analysis",
+      title: "Pending Analysis",
+      processId: "",
+      processName: "",
+      displayFields: [],
+      skills: [],
+      fieldsToDisplay: [],
+      programRoles: "",
+      programStipend: "",
+      programDuration: "",
+      salaryText: "",
+      venue: "",
+      deadlineText: "",
+      deadlineISO: "",
+      eventDate: null,
+      eventTime: "",
+      reportingTime: "",
+      link: linkInfo.primary || "",
+      links: linkInfo.all || [],
+      isFormLink: linkInfo.isForm,
+      jobRole: "",
+      parseMeta: {
+        sourceSubject,
+        forwarded: forwarded.isForwarded,
+        sender,
+        classificationSource: "none",
+        companySource: "none",
+        companyConfidence: 0,
+        hasLink: !!linkInfo.primary,
+        shouldRetry: true,
+        status: "pending",
+        llmProvider: "none",
+        model: "none",
+        llmStatus: llmResult.status || "transport_error",
+        llmUsed: false,
+        geminiUsed: false,
+        llmEmailType: null,
+        llmClassification: null,
+        geminiEmailType: null,
+        geminiClassification: null,
+        internetMessageId: "",
+        error: llmResult.error || "Dual-model failure: both primary and secondary LLM calls failed"
+      }
+    };
+  }
+
+  // ── Step 3: Company Resolution from LLM & Verified Domain ──────────────────
   const candidateSenders = [forwarded.from, sender].filter(Boolean);
   let senderAliasCompany = "";
   for (const snd of candidateSenders) {
@@ -2075,102 +2134,31 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     if (directAlias) { senderAliasCompany = directAlias; break; }
   }
 
-  const detCompanyObj = resolveCompany({ subject: sourceSubject, body: sourceBody, sender, forwarded });
+  let resolvedCompany = "";
+  let companySource = "llm";
+  let companyConfidence = 0.85;
 
-  let company, companySource, companyConfidence;
   if (senderAliasCompany) {
-    company = senderAliasCompany; companySource = "sender_alias"; companyConfidence = 1.0;
+    resolvedCompany = senderAliasCompany;
+    companySource = "sender_alias";
+    companyConfidence = 1.0;
   } else if (llmData?.company && sanitizeCompany(llmData.company)) {
-    company = sanitizeCompany(llmData.company); companySource = "llm"; companyConfidence = 0.85;
-  } else {
-    company = detCompanyObj.company; companySource = detCompanyObj.source; companyConfidence = detCompanyObj.confidence;
+    const sanitized = sanitizeCompany(llmData.company);
+    const canonicalAlias = matchKnownCompany(sanitized);
+    resolvedCompany = canonicalAlias || sanitized;
+    companySource = "llm";
+    companyConfidence = 0.85;
+  } else if (llmData?.domain && sanitizeCompany(llmData.domain)) {
+    resolvedCompany = sanitizeCompany(llmData.domain);
+    companySource = "domain_fallback";
+    companyConfidence = 0.70;
   }
 
-  let resolvedCompany = company ? (sanitizeCompany(company) || "") : "";
-
-  // Event & Non-job fallback for missing company:
-  if (!resolvedCompany && (gemini?.emailType === "event" || detClassification.category === "workshopWebinar" || detClassification.category === "hackathonEvent")) {
-    if (gemini?.domain && sanitizeCompany(gemini.domain)) {
-      resolvedCompany = sanitizeCompany(gemini.domain);
-      companySource = "domain_fallback";
-      companyConfidence = 0.70;
-    } else {
-      // Check displayFields for organizer/speaker/host
-      const hostField = (gemini?.displayFields || []).find(f =>
-        /^(speaker\/company|organizer|host|speaker|company|presenter)$/i.test(f?.label)
-      )?.value;
-      if (hostField && sanitizeCompany(hostField)) {
-        resolvedCompany = sanitizeCompany(hostField);
-        companySource = "host_field";
-        companyConfidence = 0.70;
-      } else if (gemini?.subtitle && sanitizeCompany(gemini.subtitle)) {
-        // Try extracting organizer from subtitle (e.g. "POD Expert Talk Series..." -> "POD")
-        const firstWord = gemini.subtitle.split(/\s+/)[0];
-        if (firstWord && sanitizeCompany(firstWord) && firstWord.length > 2) {
-          resolvedCompany = sanitizeCompany(firstWord);
-          companySource = "subtitle_prefix";
-          companyConfidence = 0.60;
-        }
-      }
-    }
-  }
-
-  if (!resolvedCompany) { companySource = "none"; companyConfidence = 0; }
-
-  // ── Step 4: Classification arbitration (relative confidence) ──────────────
-  const detConf = detClassification.confidence || 0;
-  const effectiveLlmConf = gemini?.classification
-    ? (gemini.classificationConfidence ? gemini.classificationConfidence / 100 : 0.85)
-    : 0;
-
-  let finalClassification, classificationReason;
-  let emailType, finalType, finalConfidence;
-
-  if (gemini?.classification && gemini?.emailType) {
-    const detIsPrimary = INTENT_TIER[detClassification.category] === "primary";
-    const detIsSecondaryOrGeneric = INTENT_TIER[detClassification.category] === "secondary" || detClassification.category === "genericNotice";
-
-    if (detIsPrimary && detConf >= 0.90 && effectiveLlmConf < 0.80) {
-      finalClassification = detClassification.classification;
-      emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
-                  detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
-      finalType = detClassification.type;
-      finalConfidence = detConf;
-      classificationReason = `deterministic preserved: "${detClassification.classification}" (det=${detConf.toFixed(2)}) is high-confidence primary-tier`;
-    } else if (detIsSecondaryOrGeneric && effectiveLlmConf >= 0.70) {
-      finalClassification = gemini.classification;
-      emailType = gemini.emailType;
-      finalType = gemini.type ?? detClassification.type;
-      finalConfidence = effectiveLlmConf;
-      classificationReason = `llm preferred: "${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)}) supersedes secondary deterministic "${detClassification.classification}" (det=${detConf.toFixed(2)})`;
-    } else if (effectiveLlmConf >= detConf) {
-      finalClassification = gemini.classification;
-      emailType = gemini.emailType;
-      finalType = gemini.type ?? detClassification.type;
-      finalConfidence = effectiveLlmConf;
-      classificationReason = `llm preferred: "${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)}) >= det="${detClassification.classification}" (det=${detConf.toFixed(2)})`;
-    } else {
-      finalClassification = detClassification.classification;
-      emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
-                  detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
-      finalType = detClassification.type;
-      finalConfidence = detConf;
-      classificationReason = `deterministic preferred: "${detClassification.classification}" (det=${detConf.toFixed(2)}) > llm="${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)})`;
-    }
-  } else if (gemini?.classification) {
-    finalClassification = gemini.classification;
-    emailType = gemini.emailType ?? (detClassification.category === "hackathonEvent" ? "event" : "job");
-    finalType = gemini.type ?? detClassification.type;
-    finalConfidence = effectiveLlmConf;
-    classificationReason = `llm only: "${gemini.classification}" (llm=${effectiveLlmConf.toFixed(2)})`;
-  } else {
-    finalClassification = detClassification.classification;
-    emailType = detClassification.category === "hackathonEvent" || detClassification.category === "workshopWebinar" ? "event" :
-                detClassification.category === "nonRecruitment" ? "nonRecruitment" : "job";
-    finalType = detClassification.type;
-    finalConfidence = detConf;
-    classificationReason = `deterministic fallback (llm unavailable): "${detClassification.classification}" (det=${detConf.toFixed(2)})`;
-  }
+  // ── Step 4: Classification & Metadata from LLM ────────────────────────────
+  const finalClassification = llmData.classification || "New Hiring Opportunity";
+  const emailType = llmData.emailType || "job";
+  const finalType = llmData.type || "unknown";
+  const finalConfidence = 0.85;
 
   const CLASSIFICATION_TO_OPP_TYPE = {
     "Hackathon / Event Invitation": "HACKATHON",
@@ -2180,19 +2168,11 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     "Venue Update": "OTHER_PLACEMENT_EVENT",
     "Non-Recruitment Email": "OTHER_PLACEMENT_EVENT",
   };
-  const inferredOppType = CLASSIFICATION_TO_OPP_TYPE[finalClassification];
-  const finalOppType = inferredOppType || gemini?.opportunityType || detClassification.opportunityType || "JOB_APPLICATION";
-
+  const finalOppType = CLASSIFICATION_TO_OPP_TYPE[finalClassification] || llmData.opportunityType || "JOB_APPLICATION";
   const finalStatus = "new";
 
-  console.log(`[CLASSIFICATION_DECISION] ${classificationReason}\nemailType="${emailType}" opportunityType="${finalOppType}" type="${finalType}"`);
-
-  let displayFields = gemini?.displayFields || [];
-  if (displayFields.length === 0) {
-    displayFields = extractFallbackDisplayFields(sourceBody, detClassification.opportunityType);
-  }
-
-  displayFields = displayFields
+  // ── Step 5: Display Fields Validation & Cleaning ──────────────────────────
+  let displayFields = (llmData.displayFields || [])
     .map(f => {
       let val = (f.value || "").trim().replace(/\s+/g, " ");
       val = val.replace(/^[-:;.,*•]+|[-:;.,*•]+$/g, "").trim();
@@ -2207,8 +2187,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     .filter(Boolean);
 
   if (displayFields.length > 5) {
-    const oppType = detClassification.opportunityType || "JOB_APPLICATION";
-    const priorities = FIELD_PRIORITY[oppType] || FIELD_PRIORITY.JOB_APPLICATION;
+    const priorities = FIELD_PRIORITY[finalOppType] || FIELD_PRIORITY.JOB_APPLICATION;
     displayFields.sort((a, b) => {
       const aIdx = priorities.findIndex(p => a.label.toLowerCase().includes(p));
       const bIdx = priorities.findIndex(p => b.label.toLowerCase().includes(p));
@@ -2219,31 +2198,14 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     displayFields = displayFields.slice(0, 5);
   }
 
+  // ── Step 6: Role & Subtitle from LLM ──────────────────────────────────────
   const isJobEmail = emailType === "job";
   const displayFieldsRole = (displayFields || []).find(f =>
     /^(role|roles|position|designation|job\s*role|job\s*title)$/i.test(f?.label)
   )?.value || "";
-  const fallbackRole = displayFieldsRole || extractFallbackRole(sourceSubject, sourceBody);
-  const roleField = isJobEmail ? (fallbackRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
-
-  let subtitle, subtitleSource;
-  if (gemini?.subtitle) {
-    subtitle = gemini.subtitle;
-    subtitleSource = "llm";
-  } else {
-    const fallback = (roleField !== "Unknown Role" && isJobEmail ? roleField : "")
-      || generateSubtitleFallback(sourceSubject, sourceBody, detClassification.category);
-    if (fallback) {
-      subtitle = fallback;
-      subtitleSource = "fallback_extractor";
-    } else {
-      subtitle = "";
-      subtitleSource = "none";
-    }
-  }
-  console.log(`[SUBTITLE_DECISION] subtitle="${subtitle}" source="${subtitleSource}"`);
-
-  const detTitle = generateTitle(resolvedCompany, detClassification.category, sourceSubject, roleField, sourceBody);
+  const roleField = isJobEmail ? (displayFieldsRole || llmData.subtitle || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
+  const subtitle = llmData.subtitle || roleField || "";
+  const subtitleSource = "llm";
 
   const deadlineField = displayFields.find(f =>
     /deadline|due date|last date|closing date/i.test(f.label)
@@ -2259,23 +2221,12 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       cleanedLength: preprocessed.cleanedLength,
       decisions: preprocessed.decisions,
     },
-    gemini: {
-      company:        gemini?.company        ?? null,
-      classification: gemini?.classification ?? null,
-      classificationConfidence: gemini?.classificationConfidence ?? null,
-      emailType:      gemini?.emailType      ?? null,
-      subtitle:       gemini?.subtitle       ?? null,
-      displayFields:  gemini?.displayFields  ?? [],
-    },
-    deterministic: {
-      company:        detCompanyObj.company  || null,
-      source:         detCompanyObj.source,
-      confidence:     detCompanyObj.confidence,
-      classification: detClassification.classification,
-      classificationConfidence: detClassification.confidence,
-      category:       detClassification.category,
-      intentTier:     INTENT_TIER[detClassification.category] || "unknown",
-      senderAlias:    senderAliasCompany     || null,
+    llm: {
+      company:        llmData?.company        ?? null,
+      classification: llmData?.classification ?? null,
+      emailType:      llmData?.emailType      ?? null,
+      subtitle:       llmData?.subtitle       ?? null,
+      displayFields:  llmData?.displayFields  ?? [],
     },
     reasoning: {
       company: {
@@ -2283,14 +2234,11 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
         resolvedCompany,
         confidence: companyConfidence,
       },
-      classification: {
-        reason: classificationReason,
-      },
       subtitle: {
         source: subtitleSource,
       },
       displayFields: {
-        source: (gemini?.displayFields?.length > 0) ? "gemini" : "fallback_extractor",
+        source: "llm",
         count: displayFields.length,
       },
     },
@@ -2303,20 +2251,20 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     classification: finalClassification,
     type:           finalType,
     status:         finalStatus,
-    confidenceScore: typeof finalConfidence === "number" ? finalConfidence : Math.min(1, detClassification.confidence + (resolvedCompany ? 0.05 : 0)),
-    timelineTitle:   gemini?.timelineTitle   || "",
-    timelineSummary: gemini?.timelineSummary || "",
+    confidenceScore: finalConfidence,
+    timelineTitle:   llmData?.timelineTitle   || "",
+    timelineSummary: llmData?.timelineSummary || "",
 
     company:  resolvedCompany,
-    domain:   gemini?.domain || "",
+    domain:   llmData?.domain || "",
     subtitle,
     role:     roleField,
-    title:    subtitle || detTitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
+    title:    subtitle || (resolvedCompany ? `${resolvedCompany} Opportunity` : "Unknown Opportunity"),
     processId:   buildProcessId(resolvedCompany),
     processName: `${resolvedCompany || "Unknown Company"} hiring process`,
 
     displayFields,
-    skills: gemini?.skills || [],
+    skills: llmData?.skills || [],
 
     ...(() => {
       const derived = deriveFromDisplayFields(displayFields);
@@ -2336,10 +2284,10 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       };
     })(),
 
-    // Links (still from deterministic link extractor)
-    link:       linkInfo.primary || gemini?.link || "",
-    links:      linkInfo.all.length ? linkInfo.all : gemini?.link ? [gemini.link] : [],
-    isFormLink: linkInfo.isForm || /docs\.google\.com\/forms|forms\.gle/.test(linkInfo.primary || gemini?.link || ""),
+    // Links
+    link:       linkInfo.primary || llmData?.link || "",
+    links:      linkInfo.all.length ? linkInfo.all : llmData?.link ? [llmData.link] : [],
+    isFormLink: linkInfo.isForm || /docs\.google\.com\/forms|forms\.gle/.test(linkInfo.primary || llmData?.link || ""),
 
     // Legacy slots kept for schema compatibility
     jobRole:       "",
@@ -2349,16 +2297,16 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       sourceSubject,
       forwarded:            forwarded.isForwarded,
       sender,
-      classificationSource: detClassification.classification,
+      classificationSource: finalClassification,
       companySource,
       companyConfidence,
       hasLink:              !!linkInfo.primary,
-      shouldRetry,
-      llmProvider:          llmResult.modelUsed || (llmResult.status === "success" ? PRIMARY_MODEL : "none"),
-      model:                llmResult.modelUsed || "none",
+      shouldRetry:          false,
+      llmProvider:          llmResult.modelUsed || PRIMARY_MODEL,
+      model:                llmResult.modelUsed || PRIMARY_MODEL,
       llmStatus:            llmResult.status,
-      llmUsed:              llmResult.status === "success",
-      geminiUsed:           llmResult.status === "success",
+      llmUsed:              true,
+      geminiUsed:           true,
       llmEmailType:         llmData?.emailType      ?? null,
       llmClassification:    llmData?.classification ?? null,
       geminiEmailType:      llmData?.emailType      ?? null,

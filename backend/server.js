@@ -48,6 +48,7 @@ const {
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 const CURRENT_PARSER_VERSION = "v4";
 const MAX_LINKED_ACCOUNTS = 3;
+const MAX_PENDING_RETRIES_PER_SYNC = 2;
 
 function getLinkRedirectUri() {
   if (process.env.GOOGLE_LINK_REDIRECT_URI) {
@@ -1287,14 +1288,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
   try {
     // ── FAST PATH: already fully parsed ──
     if (existingFast) {
-      if (existingFast.parserVersion === CURRENT_PARSER_VERSION) {
+      const isPendingFast = existingFast.status === "pending" || existingFast.status === "failed_retryable" || !existingFast.company || existingFast.company === "PENDING_PARSE";
+      if (!isPendingFast && existingFast.parserVersion === CURRENT_PARSER_VERSION) {
         if (existingFast.isDeleted) {
           console.log(`[SKIP_FAST] ${id} | Reason: Message already deleted by user`);
         } else {
           console.log(`[SKIP_FAST] ${id} | Reason: Already exists and fully parsed (${CURRENT_PARSER_VERSION})`);
         }
         return { action: 'skipped', usedLLM: false };
-      } else {
+      } else if (isPendingFast) {
         // Check if backoff retry window has elapsed
         const nextRetry = existingFast.parseMeta?.nextRetryAt ? new Date(existingFast.parseMeta.nextRetryAt) : null;
         if (nextRetry && new Date() < nextRetry) {
@@ -1394,7 +1396,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         if (internetMessageId) {
           const cachedApp = await Application.findOne({
             "parseMeta.internetMessageId": internetMessageId,
-            company: { $nin: ["PENDING_PARSE", "IGNORED"] },
+            company: { $nin: ["PENDING_PARSE", "IGNORED", null, ""] },
+            status: { $nin: ["pending", "failed_retryable"] },
+            isDeleted: false,
             parserVersion: CURRENT_PARSER_VERSION
           });
           if (cachedApp) {
@@ -1492,19 +1496,57 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             exists.markModified('events');
             eventAdded = true; // Force eventAdded so updatePayload.events is saved!
 
-            if (!parsed.isRelevant || !parsed.company) {
-              if (exists.company === "PENDING_PARSE") {
-                updatePayload.company = "IGNORED";
-                updatePayload.role = "IGNORED";
-                updatePayload.isDeleted = true;
+            const isPending = exists.status === "pending" || exists.status === "failed_retryable" || !exists.company || exists.company === "PENDING_PARSE";
+
+            if (!parsed || !parsed.company) {
+              if (shouldRetry) {
+                const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
+                const nextRetry = getNextRetryDate(currentAttempts);
+                
+                const updateObj = {
+                  "parseMeta.retryCount": currentAttempts,
+                  "parseMeta.lastRetryAt": new Date(),
+                  "parseMeta.nextRetryAt": nextRetry,
+                  "parseMeta.shouldRetry": true,
+                  "parseMeta.status": "pending",
+                  "parseMeta.lastRetryError": parsed?.parseMeta?.error || "Dual-model failure",
+                  status: currentAttempts >= 5 ? "failed_retryable" : "pending",
+                  isDeleted: false
+                };
+                if (eventAdded) {
+                  updateObj.events = exists.events;
+                }
+                if (emailAttachments.length > 0) {
+                  const existingAttachments = exists.attachments || [];
+                  const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
+                  const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
+                  if (newAttachments.length > 0) {
+                    updateObj.attachments = [...existingAttachments, ...newAttachments];
+                  }
+                }
+                await Application.findByIdAndUpdate(exists._id, updateObj, { returnDocument: 'after' });
+                console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
+              } else {
+                // Fatal parsing error / explicit non-recruitment
+                const updatePayload = { parserVersion: CURRENT_PARSER_VERSION };
+                if (eventAdded) updatePayload.events = exists.events;
+                if (isPending) {
+                  updatePayload.company = "IGNORED";
+                  updatePayload.role = "IGNORED";
+                  updatePayload.isDeleted = true;
+                }
+                await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
+                console.log(`[REPARSE_LOCKED] ${id} | Marked as ignored, locked to ${CURRENT_PARSER_VERSION}`);
               }
             } else {
-              if (exists.company === "PENDING_PARSE") {
+              if (isPending) {
                 updatePayload.company = parsed.company;
                 updatePayload.companyKey = normalizeCompany(parsed.company);
                 updatePayload.role = parsed.role || "Unknown Role";
                 updatePayload.status = "new";
                 updatePayload.isDeleted = false;
+                updatePayload["parseMeta.shouldRetry"] = false;
+                updatePayload["parseMeta.status"] = "success";
               }
 
               const retryDate = email.data?.internalDate ? new Date(parseInt(email.data.internalDate)) : exists.date;
@@ -1513,22 +1555,22 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
                 rawBody: fullBodyText || rawText || ""
               });
               Object.assign(updatePayload, enrichmentPayload);
-            }
 
-            if (eventAdded) updatePayload.events = exists.events;
+              if (eventAdded) updatePayload.events = exists.events;
 
-            // Merge attachment metadata (deduplicate by messageId+attachmentId)
-            if (emailAttachments.length > 0) {
-              const existingAttachments = exists.attachments || [];
-              const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
-              const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
-              if (newAttachments.length > 0) {
-                updatePayload.attachments = [...existingAttachments, ...newAttachments];
+              // Merge attachment metadata (deduplicate by messageId+attachmentId)
+              if (emailAttachments.length > 0) {
+                const existingAttachments = exists.attachments || [];
+                const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
+                const newAttachments = emailAttachments.filter(a => !existingKeys.has(`${a.messageId}:${a.attachmentId}`));
+                if (newAttachments.length > 0) {
+                  updatePayload.attachments = [...existingAttachments, ...newAttachments];
+                }
               }
-            }
 
-            await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
-            console.log(`[UPDATED] ${id} | Existing application enriched & locked (${CURRENT_PARSER_VERSION})`);
+              await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
+              console.log(`[UPDATED] ${id} | Existing application enriched & upgraded from pending (${CURRENT_PARSER_VERSION})`);
+            }
           } else {
             const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
             const nextRetry = getNextRetryDate(currentAttempts);
@@ -1537,15 +1579,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
               "parseMeta.retryCount": currentAttempts,
               "parseMeta.lastRetryAt": new Date(),
               "parseMeta.nextRetryAt": nextRetry,
-              "parseMeta.shouldRetry": true
+              "parseMeta.shouldRetry": true,
+              "parseMeta.status": "pending",
+              "parseMeta.lastRetryError": parsed?.parseMeta?.error || "Dual-model failure",
+              status: currentAttempts >= 5 ? "failed_retryable" : "pending",
+              isDeleted: false
             };
-            if (exists.company === "PENDING_PARSE") {
-              updateObj.status = currentAttempts >= 5 ? "failed_retryable" : "pending";
-            }
             if (eventAdded) {
               updateObj.events = exists.events;
             }
-            // Still persist attachment metadata even on deferred reparse
             if (emailAttachments.length > 0) {
               const existingAttachments = exists.attachments || [];
               const existingKeys = new Set(existingAttachments.map(a => `${a.messageId}:${a.attachmentId}`));
@@ -1555,14 +1597,15 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
               }
             }
             await Application.findByIdAndUpdate(exists._id, updateObj, { returnDocument: 'after' });
-            console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`)
+            console.log(`[REPARSE_DEFERRED] ${id} | Transient parser error (attempt ${currentAttempts}). Deferred until ${nextRetry.toISOString()}`);
           }
         } else {
-          // Fatal parsing error (parseEmailWithLLM returned null)
+          // Fatal parsing error (parseEmailWithLLM returned null or fatal exception)
+          const isPending = exists.status === "pending" || exists.status === "failed_retryable" || !exists.company || exists.company === "PENDING_PARSE";
           const updatePayload = { parserVersion: CURRENT_PARSER_VERSION };
           if (eventAdded) updatePayload.events = exists.events;
           
-          if (exists.company === "PENDING_PARSE") {
+          if (isPending) {
             updatePayload.company = "IGNORED";
             updatePayload.role = "IGNORED";
             updatePayload.isDeleted = true;
@@ -1607,7 +1650,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     if (internetMessageId) {
       const cachedApp = await Application.findOne({
         "parseMeta.internetMessageId": internetMessageId,
-        company: { $nin: ["PENDING_PARSE", "IGNORED"] },
+        company: { $nin: ["PENDING_PARSE", "IGNORED", null, ""] },
+        status: { $nin: ["pending", "failed_retryable"] },
+        isDeleted: false,
         parserVersion: CURRENT_PARSER_VERSION
       });
       if (cachedApp) {
@@ -1693,8 +1738,8 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
         try {
           const pendingApp = new Application({
             userId: acc._id,
-            company: "PENDING_PARSE",
-            role: "PENDING_PARSE",
+            company: null,
+            role: "Pending Analysis",
             messageId: id,
             source: "Gmail",
             email: acc.email,
@@ -1704,11 +1749,13 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
             status: "pending",
             isDeleted: false,
             parseMeta: {
+              status: "pending",
               shouldRetry: true,
               retryCount: 1,
               lastRetryAt: new Date(),
               nextRetryAt: nextRetry,
-              llmProvider: parsed?.parseMeta?.llmProvider || "google/gemma-4-31b-it",
+              lastRetryError: parsed?.parseMeta?.error || "Dual-model failure",
+              llmProvider: parsed?.parseMeta?.llmProvider || "none",
               llmStatus: parsed?.parseMeta?.llmStatus || "transport_error"
             }
           });
@@ -1923,7 +1970,7 @@ async function batchLookupMessageIds(messageIds, userId) {
         { "events.messageId": { $in: messageIds } }
       ]
     },
-    { messageId: 1, parserVersion: 1, isDeleted: 1, "parseMeta.nextRetryAt": 1, "events.messageId": 1 }
+    { messageId: 1, company: 1, status: 1, parserVersion: 1, isDeleted: 1, "parseMeta.nextRetryAt": 1, "parseMeta.shouldRetry": 1, "events.messageId": 1 }
   );
   
   const lookup = new Map();
@@ -2025,7 +2072,58 @@ async function syncLinkedAccountsForUser(acc, context = {}) {
           } while (pageToken);
 
           linkedNewHistoryId = latestHId;
-          if (allIds.length === 0) {
+
+          // Check for pending retry emails on linked account
+          let pendingLinkedIds = [];
+          try {
+            const rawPending = await Application.find({
+              userId: acc._id,
+              accountEmail: linked.email,
+              status: { $in: ["pending", "failed_retryable"] },
+              "parseMeta.shouldRetry": true,
+              $or: [
+                { "parseMeta.nextRetryAt": { $lte: new Date() } },
+                { "parseMeta.nextRetryAt": null }
+              ],
+              isDeleted: false
+            });
+            const pendingLinkedRetries = Array.isArray(rawPending) ? rawPending : [];
+            if (pendingLinkedRetries.length > 0) {
+              pendingLinkedIds = pendingLinkedRetries.map(p => p.messageId).filter(Boolean);
+            }
+          } catch (lRetryErr) {
+            console.warn(`[LINKED_RETRY_WARN] Failed to lookup linked retries for ${linked.email}:`, lRetryErr.message);
+          }
+
+          // Filter by ALLOWED_SENDERS at the Gmail query level (avoids fetching non-placement messages)
+          const uniqueNewIds = [...new Set(allIds)];
+          let allowedIdSet = new Set();
+          if (uniqueNewIds.length > 0) {
+            const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:30d`;
+            const senderFilterRes = await linkedGmail.users.messages.list({
+              userId: "me",
+              maxResults: 250,
+              q: queryStr
+            });
+            allowedIdSet = new Set((senderFilterRes.data.messages || []).map(m => m.id));
+          }
+          const filteredNewIds = uniqueNewIds.filter(id => allowedIdSet.has(id));
+
+          if (filteredNewIds.length > 0) {
+            const freshBatch = filteredNewIds.slice(0, config.MAX_EMAILS_PER_SYNC || 10);
+            const remainingBudget = Math.max(0, (config.MAX_EMAILS_PER_SYNC || 10) - freshBatch.length);
+            const allowedRetryCount = Math.min(MAX_PENDING_RETRIES_PER_SYNC, remainingBudget);
+            const boundedRetries = pendingLinkedIds.filter(id => !freshBatch.includes(id)).slice(0, allowedRetryCount);
+
+            linkedMsgIds = [...freshBatch, ...boundedRetries];
+            linkedSyncPath = "incremental";
+            console.log(`[LINKED_SYNC] Found ${linkedMsgIds.length} message(s) for ${linked.email} (${freshBatch.length} fresh first, ${boundedRetries.length} pending retries bounded).`);
+          } else if (pendingLinkedIds.length > 0) {
+            const boundedRetries = pendingLinkedIds.slice(0, Math.min(MAX_PENDING_RETRIES_PER_SYNC, config.MAX_EMAILS_PER_SYNC || 10));
+            linkedMsgIds = boundedRetries;
+            linkedSyncPath = "incremental";
+            console.log(`[LINKED_SYNC] 0 new inbox events. Retrying ${linkedMsgIds.length} pending parse message(s) for ${linked.email} (bounded from ${pendingLinkedIds.length} total pending).`);
+          } else {
             await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
               lastHistoryId: linkedNewHistoryId,
               syncMode: "incremental",
@@ -2034,30 +2132,6 @@ async function syncLinkedAccountsForUser(acc, context = {}) {
               lastSyncTime: new Date()
             });
             console.log(`[LINKED_SYNC] No new messages for ${linked.email}`);
-            console.log(`[LINKED_SYNC_COMPLETE] Completed linked account: ${linked.email} | Duration: ${((Date.now() - linkedStartTime)/1000).toFixed(1)}s | Fetched: 0 | Inserted: 0 | Skipped: 0`);
-            continue;
-          }
-
-          // Filter by ALLOWED_SENDERS at the Gmail query level (avoids fetching non-placement messages)
-          const uniqueNewIds = [...new Set(allIds)];
-          const queryStr = `(${ALLOWED_SENDERS.map(s => `from:${s}`).join(" OR ")}) newer_than:30d`;
-          const senderFilterRes = await linkedGmail.users.messages.list({
-            userId: "me",
-            maxResults: 250,
-            q: queryStr
-          });
-          const allowedIdSet = new Set((senderFilterRes.data.messages || []).map(m => m.id));
-          linkedMsgIds = uniqueNewIds.filter(id => allowedIdSet.has(id));
-
-          if (linkedMsgIds.length === 0) {
-            await LinkedGmailAccount.findByIdAndUpdate(linked._id, {
-              lastHistoryId: linkedNewHistoryId,
-              syncMode: "incremental",
-              syncStatus: "success",
-              syncError: null,
-              lastSyncTime: new Date()
-            });
-            console.log(`[LINKED_SYNC] ${uniqueNewIds.length} new message(s) on ${linked.email} (0 matching placement senders)`);
             console.log(`[LINKED_SYNC_COMPLETE] Completed linked account: ${linked.email} | Duration: ${((Date.now() - linkedStartTime)/1000).toFixed(1)}s | Fetched: 0 | Inserted: 0 | Skipped: 0`);
             continue;
           }
@@ -2318,7 +2392,45 @@ async function fetchAndProcessEmails(targetUserId = null) {
 
             newHistoryId = latestHistoryId;
 
-            if (allAddedMessageIds.length === 0) {
+            // Check for pending retry emails for this account whose retry window has elapsed
+            let pendingRetryIds = [];
+            try {
+              const rawPending = await Application.find({
+                userId: acc._id,
+                status: { $in: ["pending", "failed_retryable"] },
+                "parseMeta.shouldRetry": true,
+                $or: [
+                  { "parseMeta.nextRetryAt": { $lte: new Date() } },
+                  { "parseMeta.nextRetryAt": null }
+                ],
+                isDeleted: false
+              });
+              const pendingRetries = Array.isArray(rawPending) ? rawPending : [];
+              if (pendingRetries.length > 0) {
+                pendingRetryIds = pendingRetries.map(p => p.messageId).filter(Boolean);
+              }
+            } catch (retryLookupErr) {
+              console.warn(`[RETRY_QUEUE_WARN] Failed to lookup pending retries for ${acc.email}:`, retryLookupErr.message);
+            }
+
+            const uniqueNewIds = [...new Set(allAddedMessageIds)];
+
+            if (uniqueNewIds.length > 0) {
+              // Fresh emails get first priority up to MAX_EMAILS_PER_SYNC
+              const freshBatch = uniqueNewIds.slice(0, config.MAX_EMAILS_PER_SYNC || 10);
+              const remainingBudget = Math.max(0, (config.MAX_EMAILS_PER_SYNC || 10) - freshBatch.length);
+              const allowedRetryCount = Math.min(MAX_PENDING_RETRIES_PER_SYNC, remainingBudget);
+              const boundedRetries = pendingRetryIds.filter(id => !freshBatch.includes(id)).slice(0, allowedRetryCount);
+
+              messageIdsToProcess = [...freshBatch, ...boundedRetries];
+              syncPath = "incremental";
+              console.log(`[INCREMENTAL] Processing ${messageIdsToProcess.length} message(s) for ${acc.email} (${freshBatch.length} fresh first, ${boundedRetries.length} pending retries bounded).`);
+            } else if (pendingRetryIds.length > 0) {
+              const boundedRetries = pendingRetryIds.slice(0, Math.min(MAX_PENDING_RETRIES_PER_SYNC, config.MAX_EMAILS_PER_SYNC || 10));
+              messageIdsToProcess = boundedRetries;
+              syncPath = "incremental";
+              console.log(`[INCREMENTAL] 0 new inbox events. Retrying ${messageIdsToProcess.length} pending parse message(s) for ${acc.email} (bounded from ${pendingRetryIds.length} total pending).`);
+            } else {
               isZeroIncremental = true;
               syncPath = "incremental";
               messageIdsToProcess = [];
@@ -2339,11 +2451,6 @@ async function fetchAndProcessEmails(targetUserId = null) {
               const accDuration = ((Date.now() - accountStartTime) / 1000).toFixed(1);
               console.log(`[ACCOUNT COMPLETE]\nEmail: ${acc.email}\nDuration: ${accDuration}s\nFetched: 0\nInserted: 0\nSkipped: 0\nMode: Incremental`);
               accountsProcessed++;
-            } else {
-              // Deduplicate (History API can return the same message in multiple history records)
-              messageIdsToProcess = [...new Set(allAddedMessageIds)];
-              syncPath = "incremental";
-              console.log(`[INCREMENTAL] Found ${messageIdsToProcess.length} new message(s) to process (${allAddedMessageIds.length} history events, ${messageIdsToProcess.length} unique).`);
             }
 
           } catch (historyError) {

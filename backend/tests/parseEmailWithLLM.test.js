@@ -45,6 +45,8 @@ delete require.cache[require.resolve('../utils/parseEmailWithLLM')];
 
 // Setup Mock for openai with multi-model call inspection
 let mockModelBehavior = null; // function({ model, messages }) => { choices: ... } or throws
+let mockShouldThrow = null;
+let mockResponseText = "";
 let calledModels = [];
 
 const mockChatCompletionsCreate = async (params) => {
@@ -281,12 +283,12 @@ test('6. Primary 401/403 auth error: does not retry secondary model with bad cre
   assert.strictEqual(calledModels.length, 1);
   assert.strictEqual(calledModels[0], "google/gemma-4-31b-it");
   assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
-  // Cleanly drops to deterministic fallback
-  assert.strictEqual(parsed.company, "Authcorp");
+  assert.strictEqual(parsed.parseMeta.shouldRetry, true);
+  assert.strictEqual(parsed.status, "pending");
 });
 
-// ── Test 7: Both models fail → Deterministic regex fallback ──
-test('7. Both models fail: cleanly drops to deterministic fallback', async () => {
+// ── Test 7: Both models fail → Pure Dual-LLM: Defers parse for retry (shouldRetry = true) ──
+test('7. Both models fail: defers parse for retry without fragile regex guessing', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
     const err = new Error("All endpoints overloaded (503)");
@@ -313,9 +315,10 @@ test('7. Both models fail: cleanly drops to deterministic fallback', async () =>
   assert.deepStrictEqual(calledModels, ["google/gemma-4-31b-it", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
   assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
   assert.strictEqual(parsed.parseMeta.llmProvider, "none");
-  assert.strictEqual(parsed.company, "Acme Technologies");
-  assert.strictEqual(parsed.role, "Software Development Engineer - Intern");
-  assert.strictEqual(parsed.displayFields.find(f => f.label === "CTC")?.value, "18 LPA");
+  assert.strictEqual(parsed.parseMeta.shouldRetry, true);
+  assert.strictEqual(parsed.status, "pending");
+  assert.strictEqual(parsed.company, null);
+  assert.strictEqual(parsed.isRelevant, true);
 });
 
 // ── Test 8: Thinking tag sanitization ──

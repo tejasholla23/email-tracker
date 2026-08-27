@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const applicationSchema = new mongoose.Schema(
   {
-    company: { type: String, required: true },
+    company: { type: String, default: null, trim: true },
     emailType: { type: String, enum: ["job", "event", "nonRecruitment"], default: "job" },
     subtitle: { type: String, default: "" },
     // Legacy: old string-array field display list. Kept for backward compat with pre-redesign records.

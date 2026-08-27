@@ -473,7 +473,125 @@ test("7. Linked accounts: first-time full sync uses linkedMaxResults: 20 and new
   }
 });
 
+// ── Test 8: Pending parse retry queue automatic drainage during sync ──
+test("8. Retry queue drainage: PENDING_PARSE messages are queried and retried during sync even if 0 new history events", async () => {
+  resetSyncState();
+
+  const fakeUserId = "507f191e810c19729de860ef";
+  const fakeAccount = {
+    _id: fakeUserId,
+    email: "retrytest@msrit.edu",
+    tokens: { access_token: "fake_token", refresh_token: "fake_refresh", scope: "https://www.googleapis.com/auth/gmail.readonly" },
+    lastHistoryId: "300000",
+    syncStatus: "idle",
+  };
+
+  const pendingRecord = {
+    _id: "pending_app_id_999",
+    userId: fakeUserId,
+    messageId: "msg_retry_1",
+    company: null,
+    role: "Pending Analysis",
+    status: "pending",
+    isDeleted: false,
+    parseMeta: {
+      shouldRetry: true,
+      status: "pending",
+      retryCount: 1,
+      nextRetryAt: new Date(Date.now() - 60000), // In the past -> eligible for retry
+    }
+  };
+
+  let getMessageCalled = false;
+
+  const mockGmail = {
+    users: {
+      history: {
+        list: async () => ({
+          data: {
+            historyId: "300010",
+            history: [], // 0 new history events
+          },
+        }),
+      },
+      messages: {
+        get: async () => {
+          getMessageCalled = true;
+          return {
+            data: {
+              id: "msg_retry_1",
+              internalDate: "1700000000000",
+              payload: {
+                headers: [
+                  { name: "From", value: "placement@msrit.edu" },
+                  { name: "Subject", value: "Campus Recruitment - Acme Corp" },
+                  { name: "Message-ID", value: "<msg_retry_1@msrit.edu>" },
+                ],
+                body: { data: Buffer.from("Acme Corp recruitment drive").toString("base64url") },
+              },
+            },
+          };
+        },
+      },
+    },
+  };
+
+  const originalFind = Account.find;
+  const originalFindOneAndUpdate = Account.findOneAndUpdate;
+  const originalLinkedFind = LinkedGmailAccount.find;
+  const originalAppFind = Application.find;
+  const originalAppFindOne = Application.findOne;
+  const originalAppFindByIdAndUpdate = Application.findByIdAndUpdate;
+  const originalGoogleGmail = google.gmail;
+
+  google.gmail = () => mockGmail;
+  Account.find = async () => [fakeAccount];
+  Account.findOneAndUpdate = async (query, update) => {
+    Object.assign(fakeAccount, update.$set || update);
+    return fakeAccount;
+  };
+  LinkedGmailAccount.find = async () => [];
+
+  // Mock finding the pending retry application
+  Application.find = async (query) => {
+    if (query && (query.status || query.company === null || query.company === "PENDING_PARSE")) {
+      return [pendingRecord];
+    }
+    if (query && query.$or) {
+      return [pendingRecord];
+    }
+    return [];
+  };
+
+  Application.findOne = async () => pendingRecord;
+
+  let updatedPayload = null;
+  Application.findByIdAndUpdate = async (id, update) => {
+    updatedPayload = update;
+    Object.assign(pendingRecord, update);
+    return pendingRecord;
+  };
+
+  try {
+    await fetchAndProcessEmails(fakeUserId);
+
+    assert.strictEqual(getMessageCalled, true, "Must have fetched the pending message from Gmail for re-parsing");
+    assert.ok(updatedPayload, "Must have updated the pending application record in MongoDB");
+    assert.strictEqual(fakeAccount.lastHistoryId, "300010", "Must update historyId even when only retrying pending messages");
+  } finally {
+    Account.find = originalFind;
+    Account.findOneAndUpdate = originalFindOneAndUpdate;
+    LinkedGmailAccount.find = originalLinkedFind;
+    Application.find = originalAppFind;
+    Application.findOne = originalAppFindOne;
+    Application.findByIdAndUpdate = originalAppFindByIdAndUpdate;
+    google.gmail = originalGoogleGmail;
+    resetSyncState();
+  }
+});
+
 test.after(() => {
   process.exit(0);
 });
+
 
