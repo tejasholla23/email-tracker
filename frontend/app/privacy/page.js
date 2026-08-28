@@ -39,7 +39,7 @@ export default function PrivacyPage() {
           </a>
         </div>
 
-        <div style={{ fontSize: "14.5px", color: "#94a3b8", lineHeight: "1.7", display: "flex", flexDirection: "column", gap: "24px" }}>
+        <div style={{ fontSize: "14.5px", color: "#94a3b8", lineHeight: "1.7", display: "flex", flexDirection: "column", gap: "24px", textAlign: "justify" }}>
           <p>
             <strong>Last Updated:</strong> August 27, 2026
           </p>

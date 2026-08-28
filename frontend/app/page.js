@@ -2378,14 +2378,15 @@ export default function JobTrackerDashboard() {
         .feature-panel { padding: 16px; border-radius: 8px; background: #f8fafc; border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: flex-start; }
         .dark .feature-panel { background: rgba(255, 255, 255, 0.02); }
         
-        .legal-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); }
-        .legal-content h2 { font-size: 17px; font-weight: 700; color: var(--text-heading); margin-top: 28px; margin-bottom: 10px; }
+        .settings-container p { text-align: justify; }
+        .legal-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); text-align: justify; }
+        .legal-content h2 { font-size: 17px; font-weight: 700; color: var(--text-heading); margin-top: 28px; margin-bottom: 10px; text-align: left; }
         .legal-content h2:first-of-type { margin-top: 8px; }
-        .legal-content p { margin-bottom: 12px; }
-        .legal-content ul { margin: 8px 0 16px 20px; list-style-type: disc; }
+        .legal-content p { margin-bottom: 12px; text-align: justify; }
+        .legal-content ul { margin: 8px 0 16px 20px; list-style-type: disc; text-align: justify; }
         .legal-content ul li { margin-bottom: 4px; }
         .legal-content strong { color: var(--text-heading); }
-        .legal-last-updated { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; font-style: italic; }
+        .legal-last-updated { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; font-style: italic; text-align: left; }
         
         /* Stats Section */
         .stats-grid { 
