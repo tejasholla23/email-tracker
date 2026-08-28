@@ -4579,7 +4579,7 @@ export default function JobTrackerDashboard() {
                         <h3>About Email Tracker</h3>
                         <span className="about-version-badge">VERSION 2.5.0 STABLE</span>
                         <p className="about-desc">
-                          Email Tracker helps you keep track of campus recruitment emails without digging through your inbox. It automatically organizes opportunities, deadlines, application links, and shortlist updates in one place. You can also sync important deadlines with Google Calendar and receive real-time notifications.
+                          Email Tracker helps you keep track of campus recruitment emails without digging through your inbox. It automatically organizes opportunities, deadlines, application links, and shortlist updates in one place, making it easier to keep track of the companies you’re interested in and the next steps for each opportunity. You can also sync important deadlines with Google Calendar and receive real-time notifications when there are new updates, so important information doesn’t get buried among your other emails.
                         </p>
                         <div className="about-tech-container">
                           <span className="about-tech-label">Built with:</span>
