@@ -4579,19 +4579,19 @@ export default function JobTrackerDashboard() {
                         <h3>About Email Tracker</h3>
                         <span className="about-version-badge">VERSION 2.5.0 STABLE</span>
                         <p className="about-desc">
-                          Email Tracker is an intelligent, multi-user campus recruitment companion designed to ensure you never miss a career opportunity. It connects securely to your primary and linked Gmail inboxes, uses an advanced Dual-LLM pipeline (OpenAI GPT-OSS 20B & NVIDIA Nemotron 3.5 Lightning) to extract structured job details, parses attached spreadsheets to instantly detect if you are shortlisted, and synchronizes recruitment deadlines directly to your Google Calendar with real-time push alerts.
+                          Email Tracker helps you keep track of campus recruitment emails without digging through your inbox. It automatically organizes opportunities, deadlines, application links, and shortlist updates in one place. You can also sync important deadlines with Google Calendar and receive real-time notifications.
                         </p>
                         <div className="about-tech-container">
                           <span className="about-tech-label">Built with:</span>
                           <div className="about-tech-tags">
-                            <span className="about-tech-tag">Next.js 14</span>
+                            <span className="about-tech-tag">Next.js & React</span>
                             <span className="about-tech-tag">Node.js & Express</span>
                             <span className="about-tech-tag">MongoDB Atlas</span>
-                            <span className="about-tech-tag">Dual-LLM (GPT-OSS & Nemotron 3.5)</span>
-                            <span className="about-tech-tag">Gmail Pub/Sub & History API</span>
+                            <span className="about-tech-tag">OpenAI GPT-OSS 20B</span>
+                            <span className="about-tech-tag">Nemotron 3.5 Lightning</span>
+                            <span className="about-tech-tag">Gmail Pub/Sub</span>
                             <span className="about-tech-tag">Google Calendar API</span>
-                            <span className="about-tech-tag">Spreadsheet Shortlist Engine</span>
-                            <span className="about-tech-tag">Web Push Notifications</span>
+                            <span className="about-tech-tag">Real-time Notifications</span>
                           </div>
                         </div>
                       </div>
