@@ -295,7 +295,7 @@ function deriveFromDisplayFields(displayFields = []) {
  * Used ONLY when more than 5 valid fields are returned (to select top 5).
  */
 const FIELD_PRIORITY = {
-  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "duration", "location", "joining", "registration link"],
+  JOB_APPLICATION: ["role", "deadline", "last date", "due date", "closing date", "ctc", "stipend", "assessment date", "assessment", "test date", "interview date", "interview", "duration", "location", "joining", "registration link"],
   HACKATHON: ["registration deadline", "deadline", "last date", "due date", "closing date", "prize", "prize pool", "team size", "mode", "organizer", "timeline", "registration link"],
   WEBINAR: ["event title", "title", "speaker/company", "speaker", "organizer", "date", "event dates", "dates", "time", "topic", "session topics", "registration link", "certificate"],
   OTHER_PLACEMENT_EVENT: ["event title", "title", "date", "event dates", "dates", "time", "organizer", "mode", "registration link"],
@@ -1673,7 +1673,7 @@ function validateLLMResponse(raw) {
   const timelineTitle = sanitizeTextField(raw.timelineTitle, 100);
   const timelineSummary = sanitizeTextField(raw.timelineSummary, 300);
 
-  // displayFields — flexible [{label, value}] array, max 8 items through (trimmed to 5 later)
+  // displayFields — flexible [{label, value}] array, max 15 items through (top 5 shown on card, all in detail modal)
   let displayFields = [];
   if (Array.isArray(raw.displayFields)) {
     displayFields = raw.displayFields
@@ -1695,7 +1695,7 @@ function validateLLMResponse(raw) {
         return { label: f.label, value: result.value };
       })
       .filter(Boolean)
-      .slice(0, 8);
+      .slice(0, 15);
   }
 
   // status â€” strictly enforced as "new" regardless of Gemini output
@@ -1874,14 +1874,14 @@ SKILLS RULES:
 - Only extract skills explicitly stated in the email, not inferred from the role name.
 
 DISPLAY FIELDS RULES:
-- Extract all applicable fields (e.g. Role, CTC, Stipend, Deadline, Duration, Location, Joining) as displayFields. Do not limit the list size in your response; the system will prioritize and filter them. Only include fields with values EXPLICITLY stated in the email.
+- Extract all applicable fields (e.g. Role, CTC, Stipend, Deadline, Assessment Date, Interview Date, Duration, Location, Joining, Mode) as displayFields. Do not limit the list size in your response; the primary 5 fields will be featured on the card, and all additional fields will be visible in the detailed view. Only include fields with values EXPLICITLY stated in the email.
 - NEVER extract or return "Eligibility". It is redundant as all recipients are eligible.
 - Do NOT include empty, vague, or inferred values.
 - Choose labels a student would want to see immediately on a card.
 - Ignore forwarding footers entirely. NEVER use RIT, MSRIT, Placement Department, or Dean's name as a venue, location, or company.
 - CRITICAL: Strongly prioritize fields based on the provided Opportunity Type (${opportunityType}):
 
-  If JOB_APPLICATION: Extract Role, CTC, Stipend, Deadline, Duration, Location, Joining.
+  If JOB_APPLICATION: Extract Role, CTC, Stipend, Deadline, Assessment Date, Interview Date, Duration, Location, Joining.
   If HACKATHON: Extract Event Name, Registration Deadline, Timeline, Prize Amount, Team Size, Mode, Organizer, Benefits.
   If WEBINAR: Extract Event Title, Date, Time, Speaker/Company.
   If OTHER_PLACEMENT_EVENT: Extract Event Title, Important Dates, Organizer, Mode.
@@ -2209,7 +2209,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     })
     .filter(Boolean);
 
-  if (displayFields.length > 5) {
+  if (displayFields.length > 1) {
     const priorities = FIELD_PRIORITY[finalOppType] || FIELD_PRIORITY.JOB_APPLICATION;
     displayFields.sort((a, b) => {
       const aIdx = priorities.findIndex(p => a.label.toLowerCase().includes(p));
@@ -2218,7 +2218,9 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       const bPriority = bIdx >= 0 ? bIdx : priorities.length;
       return aPriority - bPriority;
     });
-    displayFields = displayFields.slice(0, 5);
+    if (displayFields.length > 15) {
+      displayFields = displayFields.slice(0, 15);
+    }
   }
 
   // ── Step 6: Role & Subtitle from LLM ──────────────────────────────────────

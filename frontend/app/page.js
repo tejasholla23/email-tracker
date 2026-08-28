@@ -5498,14 +5498,31 @@ export default function JobTrackerDashboard() {
                                       : null;
 
                                     if (flexFields && flexFields.length > 0) {
+                                      const cardFields = flexFields.slice(0, 5);
+                                      const extraCount = flexFields.length - cardFields.length;
                                       return (
                                         <div className="program-details">
-                                          {flexFields.map(({ label, value }) => (
+                                          {cardFields.map(({ label, value }) => (
                                             <div key={label} className="program-detail">
                                               <span className="program-detail-label">{label}</span>
                                               <span className="program-detail-value">{value}</span>
                                             </div>
                                           ))}
+                                          {extraCount > 0 && (
+                                            <div className="program-detail-more" style={{
+                                              fontSize: '11px',
+                                              fontWeight: '600',
+                                              color: 'var(--accent, #3b82f6)',
+                                              paddingTop: '2px',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
+                                              opacity: 0.9
+                                            }}>
+                                              <span>+{extraCount} more in details</span>
+                                              <span style={{ fontSize: '9px' }}>→</span>
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     }
@@ -6291,6 +6308,61 @@ export default function JobTrackerDashboard() {
                     </div>
                   </div>
                 )}
+
+                {/* ── Key Opportunity Details Section (All Extracted Fields) ── */}
+                {(() => {
+                  const details = displayFieldRows.length > 0 ? displayFieldRows : displayRowsFromFields;
+                  if (details.length === 0) return null;
+
+                  return (
+                    <div className="info-modal-section">
+                      <div className="info-modal-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #3b82f6)', flexShrink: 0 }}>
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                          </svg>
+                          <span>DRIVE & OPPORTUNITY DETAILS ({details.length})</span>
+                        </div>
+                      </div>
+                      <div className="info-modal-section-body">
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                          gap: '10px 14px',
+                          padding: '12px 14px',
+                          background: 'var(--bg-secondary, rgba(255, 255, 255, 0.04))',
+                          borderRadius: '10px',
+                          border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))'
+                        }}>
+                          {details.map(({ label, value }, idx) => (
+                            <div key={idx} style={{ minWidth: 0 }}>
+                              <div style={{
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                color: 'var(--text-secondary, #94a3b8)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em',
+                                marginBottom: '2px'
+                              }}>
+                                {label}
+                              </div>
+                              <div style={{
+                                fontSize: '13.5px',
+                                fontWeight: '600',
+                                color: 'var(--text-primary, #f8fafc)',
+                                wordBreak: 'break-word',
+                                lineHeight: '1.4'
+                              }}>
+                                {value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── Attachments Section ── */}
                 {(() => {
