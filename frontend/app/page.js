@@ -4579,7 +4579,7 @@ export default function JobTrackerDashboard() {
                         <h3>About Email Tracker</h3>
                         <span className="about-version-badge">VERSION 2.5.0 STABLE</span>
                         <p className="about-desc">
-                          Email Tracker is an intelligent, multi-user campus recruitment companion designed to ensure you never miss a career opportunity. It connects securely to your primary and linked Gmail inboxes, uses an advanced Dual-LLM pipeline (Google Gemma 4 31B & NVIDIA Nemotron 3.5 Lightning) to extract structured job details, parses attached spreadsheets to instantly detect if you are shortlisted, and synchronizes recruitment deadlines directly to your Google Calendar with real-time push alerts.
+                          Email Tracker is an intelligent, multi-user campus recruitment companion designed to ensure you never miss a career opportunity. It connects securely to your primary and linked Gmail inboxes, uses an advanced Dual-LLM pipeline (OpenAI GPT-OSS 20B & NVIDIA Nemotron 3.5 Lightning) to extract structured job details, parses attached spreadsheets to instantly detect if you are shortlisted, and synchronizes recruitment deadlines directly to your Google Calendar with real-time push alerts.
                         </p>
                         <div className="about-tech-container">
                           <span className="about-tech-label">Built with:</span>
@@ -4587,7 +4587,7 @@ export default function JobTrackerDashboard() {
                             <span className="about-tech-tag">Next.js 14</span>
                             <span className="about-tech-tag">Node.js & Express</span>
                             <span className="about-tech-tag">MongoDB Atlas</span>
-                            <span className="about-tech-tag">Dual-LLM (Gemma 4 & Nemotron 3.5)</span>
+                            <span className="about-tech-tag">Dual-LLM (GPT-OSS & Nemotron 3.5)</span>
                             <span className="about-tech-tag">Gmail Pub/Sub & History API</span>
                             <span className="about-tech-tag">Google Calendar API</span>
                             <span className="about-tech-tag">Spreadsheet Shortlist Engine</span>
@@ -4773,7 +4773,7 @@ export default function JobTrackerDashboard() {
                       <h2>3. How do we process and use your data?</h2>
                       <p>All data processed serves one direct purpose: simplifying your placement tracking:</p>
                       <ul>
-                        <li><strong>Dual-LLM AI Parsing</strong> — unstructured emails are parsed using Google Gemma 4 31B and NVIDIA Nemotron 3.5 Lightning (via NVIDIA NIM API) into clean application cards.</li>
+                        <li><strong>Dual-LLM AI Parsing</strong> — unstructured emails are parsed using OpenAI GPT-OSS 20B and NVIDIA Nemotron 3.5 Lightning (via NVIDIA NIM API) into clean application cards.</li>
                         <li><strong>Spreadsheet Shortlist Detection</strong> — attached candidate rosters are parsed in-memory during sync to determine if your name or USN is shortlisted.</li>
                         <li><strong>Multi-Inbox Sync</strong> — coordinating primary and secondary linked accounts seamlessly.</li>
                         <li><strong>Calendar Integration</strong> — synchronizing deadlines, PPTs, assessments, and interviews to your Google Calendar.</li>
@@ -4824,7 +4824,7 @@ export default function JobTrackerDashboard() {
 
                       <h2>3. AI Parsing & Shortlist Verification Notice</h2>
                       <p>
-                        Email Tracker uses advanced Dual-LLM extraction (Gemma 4 & Nemotron 3.5) and automated spreadsheet parsing to organize recruitment communications and detect candidate shortlist status.
+                        Email Tracker uses advanced Dual-LLM extraction (OpenAI GPT-OSS & Nemotron 3.5) and automated spreadsheet parsing to organize recruitment communications and detect candidate shortlist status.
                         <br />
                         <strong>Important:</strong> AI and automated extractors can occasionally misinterpret ambiguous notices. <strong>You are solely responsible for independently verifying all critical deadlines, eligibility criteria, assessment links, and interview schedules with the official communications from your institution or employer.</strong>
                       </p>

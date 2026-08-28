@@ -85,8 +85,8 @@ require.cache[require.resolve('openai')] = {
 // Re-require parseEmailWithLLM to use our mocked OpenAI
 const { parseEmailWithLLM } = require('../utils/parseEmailWithLLM');
 
-// ── Test 1: Primary success (Gemma 4) → No fallback ──
-test('1. Primary model (google/gemma-4-31b-it) success: returns primary llmProvider without invoking fallback', async () => {
+// ── Test 1: Primary success (GPT-OSS) → No fallback ──
+test('1. Primary model (openai/gpt-oss-20b) success: returns primary llmProvider without invoking fallback', async () => {
   mockShouldThrow = null;
   mockModelBehavior = null;
   calledModels = [];
@@ -107,17 +107,17 @@ test('1. Primary model (google/gemma-4-31b-it) success: returns primary llmProvi
   );
 
   assert.strictEqual(parsed.company, "GemmaTech");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "google/gemma-4-31b-it");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "openai/gpt-oss-20b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
   assert.strictEqual(calledModels.length, 1);
-  assert.strictEqual(calledModels[0], "google/gemma-4-31b-it");
+  assert.strictEqual(calledModels[0], "openai/gpt-oss-20b");
 });
 
 // ── Test 2: Primary rate limit (429) → Secondary model fallback (Nemotron) ──
 test('2. Primary rate limit 429: seamlessly falls back to nvidia/nemotron-3.5-lightning-30b-a3b', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
-    if (params.model === "google/gemma-4-31b-it") {
+    if (params.model === "openai/gpt-oss-20b") {
       const err = new Error("Rate limit exceeded (429)");
       err.status = 429;
       throw err;
@@ -148,14 +148,14 @@ test('2. Primary rate limit 429: seamlessly falls back to nvidia/nemotron-3.5-li
   assert.strictEqual(parsed.company, "NemotronCorp");
   assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
-  assert.deepStrictEqual(calledModels, ["google/gemma-4-31b-it", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
+  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
 });
 
 // ── Test 3: Primary 503/timeout → Secondary model fallback (Nemotron) ──
 test('3. Primary 503 service unavailable: falls back to secondary model', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
-    if (params.model === "google/gemma-4-31b-it") {
+    if (params.model === "openai/gpt-oss-20b") {
       const err = new Error("Service Unavailable (503)");
       err.status = 503;
       throw err;
@@ -192,7 +192,7 @@ test('3. Primary 503 service unavailable: falls back to secondary model', async 
 test('4. Primary malformed JSON: falls back to secondary model', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
-    if (params.model === "google/gemma-4-31b-it") {
+    if (params.model === "openai/gpt-oss-20b") {
       return { choices: [{ message: { content: "{ bad json: none" } }] };
     }
     return {
@@ -227,7 +227,7 @@ test('4. Primary malformed JSON: falls back to secondary model', async () => {
 test('5. Primary schema validation failure: falls back to secondary model', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
-    if (params.model === "google/gemma-4-31b-it") {
+    if (params.model === "openai/gpt-oss-20b") {
       return {
         choices: [{
           message: {
@@ -281,7 +281,7 @@ test('6. Primary 401/403 auth error: does not retry secondary model with bad cre
 
   // Should have attempted ONLY primary model, not secondary
   assert.strictEqual(calledModels.length, 1);
-  assert.strictEqual(calledModels[0], "google/gemma-4-31b-it");
+  assert.strictEqual(calledModels[0], "openai/gpt-oss-20b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
   assert.strictEqual(parsed.parseMeta.shouldRetry, true);
   assert.strictEqual(parsed.status, "pending");
@@ -312,7 +312,7 @@ test('7. Both models fail: defers parse for retry without fragile regex guessing
     body
   );
 
-  assert.deepStrictEqual(calledModels, ["google/gemma-4-31b-it", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
+  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
   assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
   assert.strictEqual(parsed.parseMeta.llmProvider, "none");
   assert.strictEqual(parsed.parseMeta.shouldRetry, true);
@@ -406,7 +406,7 @@ Placement Department`;
   assert.strictEqual(parsed.company, "Prime Numbers");
   assert.strictEqual(parsed.emailType, "job");
   assert.strictEqual(parsed.link, "https://forms.gle/HaSF5SzSaJSk8RB36");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "google/gemma-4-31b-it");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "openai/gpt-oss-20b");
 });
 
 // ── Test 10: Deterministic time extraction: CTC/compensation does not bleed into eventTime ──

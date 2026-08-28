@@ -15,7 +15,7 @@
 
 **Email Tracker** is a production-grade, multi-user web application designed to automatically track, parse, and organize campus placement communications into a sleek, centralized dashboard.
 
-Powered by a **Pure Dual-LLM Ingestion Pipeline** (Google Gemma 4 31B + NVIDIA Nemotron 3.5 Lightning), **Google Pub/Sub real-time webhooks**, **Linked Gmail accounts**, **Spreadsheet Shortlist Parsing**, **Google Calendar auto-synchronization**, and **Web Push alerts**, Email Tracker ensures students never miss a registration deadline, test announcement, or shortlist update.
+Powered by a **Pure Dual-LLM Ingestion Pipeline** (OpenAI GPT-OSS 20B + NVIDIA Nemotron 3.5 Lightning), **Google Pub/Sub real-time webhooks**, **Linked Gmail accounts**, **Spreadsheet Shortlist Parsing**, **Google Calendar auto-synchronization**, and **Web Push alerts**, Email Tracker ensures students never miss a registration deadline, test announcement, or shortlist update.
 
 ---
 
@@ -28,7 +28,7 @@ Powered by a **Pure Dual-LLM Ingestion Pipeline** (Google Gemma 4 31B + NVIDIA N
 ## Key Features
 
 ### 1. Pure Dual-LLM Ingestion & In-Flight Coalescing
-- **Primary & Fallback Models:** Employs **Google Gemma 4 31B** as the primary structured extractor with automatic fallback to **NVIDIA Nemotron 3.5 Lightning** via NVIDIA NIM API.
+- **Primary & Fallback Models:** Employs **OpenAI GPT-OSS 20B** (`openai/gpt-oss-20b`) as the primary structured extractor with automatic fallback to **NVIDIA Nemotron 3.5 Lightning** (`nvidia/nemotron-3.5-lightning-30b-a3b`) via NVIDIA NIM API.
 - **Single-Flight Coalescing:** When hundreds of students receive the same placement broadcast simultaneously, the backend coalesces concurrent parses into **exactly one LLM request**, caching the structured result by `Message-ID` across all users in milliseconds.
 - **Structured Schema Extraction:** Accurately extracts company name, role, CTC, stipend, location, deadline, eligibility criteria, registration links, and interview rounds without brittle regex guessing.
 
@@ -69,7 +69,7 @@ Powered by a **Pure Dual-LLM Ingestion Pipeline** (Google Gemma 4 31B + NVIDIA N
 | **Backend** | Node.js, Express.js, Mongoose ODM |
 | **Database** | MongoDB Atlas |
 | **Authentication & Security** | Google OAuth 2.0 (PKCE), JWT Access/Refresh Rotation, Rate Limiters |
-| **AI & LLM Pipeline** | Google Gemma 4 31B & NVIDIA Nemotron 3.5 Lightning (NVIDIA NIM API) |
+| **AI & LLM Pipeline** | OpenAI GPT-OSS 20B & NVIDIA Nemotron 3.5 Lightning (NVIDIA NIM API) |
 | **Spreadsheet & Attachment Engine** | SheetJS (`xlsx`), Gmail Attachment API |
 | **External APIs** | Gmail API (Push & History API), Google Calendar API, Web Push API |
 | **Deployment** | Vercel (Frontend), Node.js Cloud Platform (Backend) |
@@ -91,7 +91,7 @@ flowchart TD
         PUBSUB["Gmail Pub/Sub Webhook Handler"]
         SYNC["Freshness-First Sync Engine"]
         SINGLEFLIGHT["Single-Flight Coalescer"]
-        PARSER["Dual-LLM Extractor (Gemma 4 / Nemotron 3.5)"]
+        PARSER["Dual-LLM Extractor (GPT-OSS / Nemotron 3.5)"]
         EXCEL["Attachment & Shortlist Engine (xlsx)"]
         CAL_SERVICE["Google Calendar Service"]
         PUSH_SERVICE["Web Push Service"]
@@ -181,6 +181,121 @@ email-tracker/
 └── README.md
 ```
 
+<<<<<<< HEAD
+=======
+---
+
+## Installation & Setup
+
+### Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+- **MongoDB**: Local MongoDB or MongoDB Atlas instance
+- **Google Cloud Project**: OAuth 2.0 Client ID with **Gmail API**, **Google Calendar API**, and **Google Cloud Pub/Sub** enabled
+- **NVIDIA NIM API Key**: For OpenAI GPT-OSS 20B and Nemotron 3.5 access
+
+---
+
+### Step-by-Step Installation
+
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/tejasholla23/email-tracker.git
+   cd email-tracker
+   ```
+
+2. **Backend Setup:**
+   ```bash
+   cd backend
+   npm install
+   ```
+
+3. **Frontend Setup:**
+   ```bash
+   cd ../frontend
+   npm install
+   ```
+
+---
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+```env
+# Server Configuration
+PORT=5000
+FRONTEND_URL=http://localhost:3000
+
+# Database
+MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/email-tracker?retryWrites=true&w=majority
+
+# JWT Security
+JWT_SECRET=your_jwt_secret_key
+
+# Google OAuth 2.0
+GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
+GOOGLE_LINK_REDIRECT_URI=http://localhost:5000/auth/google/link-callback
+
+# Google Cloud Pub/Sub
+PUBSUB_TOPIC_NAME=projects/your-project-id/topics/gmail-notifications
+PUBSUB_VERIFICATION_TOKEN=your_random_verification_token
+
+# NVIDIA NIM API (Dual-LLM Pipeline)
+NVIDIA_PRIMARY_MODEL=openai/gpt-oss-20b
+NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b
+NVIDIA_PRIMARY_API_KEY=nvapi-your_primary_key
+NVIDIA_SECONDARY_API_KEY=nvapi-your_secondary_key
+NVIDIA_API_KEY=nvapi-your_fallback_key
+LLM_TEMPERATURE=0.2
+
+# Web Push VAPID Keys
+VAPID_SUBJECT=mailto:admin@example.com
+VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+
+# External Cron Key
+CRON_API_KEY=your_cron_secret_api_key
+```
+
+### Frontend (`frontend/.env.local`)
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
+```
+
+---
+
+## Running the Application
+
+### 1. Start the Backend Server
+```bash
+cd backend
+npm start
+```
+
+### 2. Start the Frontend Next.js Server
+```bash
+cd frontend
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Running Automated Tests
+
+The test suite covers LLM fallbacks, single-flight coalescing, persistent retry bounds, linked accounts, attachment parsing, and calendar sync:
+
+```bash
+cd backend
+npm test
+```
+>>>>>>> e97725b (Switch primary LLM to openai/gpt-oss-20b, add dual-key authorization, and set temperature to 0.2)
 
 ---
 

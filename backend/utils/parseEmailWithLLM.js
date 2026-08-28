@@ -2,14 +2,23 @@ const { OpenAI } = require("openai");
 const he = require("he");
 const config = require("../config/appConfig");
 
-const nvidiaClient = new OpenAI({
-  apiKey: process.env.NVIDIA_API_KEY || "dummy_key",
+const primaryClient = new OpenAI({
+  apiKey: config.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_API_KEY || "dummy_key",
   baseURL: "https://integrate.api.nvidia.com/v1",
   timeout: 25000, // 25s timeout for fast bounded failure
   maxRetries: 1,  // Prevent excessive retries
 });
 
-const PRIMARY_MODEL = config.NVIDIA_PRIMARY_MODEL || "google/gemma-4-31b-it";
+const fallbackClient = new OpenAI({
+  apiKey: config.NVIDIA_SECONDARY_API_KEY || process.env.NVIDIA_SECONDARY_API_KEY || config.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_API_KEY || "dummy_key",
+  baseURL: "https://integrate.api.nvidia.com/v1",
+  timeout: 30000, // 30s timeout for fallback
+  maxRetries: 1,
+});
+
+const nvidiaClient = primaryClient; // backward compatibility
+
+const PRIMARY_MODEL = config.NVIDIA_PRIMARY_MODEL || "openai/gpt-oss-20b";
 const FALLBACK_MODEL = config.NVIDIA_FALLBACK_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 // ---------------------------------------------------------------------------
@@ -1722,19 +1731,33 @@ const validateGeminiResponse = validateLLMResponse;
  * Attempt structured extraction with a single model.
  * Returns { success: true, data: validated } or { success: false, reason: string, errorType: "auth_error"|"transport_error"|"content_error" }
  */
-async function executeSingleModelAttempt(modelName, prompt) {
+async function executeSingleModelAttempt(modelName, prompt, client = primaryClient) {
   try {
-    const response = await nvidiaClient.chat.completions.create({
+    const isNemotron = /nemotron/i.test(modelName);
+    const requestParams = {
       model: modelName,
       messages: [{ role: "user", content: prompt }],
-      temperature: 1,
-      top_p: 0.95,
-      max_tokens: 16384,
+      temperature: config.LLM_TEMPERATURE ?? 0.2,
       stream: false,
-      chat_template_kwargs: { enable_thinking: false },
-    });
+    };
+
+    if (isNemotron) {
+      requestParams.top_p = 0.95;
+      requestParams.max_tokens = 4096;
+      requestParams.reasoning_budget = 4096;
+      requestParams.chat_template_kwargs = { enable_thinking: true };
+    } else {
+      requestParams.top_p = 1;
+      requestParams.max_tokens = 4096;
+    }
+
+    const response = await client.chat.completions.create(requestParams);
 
     let rawContent = response.choices?.[0]?.message?.content || "";
+    if (!rawContent && response.choices?.[0]?.message?.reasoning_content) {
+      rawContent = response.choices[0].message.reasoning_content;
+    }
+
     // Strip thinking/reasoning tags if emitted in message.content
     rawContent = rawContent
       .replace(/<thought[\s\S]*?<\/thought>/gi, "")
@@ -1816,7 +1839,7 @@ async function executeSingleModelAttempt(modelName, prompt) {
 
 /**
  * Call LLM with a two-tier hierarchy:
- * 1. Primary: Gemma 4 31B
+ * 1. Primary: OpenAI GPT-OSS (openai/gpt-oss-20b)
  * 2. Secondary Fallback: Nemotron 3.5 Lightning 30B-A3B
  * Falls back to null/error status if both fail.
  */
@@ -1898,9 +1921,9 @@ Subject: ${subject}
 Sender: ${sender}
 Body: ${truncatedBody}`;
 
-  // ── Tier 1: Primary Model (Gemma 4 31B) ──────────────────────────────────
+  // ── Tier 1: Primary Model (GPT-OSS / configured primary) ──────────────────
   console.log(`[NVIDIA_PRIMARY] Using ${PRIMARY_MODEL}`);
-  const primaryResult = await executeSingleModelAttempt(PRIMARY_MODEL, prompt, 25000);
+  const primaryResult = await executeSingleModelAttempt(PRIMARY_MODEL, prompt, primaryClient);
 
   if (primaryResult.success) {
     const validated = primaryResult.data;
@@ -1916,15 +1939,15 @@ Body: ${truncatedBody}`;
 
   console.warn(`[NVIDIA_PRIMARY_FAILED] Primary model (${PRIMARY_MODEL}) failed: ${primaryResult.reason}.`);
 
-  // If the failure is a fatal authentication error (401/403), do NOT cycle credentials to secondary model
-  if (primaryResult.errorType === "auth_error") {
+  // If the failure is a fatal authentication error (401/403) and we share keys, check if secondary key exists
+  if (primaryResult.errorType === "auth_error" && (!config.NVIDIA_SECONDARY_API_KEY || config.NVIDIA_SECONDARY_API_KEY === config.NVIDIA_PRIMARY_API_KEY)) {
     console.error(`[NVIDIA_AUTH_ERROR] Authentication/credential failure. Skipping secondary model fallback.`);
     return { status: "transport_error" };
   }
 
-  // ── Tier 2: Secondary Fallback Model (Nemotron 3.5 Lightning) ─────────────
+  // ── Tier 2: Secondary Fallback Model (Nemotron / configured fallback) ──────
   console.log(`[NVIDIA_FALLBACK] Using ${FALLBACK_MODEL}`);
-  const fallbackResult = await executeSingleModelAttempt(FALLBACK_MODEL, prompt, 20000);
+  const fallbackResult = await executeSingleModelAttempt(FALLBACK_MODEL, prompt, fallbackClient);
 
   if (fallbackResult.success) {
     const validated = fallbackResult.data;

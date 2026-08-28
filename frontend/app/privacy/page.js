@@ -68,7 +68,7 @@ export default function PrivacyPage() {
               Data accessed via Google APIs is used strictly to power the core functionality of Email Tracker:
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
-              <li><strong>Dual-LLM AI Parsing:</strong> Converting unstructured placement emails into structured application records using Google Gemma 4 31B with automatic fallback to NVIDIA Nemotron 3.5 Lightning (via NVIDIA NIM API).</li>
+              <li><strong>Dual-LLM AI Parsing:</strong> Converting unstructured placement emails into structured application records using OpenAI GPT-OSS 20B with automatic fallback to NVIDIA Nemotron 3.5 Lightning (via NVIDIA NIM API).</li>
               <li><strong>Spreadsheet Shortlist Detection:</strong> Inspecting attached candidate lists (`.xlsx`, `.xls`, `.csv`) in-memory during sync to determine if your name or USN appears on the shortlist.</li>
               <li><strong>Multi-Inbox Coordination:</strong> Synchronizing both your institutional and linked secondary accounts seamlessly without mixing credentials.</li>
               <li><strong>Automated Calendar Scheduling:</strong> Creating and updating calendar events for drive deadlines, online tests, PPTs, and interview schedules.</li>
@@ -101,7 +101,7 @@ export default function PrivacyPage() {
             </p>
             <ul style={{ paddingLeft: "20px", marginBottom: "12px", listStyleType: "disc" }}>
               <li><strong>Google Cloud & Gmail APIs:</strong> For OAuth 2.0 authentication, mailbox change notifications (Pub/Sub), and calendar sync.</li>
-              <li><strong>NVIDIA NIM API:</strong> For structured LLM extraction (Gemma 4 31B & Nemotron 3.5 Lightning) with strict privacy agreements.</li>
+              <li><strong>NVIDIA NIM API:</strong> For structured LLM extraction (OpenAI GPT-OSS 20B & Nemotron 3.5 Lightning) with strict privacy agreements.</li>
               <li><strong>MongoDB Atlas:</strong> For secure, encrypted database storage with strict per-tenant scoping.</li>
             </ul>
           </section>
