@@ -56,19 +56,28 @@ export default function AnalyticsView({ applications = [] }) {
     let nonPlacementCount = 0;
 
     let placementAppliedCount = 0;
-    let placementDoneCount = 0;
-    let placementNewUnmarkedCount = 0;
-    let placementNoResponseCount = 0;
-
     let eventsAppliedCount = 0;
-    let eventsDoneCount = 0;
-    let eventsNewUnmarkedCount = 0;
-    let eventsNoResponseCount = 0;
 
+    // Mutually exclusive status breakdown for placement opportunities (sum = placementCount)
+    let donutPlacementOffers = 0;
+    let donutPlacementRejected = 0;
+    let donutPlacementDone = 0;
+    let donutPlacementAwaitingResponse = 0;
+    let donutPlacementApplied = 0;
+    let donutPlacementNew = 0;
+
+    // Mutually exclusive status breakdown for non-placement events (sum = nonPlacementCount)
+    let donutEventsDone = 0;
+    let donutEventsAwaitingResponse = 0;
+    let donutEventsApplied = 0;
+    let donutEventsNew = 0;
+
+    // Funnel & KPI cumulative metrics
     let oaCount = 0;
     let interviewCount = 0;
     let offerCount = 0;
     let rejectedCount = 0;
+    let noResponseCount = 0;
     let upcomingDeadlinesCount = 0;
 
     filteredApps.forEach((app) => {
@@ -78,20 +87,15 @@ export default function AnalyticsView({ applications = [] }) {
       const latestTime = getLatestAppTime(app);
       const ageInDays = (now - latestTime) / DAY_MS;
 
-      // Applied / In-Progress status: persistent hasApplied flag, or currently applied / in any recruitment stage
       const hasApplied = app.hasApplied || status === "applied" || (stage && stage !== "none");
-
-      // No response tag: applied and >= 20 days since last email, irrespective of hiring stage
       const isNoResponse = status === "applied" && ageInDays >= 20;
 
       if (isPlacement) {
         placementCount++;
         if (hasApplied) placementAppliedCount++;
-        if (status === "done") placementDoneCount++;
-        if (status === "new") placementNewUnmarkedCount++;
-        if (isNoResponse) placementNoResponseCount++;
+        if (isNoResponse) noResponseCount++;
 
-        // Stages (Hierarchy: Offer > Interview > OA + Rejection tracking)
+        // Cumulative stage milestones for placement funnel & KPI cards
         if (stage === "offered") {
           offerCount++;
           interviewCount++;
@@ -113,12 +117,35 @@ export default function AnalyticsView({ applications = [] }) {
         if (stage === "rejected") {
           rejectedCount++;
         }
+
+        // Mutually exclusive status partition for Donut Chart (exactly 1 category per app)
+        if (stage === "offered") {
+          donutPlacementOffers++;
+        } else if (["rejected", "rejected_after_oa", "rejected_after_interview"].includes(stage)) {
+          donutPlacementRejected++;
+        } else if (status === "done") {
+          donutPlacementDone++;
+        } else if (isNoResponse) {
+          donutPlacementAwaitingResponse++;
+        } else if (hasApplied || status === "applied") {
+          donutPlacementApplied++;
+        } else {
+          donutPlacementNew++;
+        }
       } else {
         nonPlacementCount++;
         if (hasApplied) eventsAppliedCount++;
-        if (status === "done") eventsDoneCount++;
-        if (status === "new") eventsNewUnmarkedCount++;
-        if (isNoResponse) eventsNoResponseCount++;
+
+        // Mutually exclusive status partition for Non-Placement Donut Chart
+        if (status === "done") {
+          donutEventsDone++;
+        } else if (isNoResponse) {
+          donutEventsAwaitingResponse++;
+        } else if (hasApplied || status === "applied") {
+          donutEventsApplied++;
+        } else {
+          donutEventsNew++;
+        }
       }
 
       // Upcoming Deadlines (within 7 days)
@@ -136,9 +163,6 @@ export default function AnalyticsView({ applications = [] }) {
 
     const appliedCount = categoryFilter === "events" ? eventsAppliedCount : placementAppliedCount;
     const notAppliedCount = categoryFilter === "events" ? eventsNotAppliedCount : placementNotAppliedCount;
-    const noResponseCount = categoryFilter === "events" ? eventsNoResponseCount : placementNoResponseCount;
-    const doneCount = categoryFilter === "events" ? eventsDoneCount : placementDoneCount;
-    const newUnmarkedCount = categoryFilter === "events" ? eventsNewUnmarkedCount : placementNewUnmarkedCount;
 
     const applyRate = placementCount > 0 ? Math.round((placementAppliedCount / placementCount) * 100) : 0;
     const oaRate = placementAppliedCount > 0 ? Math.round((oaCount / placementAppliedCount) * 100) : 0;
@@ -155,8 +179,6 @@ export default function AnalyticsView({ applications = [] }) {
       eventsNotAppliedCount,
       appliedCount,
       notAppliedCount,
-      doneCount,
-      newUnmarkedCount,
       noResponseCount,
       oaCount,
       interviewCount,
@@ -167,6 +189,17 @@ export default function AnalyticsView({ applications = [] }) {
       oaRate,
       interviewRate,
       offerRate,
+      // Donut partition counts
+      donutPlacementOffers,
+      donutPlacementRejected,
+      donutPlacementDone,
+      donutPlacementAwaitingResponse,
+      donutPlacementApplied,
+      donutPlacementNew,
+      donutEventsDone,
+      donutEventsAwaitingResponse,
+      donutEventsApplied,
+      donutEventsNew,
     };
   }, [filteredApps, categoryFilter]);
 
@@ -177,18 +210,18 @@ export default function AnalyticsView({ applications = [] }) {
 
     const segments = isEvents
       ? [
-          { label: "Applied", count: Math.max(0, metrics.eventsAppliedCount - metrics.eventsNoResponseCount), color: "#0891b2" },
-          { label: "Awaiting Response", count: metrics.eventsNoResponseCount, color: "#d97706" },
-          { label: "New / Unmarked", count: metrics.newUnmarkedCount, color: "#2563eb" },
-          { label: "Marked Done", count: metrics.doneCount, color: "#475569" },
+          { label: "Applied", count: metrics.donutEventsApplied, color: "#0891b2" },
+          { label: "Awaiting Response", count: metrics.donutEventsAwaitingResponse, color: "#d97706" },
+          { label: "New / Unmarked", count: metrics.donutEventsNew, color: "#2563eb" },
+          { label: "Marked Done", count: metrics.donutEventsDone, color: "#475569" },
         ].filter((s) => s.count > 0)
       : [
-          { label: "Applied", count: Math.max(0, metrics.placementAppliedCount - metrics.noResponseCount - metrics.offerCount - metrics.rejectedCount), color: "#0891b2" },
-          { label: "Awaiting Response", count: metrics.noResponseCount, color: "#d97706" },
-          { label: "New / Unmarked", count: metrics.newUnmarkedCount, color: "#2563eb" },
-          { label: "Marked Done", count: metrics.doneCount, color: "#475569" },
-          { label: "Offers / Selected", count: metrics.offerCount, color: "#059669" },
-          { label: "Rejected", count: metrics.rejectedCount, color: "#be123c" },
+          { label: "Applied", count: metrics.donutPlacementApplied, color: "#0891b2" },
+          { label: "Awaiting Response", count: metrics.donutPlacementAwaitingResponse, color: "#d97706" },
+          { label: "New / Unmarked", count: metrics.donutPlacementNew, color: "#2563eb" },
+          { label: "Marked Done", count: metrics.donutPlacementDone, color: "#475569" },
+          { label: "Offers / Selected", count: metrics.donutPlacementOffers, color: "#059669" },
+          { label: "Rejected", count: metrics.donutPlacementRejected, color: "#be123c" },
         ].filter((s) => s.count > 0);
 
     let cumulativeAngle = 0;
