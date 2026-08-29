@@ -317,33 +317,15 @@ export default function AnalyticsView({ applications = [] }) {
               </div>
 
               <div className="funnel-container">
-                {/* Stage 1: Received */}
+                {/* 1. Applied */}
                 <div className="funnel-step">
                   <div className="funnel-step-meta">
-                    <span className="funnel-step-name">1. Drives Received</span>
-                    <span className="funnel-step-count">{metrics.placementCount}</span>
-                  </div>
-                  <div className="funnel-bar-track">
-                    <div className="funnel-bar-fill step-1" style={{ width: "100%" }}>
-                      <span className="funnel-bar-percent">100%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Stage 2: Applied */}
-                <div className="funnel-step">
-                  <div className="funnel-step-meta">
-                    <span className="funnel-step-name">2. Applied</span>
-                    <div className="funnel-step-count-group">
-                      <span className="funnel-step-count">{metrics.appliedCount}</span>
-                      {metrics.notAppliedCount > 0 && (
-                        <span className="funnel-dropoff">(-{metrics.notAppliedCount})</span>
-                      )}
-                    </div>
+                    <span className="funnel-step-name">Applied</span>
+                    <span className="funnel-step-count">{metrics.appliedCount}</span>
                   </div>
                   <div className="funnel-bar-track">
                     <div
-                      className="funnel-bar-fill step-2"
+                      className="funnel-bar-fill step-applied"
                       style={{ width: `${Math.max(metrics.appliedCount > 0 ? 12 : 0, metrics.applyRate)}%` }}
                     >
                       {metrics.applyRate > 0 && (
@@ -351,94 +333,114 @@ export default function AnalyticsView({ applications = [] }) {
                       )}
                     </div>
                     {metrics.applyRate === 0 && (
-                      <span className="funnel-zero-pill step-2-zero">0%</span>
+                      <span className="funnel-zero-pill step-applied-zero">0%</span>
                     )}
                   </div>
                 </div>
 
-                {/* Stage 3: Online Assessment */}
-                <div className="funnel-step">
-                  <div className="funnel-step-meta">
-                    <span className="funnel-step-name">3. Online Assessment (OA)</span>
-                    <div className="funnel-step-count-group">
-                      <span className="funnel-step-count">{metrics.oaCount}</span>
-                      {metrics.appliedCount > metrics.oaCount && (
-                        <span className="funnel-dropoff">(-{metrics.appliedCount - metrics.oaCount})</span>
-                      )}
+                {/* 2. Not Applied */}
+                {(() => {
+                  const notAppliedRate = metrics.placementCount > 0 ? Math.round((metrics.notAppliedCount / metrics.placementCount) * 100) : 0;
+                  return (
+                    <div className="funnel-step">
+                      <div className="funnel-step-meta">
+                        <span className="funnel-step-name">Not Applied</span>
+                        <span className="funnel-step-count">{metrics.notAppliedCount}</span>
+                      </div>
+                      <div className="funnel-bar-track">
+                        <div
+                          className="funnel-bar-fill step-not-applied"
+                          style={{ width: `${Math.max(metrics.notAppliedCount > 0 ? 12 : 0, notAppliedRate)}%` }}
+                        >
+                          {notAppliedRate > 0 && (
+                            <span className="funnel-bar-percent">{notAppliedRate}%</span>
+                          )}
+                        </div>
+                        {notAppliedRate === 0 && (
+                          <span className="funnel-zero-pill step-not-applied-zero">0%</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="funnel-bar-track">
-                    <div
-                      className="funnel-bar-fill step-3"
-                      style={{
-                        width: `${Math.max(metrics.oaCount > 0 ? 12 : 0, metrics.placementCount > 0 ? (metrics.oaCount / metrics.placementCount) * 100 : 0)}%`,
-                      }}
-                    >
-                      {metrics.oaRate > 0 && (
-                        <span className="funnel-bar-percent">{metrics.oaRate}%</span>
-                      )}
-                    </div>
-                    {metrics.oaRate === 0 && (
-                      <span className="funnel-zero-pill step-3-zero">0%</span>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()}
 
-                {/* Stage 4: Interview */}
-                <div className="funnel-step">
-                  <div className="funnel-step-meta">
-                    <span className="funnel-step-name">4. Interview Scheduled</span>
-                    <div className="funnel-step-count-group">
-                      <span className="funnel-step-count">{metrics.interviewCount}</span>
-                      {metrics.oaCount > metrics.interviewCount && (
-                        <span className="funnel-dropoff">(-{metrics.oaCount - metrics.interviewCount})</span>
-                      )}
+                {/* 3. Shortlisted for OA */}
+                {(() => {
+                  const oaRateOfTotal = metrics.placementCount > 0 ? Math.round((metrics.oaCount / metrics.placementCount) * 100) : 0;
+                  return (
+                    <div className="funnel-step">
+                      <div className="funnel-step-meta">
+                        <span className="funnel-step-name">Shortlisted for OA</span>
+                        <span className="funnel-step-count">{metrics.oaCount}</span>
+                      </div>
+                      <div className="funnel-bar-track">
+                        <div
+                          className="funnel-bar-fill step-oa"
+                          style={{ width: `${Math.max(metrics.oaCount > 0 ? 12 : 0, oaRateOfTotal)}%` }}
+                        >
+                          {oaRateOfTotal > 0 && (
+                            <span className="funnel-bar-percent">{oaRateOfTotal}%</span>
+                          )}
+                        </div>
+                        {oaRateOfTotal === 0 && (
+                          <span className="funnel-zero-pill step-oa-zero">0%</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="funnel-bar-track">
-                    <div
-                      className="funnel-bar-fill step-4"
-                      style={{
-                        width: `${Math.max(metrics.interviewCount > 0 ? 12 : 0, metrics.placementCount > 0 ? (metrics.interviewCount / metrics.placementCount) * 100 : 0)}%`,
-                      }}
-                    >
-                      {metrics.interviewRate > 0 && (
-                        <span className="funnel-bar-percent">{metrics.interviewRate}%</span>
-                      )}
-                    </div>
-                    {metrics.interviewRate === 0 && (
-                      <span className="funnel-zero-pill step-4-zero">0%</span>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()}
 
-                {/* Stage 5: Offer */}
-                <div className="funnel-step">
-                  <div className="funnel-step-meta">
-                    <span className="funnel-step-name">5. Offers / Selected</span>
-                    <div className="funnel-step-count-group">
-                      <span className="funnel-step-count">{metrics.offerCount}</span>
-                      {metrics.interviewCount > metrics.offerCount && (
-                        <span className="funnel-dropoff">(-{metrics.interviewCount - metrics.offerCount})</span>
-                      )}
+                {/* 4. Shortlisted for Interview */}
+                {(() => {
+                  const interviewRateOfTotal = metrics.placementCount > 0 ? Math.round((metrics.interviewCount / metrics.placementCount) * 100) : 0;
+                  return (
+                    <div className="funnel-step">
+                      <div className="funnel-step-meta">
+                        <span className="funnel-step-name">Shortlisted for Interview</span>
+                        <span className="funnel-step-count">{metrics.interviewCount}</span>
+                      </div>
+                      <div className="funnel-bar-track">
+                        <div
+                          className="funnel-bar-fill step-interview"
+                          style={{ width: `${Math.max(metrics.interviewCount > 0 ? 12 : 0, interviewRateOfTotal)}%` }}
+                        >
+                          {interviewRateOfTotal > 0 && (
+                            <span className="funnel-bar-percent">{interviewRateOfTotal}%</span>
+                          )}
+                        </div>
+                        {interviewRateOfTotal === 0 && (
+                          <span className="funnel-zero-pill step-interview-zero">0%</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="funnel-bar-track">
-                    <div
-                      className="funnel-bar-fill step-5"
-                      style={{
-                        width: `${Math.max(metrics.offerCount > 0 ? 12 : 0, metrics.placementCount > 0 ? (metrics.offerCount / metrics.placementCount) * 100 : 0)}%`,
-                      }}
-                    >
-                      {metrics.offerRate > 0 && (
-                        <span className="funnel-bar-percent">{metrics.offerRate}%</span>
-                      )}
+                  );
+                })()}
+
+                {/* 5. Rejected */}
+                {(() => {
+                  const rejectedRateOfTotal = metrics.placementCount > 0 ? Math.round((metrics.rejectedCount / metrics.placementCount) * 100) : 0;
+                  return (
+                    <div className="funnel-step">
+                      <div className="funnel-step-meta">
+                        <span className="funnel-step-name">Rejected</span>
+                        <span className="funnel-step-count">{metrics.rejectedCount}</span>
+                      </div>
+                      <div className="funnel-bar-track">
+                        <div
+                          className="funnel-bar-fill step-rejected"
+                          style={{ width: `${Math.max(metrics.rejectedCount > 0 ? 12 : 0, rejectedRateOfTotal)}%` }}
+                        >
+                          {rejectedRateOfTotal > 0 && (
+                            <span className="funnel-bar-percent">{rejectedRateOfTotal}%</span>
+                          )}
+                        </div>
+                        {rejectedRateOfTotal === 0 && (
+                          <span className="funnel-zero-pill step-rejected-zero">0%</span>
+                        )}
+                      </div>
                     </div>
-                    {metrics.offerRate === 0 && (
-                      <span className="funnel-zero-pill step-5-zero">0%</span>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Footnote */}
@@ -446,7 +448,7 @@ export default function AnalyticsView({ applications = [] }) {
                 <svg className="footnote-icon" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
-                <span>Percentages show conversion from the previous stage.</span>
+                <span>Percentages indicate the proportion of total campus opportunities.</span>
               </div>
             </div>
 
@@ -820,11 +822,11 @@ export default function AnalyticsView({ applications = [] }) {
           color: #ffffff;
         }
 
-        .funnel-bar-fill.step-1 { background: #2563eb; }
-        .funnel-bar-fill.step-2 { background: #0d9488; }
-        .funnel-bar-fill.step-3 { background: #8b5cf6; }
-        .funnel-bar-fill.step-4 { background: #f59e0b; }
-        .funnel-bar-fill.step-5 { background: #10b981; }
+        .funnel-bar-fill.step-applied { background: #0d9488; }
+        .funnel-bar-fill.step-not-applied { background: #64748b; }
+        .funnel-bar-fill.step-oa { background: #8b5cf6; }
+        .funnel-bar-fill.step-interview { background: #f59e0b; }
+        .funnel-bar-fill.step-rejected { background: #ef4444; }
 
         .funnel-zero-pill {
           margin-left: 6px;
@@ -835,10 +837,11 @@ export default function AnalyticsView({ applications = [] }) {
           color: #ffffff;
         }
 
-        .step-2-zero { background: #0d9488; }
-        .step-3-zero { background: #8b5cf6; }
-        .step-4-zero { background: #f59e0b; }
-        .step-5-zero { background: #10b981; }
+        .step-applied-zero { background: #0d9488; }
+        .step-not-applied-zero { background: #64748b; }
+        .step-oa-zero { background: #8b5cf6; }
+        .step-interview-zero { background: #f59e0b; }
+        .step-rejected-zero { background: #ef4444; }
 
         /* Footnote */
         .chart-footnote {
