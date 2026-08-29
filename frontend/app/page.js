@@ -2395,11 +2395,11 @@ export default function JobTrackerDashboard() {
         }
 
         /* Settings Page */
-        .settings-container { display: flex; flex-direction: column; gap: 16px; max-width: 100%; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+        .settings-container { display: flex; flex-direction: column; gap: 22px; max-width: 100%; margin: 0 auto; width: 100%; padding-bottom: 40px; }
         .settings-header { margin-bottom: 4px; }
         .settings-main-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px; }
         .settings-main-subtitle { color: var(--text-secondary); font-size: 15px; }
-        .settings-grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+        .settings-grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
         .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 28px; box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02); }
         .settings-title { font-size: 20px; font-weight: 700; color: var(--text-heading); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
         .settings-title-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(13, 148, 136, 0.1); color: #0d9488; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -2436,7 +2436,7 @@ export default function JobTrackerDashboard() {
         .cal-cards-container {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 24px;
         }
         .cal-panel-card {
           background: #ffffff;

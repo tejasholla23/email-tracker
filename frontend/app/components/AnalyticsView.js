@@ -640,7 +640,8 @@ export default function AnalyticsView({ applications = [] }) {
         .kpi-card {
           background: #070e1e;
           border-radius: 12px;
-          padding: 13px 14px;
+          padding: 16px 16px;
+          min-height: 108px;
           display: flex;
           flex-direction: column;
           transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -674,7 +675,7 @@ export default function AnalyticsView({ applications = [] }) {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 4px;
+          margin-bottom: 6px;
         }
 
         .kpi-label {
@@ -689,18 +690,18 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .kpi-value {
-          font-size: 28px;
+          font-size: 30px;
           font-weight: 800;
           color: #f8fafc;
           line-height: 1.1;
-          margin-bottom: 4px;
+          margin-bottom: 6px;
         }
 
         .kpi-subtext {
-          font-size: 10.5px;
+          font-size: 11px;
           color: #94a3b8;
           margin-top: auto;
-          line-height: 1.2;
+          line-height: 1.25;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
