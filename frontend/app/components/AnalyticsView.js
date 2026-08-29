@@ -987,6 +987,206 @@ export default function AnalyticsView({ applications = [] }) {
           color: #94a3b8;
           margin: 0;
         }
+
+        /* Responsive Styles */
+        @media (max-width: 1200px) {
+          .analytics-kpi-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+
+        @media (max-width: 960px) {
+          .analytics-charts-row {
+            grid-template-columns: 1fr;
+            gap: 16px;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .analytics-container {
+            gap: 18px;
+          }
+
+          .analytics-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .analytics-title {
+            font-size: 24px;
+          }
+
+          .analytics-controls {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+
+          .analytics-filter-group {
+            width: 100%;
+          }
+
+          .analytics-pill {
+            flex: 1;
+            text-align: center;
+            padding: 7px 6px;
+            font-size: 12px;
+          }
+
+          .analytics-time-select-wrapper {
+            width: 100%;
+          }
+
+          .analytics-time-select {
+            width: 100%;
+          }
+
+          .analytics-chart-card {
+            padding: 18px 16px;
+          }
+
+          .chart-card-header {
+            margin-bottom: 16px;
+          }
+
+          .chart-card-header h3 {
+            font-size: 17px;
+          }
+
+          .donut-chart-wrapper {
+            flex-direction: column;
+            gap: 20px;
+          }
+
+          .donut-legend {
+            width: 100%;
+            min-width: 100%;
+            gap: 10px;
+          }
+        }
+
+        @media (max-width: 680px) {
+          .analytics-kpi-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .analytics-container {
+            gap: 16px;
+          }
+
+          .analytics-title {
+            font-size: 22px;
+          }
+
+          .analytics-kpi-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+          }
+
+          .kpi-card {
+            padding: 12px 10px;
+            min-height: 94px;
+            border-radius: 10px;
+          }
+
+          .kpi-label {
+            font-size: 9.5px;
+          }
+
+          .kpi-value {
+            font-size: 24px;
+            margin-bottom: 4px;
+          }
+
+          .kpi-subtext {
+            font-size: 9.5px;
+            line-height: 1.2;
+          }
+
+          .analytics-pill {
+            padding: 6px 3px;
+            font-size: 11px;
+          }
+
+          .analytics-chart-card {
+            padding: 16px 12px;
+            border-radius: 12px;
+          }
+
+          .funnel-step {
+            gap: 4px;
+          }
+
+          .funnel-step-meta {
+            font-size: 12px;
+          }
+
+          .funnel-step-count {
+            font-size: 12px;
+          }
+
+          .funnel-dropoff {
+            font-size: 11px;
+          }
+
+          .funnel-bar-track {
+            height: 22px;
+          }
+
+          .funnel-bar-percent {
+            font-size: 10px;
+          }
+
+          .donut-svg-container {
+            width: 150px;
+            height: 150px;
+          }
+
+          .donut-center-value {
+            font-size: 26px;
+          }
+
+          .donut-center-label {
+            font-size: 8.5px;
+          }
+
+          .legend-item {
+            font-size: 12px;
+            padding: 3px 2px;
+          }
+
+          .legend-dot {
+            width: 8px;
+            height: 8px;
+            margin-right: 8px;
+          }
+
+          .legend-count {
+            margin-right: 8px;
+          }
+
+          .legend-percent {
+            font-size: 11px;
+            width: 28px;
+          }
+
+          .chart-footnote {
+            margin-top: 18px;
+            font-size: 11px;
+            padding: 8px 10px;
+            gap: 8px;
+          }
+
+          .footnote-icon {
+            width: 14px;
+            height: 14px;
+          }
+        }
       `}</style>
     </div>
   );
