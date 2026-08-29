@@ -11,7 +11,7 @@ const applicationSchema = new mongoose.Schema(
     },
     stage: {
       type: String,
-      enum: ["none", "oa_scheduled", "interview_scheduled", "offered", "rejected"],
+      enum: ["none", "oa_scheduled", "interview_scheduled", "offered", "rejected", "rejected_after_oa", "rejected_after_interview"],
       default: "none",
     },
     subtitle: { type: String, default: "" },

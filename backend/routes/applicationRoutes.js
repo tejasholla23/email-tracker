@@ -187,7 +187,7 @@ router.patch("/:id", writeLimiter, async (req, res) => {
 
     // Historical applied persistence: once applied, always count as applied in analytics
     const isAppliedUpdate = update.status === "applied" ||
-      ["oa_scheduled", "interview_scheduled", "offered"].includes(update.stage);
+      ["oa_scheduled", "interview_scheduled", "offered", "rejected_after_oa", "rejected_after_interview"].includes(update.stage);
     if (isAppliedUpdate) {
       update.hasApplied = true;
       if (!update.appliedAt) update.appliedAt = new Date();

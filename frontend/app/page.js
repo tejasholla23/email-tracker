@@ -1550,7 +1550,7 @@ export default function JobTrackerDashboard() {
       manualEdits.displayFields = [];
     }
 
-    if (manualEdits.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered"].includes(manualEdits.stage)) {
+    if (manualEdits.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered", "rejected_after_oa", "rejected_after_interview"].includes(manualEdits.stage)) {
       manualEdits.hasApplied = true;
     }
 
@@ -1588,7 +1588,7 @@ export default function JobTrackerDashboard() {
   };
 
   const handleQuickUpdate = async (appId, updates) => {
-    const isApplied = updates.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered"].includes(updates.stage);
+    const isApplied = updates.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered", "rejected_after_oa", "rejected_after_interview"].includes(updates.stage);
     const extraUpdates = isApplied ? { hasApplied: true } : {};
     setApplications(prev => prev.map(a => {
       if (a._id === appId) {
@@ -2871,6 +2871,8 @@ export default function JobTrackerDashboard() {
         .stage-interview { background: #fef3c7; border-color: rgba(245, 158, 11, 0.3); color: #b45309; }
         .stage-offered { background: #dcfce7; border-color: rgba(34, 197, 94, 0.3); color: #15803d; }
         .stage-rejected { background: #fee2e2; border-color: rgba(239, 68, 68, 0.3); color: #b91c1c; }
+        .stage-rejected_after_oa { background: #fdf2f8; border-color: rgba(225, 29, 72, 0.35); color: #be123c; }
+        .stage-rejected_after_interview { background: #fff1f2; border-color: rgba(225, 29, 72, 0.35); color: #9f1239; }
         .opp-hackathon { background: #ede9fe; border-color: rgba(139, 92, 246, 0.3); color: #6d28d9; }
         .opp-webinar { background: #e0f2fe; border-color: rgba(14, 165, 233, 0.3); color: #0369a1; }
         .opp-event { background: #f1f5f9; border-color: rgba(100, 116, 139, 0.3); color: #475569; }
@@ -3871,6 +3873,8 @@ export default function JobTrackerDashboard() {
         .dark .stage-interview { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fcd34d; }
         .dark .stage-offered { background: rgba(34, 197, 94, 0.15); border-color: #22c55e; color: #86efac; }
         .dark .stage-rejected { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5; }
+        .dark .stage-rejected_after_oa { background: rgba(225, 29, 72, 0.15); border-color: #e11d48; color: #fda4af; }
+        .dark .stage-rejected_after_interview { background: rgba(225, 29, 72, 0.15); border-color: #e11d48; color: #fda4af; }
         .dark .opp-hackathon { background: rgba(139, 92, 246, 0.15); border-color: #8b5cf6; color: #c4b5fd; }
         .dark .opp-webinar { background: rgba(14, 165, 233, 0.15); border-color: #0ea5e9; color: #7dd3fc; }
         .dark .opp-event { background: rgba(100, 116, 139, 0.15); border-color: #64748b; color: #cbd5e1; }
@@ -6037,7 +6041,7 @@ export default function JobTrackerDashboard() {
                                     className={`status-quick-item ${app.stage === "oa_scheduled" ? "active" : ""}`}
                                     onClick={() => handleQuickUpdate(app._id, { stage: "oa_scheduled" })}
                                   >
-                                    <span><span className="status-quick-dot" style={{ background: '#a855f7' }}></span>OA</span>
+                                    <span><span className="status-quick-dot" style={{ background: '#8b5cf6' }}></span>OA</span>
                                     {app.stage === "oa_scheduled" && <span>✓</span>}
                                   </button>
                                   <button
@@ -6053,7 +6057,7 @@ export default function JobTrackerDashboard() {
                                     className={`status-quick-item ${app.stage === "offered" ? "active" : ""}`}
                                     onClick={() => handleQuickUpdate(app._id, { stage: "offered" })}
                                   >
-                                    <span><span className="status-quick-dot" style={{ background: '#22c55e' }}></span>Offered</span>
+                                    <span><span className="status-quick-dot" style={{ background: '#10b981' }}></span>Offered</span>
                                     {app.stage === "offered" && <span>✓</span>}
                                   </button>
                                   <button
@@ -6061,8 +6065,24 @@ export default function JobTrackerDashboard() {
                                     className={`status-quick-item ${app.stage === "rejected" ? "active" : ""}`}
                                     onClick={() => handleQuickUpdate(app._id, { stage: "rejected" })}
                                   >
-                                    <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected</span>
+                                    <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected (Direct)</span>
                                     {app.stage === "rejected" && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.stage === "rejected_after_oa" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { stage: "rejected_after_oa" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#be123c' }}></span>Rejected (after OA)</span>
+                                    {app.stage === "rejected_after_oa" && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.stage === "rejected_after_interview" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { stage: "rejected_after_interview" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#9f1239' }}></span>Rejected (after Interview)</span>
+                                    {app.stage === "rejected_after_interview" && <span>✓</span>}
                                   </button>
                                 </div>
                               )}
@@ -6079,7 +6099,7 @@ export default function JobTrackerDashboard() {
                                   }}
                                   title="Click to change recruitment stage"
                                 >
-                                  {app.stage === "oa_scheduled" ? "OA" : app.stage === "interview_scheduled" ? "Interview" : app.stage === "offered" ? "Offered" : app.stage === "rejected" ? "Rejected" : app.stage}
+                                  {app.stage === "oa_scheduled" ? "OA" : app.stage === "interview_scheduled" ? "Interview" : app.stage === "offered" ? "Offered" : app.stage === "rejected" ? "Rejected" : app.stage === "rejected_after_oa" ? "OA • Rejected" : app.stage === "rejected_after_interview" ? "Interview • Rejected" : app.stage}
                                   <span className="status-badge-chevron">▼</span>
                                 </span>
                                 {activeStatusMenuId === `${app._id}-stage` && (
@@ -6098,7 +6118,7 @@ export default function JobTrackerDashboard() {
                                       className={`status-quick-item ${app.stage === "oa_scheduled" ? "active" : ""}`}
                                       onClick={() => handleQuickUpdate(app._id, { stage: "oa_scheduled" })}
                                     >
-                                      <span><span className="status-quick-dot" style={{ background: '#a855f7' }}></span>OA</span>
+                                      <span><span className="status-quick-dot" style={{ background: '#8b5cf6' }}></span>OA</span>
                                       {app.stage === "oa_scheduled" && <span>✓</span>}
                                     </button>
                                     <button
@@ -6114,7 +6134,7 @@ export default function JobTrackerDashboard() {
                                       className={`status-quick-item ${app.stage === "offered" ? "active" : ""}`}
                                       onClick={() => handleQuickUpdate(app._id, { stage: "offered" })}
                                     >
-                                      <span><span className="status-quick-dot" style={{ background: '#22c55e' }}></span>Offered</span>
+                                      <span><span className="status-quick-dot" style={{ background: '#10b981' }}></span>Offered</span>
                                       {app.stage === "offered" && <span>✓</span>}
                                     </button>
                                     <button
@@ -6122,8 +6142,24 @@ export default function JobTrackerDashboard() {
                                       className={`status-quick-item ${app.stage === "rejected" ? "active" : ""}`}
                                       onClick={() => handleQuickUpdate(app._id, { stage: "rejected" })}
                                     >
-                                      <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected</span>
+                                      <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected (Direct)</span>
                                       {app.stage === "rejected" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.stage === "rejected_after_oa" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { stage: "rejected_after_oa" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#be123c' }}></span>Rejected (after OA)</span>
+                                      {app.stage === "rejected_after_oa" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.stage === "rejected_after_interview" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { stage: "rejected_after_interview" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#9f1239' }}></span>Rejected (after Interview)</span>
+                                      {app.stage === "rejected_after_interview" && <span>✓</span>}
                                     </button>
                                   </div>
                                 )}
@@ -6771,7 +6807,9 @@ export default function JobTrackerDashboard() {
                       <option value="oa_scheduled">Online Assessment (OA)</option>
                       <option value="interview_scheduled">Interview Scheduled</option>
                       <option value="offered">Offered / Selected</option>
-                      <option value="rejected">Rejected</option>
+                      <option value="rejected">Rejected (Direct / Resume)</option>
+                      <option value="rejected_after_oa">Rejected (after OA)</option>
+                      <option value="rejected_after_interview">Rejected (after Interview)</option>
                     </select>
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
@@ -6986,7 +7024,7 @@ export default function JobTrackerDashboard() {
                 <div className="info-modal-meta-chips">
                   {app.stage && app.stage !== 'none' && (
                     <span className={`meta-chip stage-badge stage-${app.stage === 'oa_scheduled' ? 'oa' : app.stage === 'interview_scheduled' ? 'interview' : app.stage}`} style={{ textTransform: 'capitalize' }}>
-                      {app.stage === 'oa_scheduled' ? 'OA' : app.stage === 'interview_scheduled' ? 'Interview Scheduled' : app.stage === 'offered' ? 'Offered' : app.stage === 'rejected' ? 'Rejected' : app.stage}
+                      {app.stage === 'oa_scheduled' ? 'OA' : app.stage === 'interview_scheduled' ? 'Interview Scheduled' : app.stage === 'offered' ? 'Offered' : app.stage === 'rejected' ? 'Rejected' : app.stage === 'rejected_after_oa' ? 'OA • Rejected' : app.stage === 'rejected_after_interview' ? 'Interview • Rejected' : app.stage}
                     </span>
                   )}
                   {app.opportunityType && app.opportunityType !== 'JOB_APPLICATION' && (

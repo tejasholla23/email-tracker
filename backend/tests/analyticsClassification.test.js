@@ -208,5 +208,16 @@ describe("Analytics & Recruitment Classification Unit Tests", () => {
       assert.equal(update.manualOverrides, undefined);
       assert.equal(update.$addToSet, undefined);
     });
+
+    test("Application schema allows rejected_after_oa and rejected_after_interview", () => {
+      const Application = require("../models/Application");
+      const app1 = new Application({ stage: "rejected_after_oa" });
+      const err1 = app1.validateSync(["stage"]);
+      assert.equal(err1, undefined);
+
+      const app2 = new Application({ stage: "rejected_after_interview" });
+      const err2 = app2.validateSync(["stage"]);
+      assert.equal(err2, undefined);
+    });
   });
 });

@@ -78,7 +78,7 @@ export default function AnalyticsView({ applications = [] }) {
       const ageInDays = (now - latestTime) / DAY_MS;
 
       // Applied / In-Progress status: persistent hasApplied flag, or currently applied / in advanced stages
-      const hasApplied = app.hasApplied || status === "applied" || stage === "oa_scheduled" || stage === "interview_scheduled" || stage === "offered";
+      const hasApplied = app.hasApplied || status === "applied" || ["oa_scheduled", "interview_scheduled", "offered", "rejected_after_oa", "rejected_after_interview"].includes(stage);
       if (hasApplied) {
         appliedCount++;
       }
@@ -88,7 +88,7 @@ export default function AnalyticsView({ applications = [] }) {
       }
 
       // Derived No Response (>20 days inactive after apply, not done, not rejected, not offered)
-      if (status === "applied" && ageInDays >= 20 && stage !== "offered" && stage !== "rejected" && stage !== "interview_scheduled") {
+      if (status === "applied" && ageInDays >= 20 && !["offered", "rejected", "rejected_after_oa", "rejected_after_interview", "interview_scheduled"].includes(stage)) {
         noResponseCount++;
       }
 
@@ -97,7 +97,7 @@ export default function AnalyticsView({ applications = [] }) {
         newUnmarkedCount++;
       }
 
-      // Stages (Hierarchy: Offer > Interview > OA)
+      // Stages (Hierarchy: Offer > Interview > OA + Rejection tracking)
       if (stage === "offered") {
         offerCount++;
         interviewCount++;
@@ -105,6 +105,13 @@ export default function AnalyticsView({ applications = [] }) {
       } else if (stage === "interview_scheduled") {
         interviewCount++;
         oaCount++;
+      } else if (stage === "rejected_after_interview") {
+        interviewCount++;
+        oaCount++;
+        rejectedCount++;
+      } else if (stage === "rejected_after_oa") {
+        oaCount++;
+        rejectedCount++;
       } else if (stage === "oa_scheduled" || app.isShortlisted) {
         oaCount++;
       }
