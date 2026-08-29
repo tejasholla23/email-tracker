@@ -153,12 +153,12 @@ export default function AnalyticsView({ applications = [] }) {
   // ── Donut Chart Data Calculation ───────────────────────────────────────────
   const donutData = useMemo(() => {
     const segments = [
-      { label: "Applied", count: Math.max(0, metrics.appliedCount - metrics.noResponseCount - metrics.offerCount), color: "#14b8a6" },
-      { label: "Awaiting Response", count: metrics.noResponseCount, color: "#f59e0b" },
+      { label: "Applied", count: Math.max(0, metrics.appliedCount - metrics.noResponseCount - metrics.offerCount), color: "#0891b2" },
+      { label: "Awaiting Response", count: metrics.noResponseCount, color: "#d97706" },
       { label: "New / Unmarked", count: metrics.newUnmarkedCount, color: "#2563eb" },
       { label: "Marked Done", count: metrics.doneCount, color: "#475569" },
-      { label: "Offers / Selected", count: metrics.offerCount, color: "#10b981" },
-      { label: "Rejected", count: metrics.rejectedCount, color: "#ef4444" },
+      { label: "Offers / Selected", count: metrics.offerCount, color: "#059669" },
+      { label: "Rejected", count: metrics.rejectedCount, color: "#be123c" },
     ].filter((s) => s.count > 0);
 
     const totalCount = segments.reduce((sum, s) => sum + s.count, 0);
@@ -656,22 +656,22 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .kpi-card.kpi-drives {
-          border: 1.5px solid rgba(37, 99, 235, 0.5);
+          border: 1.5px solid rgba(37, 99, 235, 0.45);
         }
         .kpi-card.kpi-applied {
-          border: 1.5px solid rgba(20, 184, 166, 0.5);
+          border: 1.5px solid rgba(8, 145, 178, 0.45);
         }
         .kpi-card.kpi-oa {
-          border: 1.5px solid rgba(139, 92, 246, 0.5);
+          border: 1.5px solid rgba(99, 102, 241, 0.45);
         }
         .kpi-card.kpi-interviews {
-          border: 1.5px solid rgba(217, 119, 6, 0.5);
+          border: 1.5px solid rgba(217, 119, 6, 0.45);
         }
         .kpi-card.kpi-offers {
-          border: 1.5px solid rgba(16, 185, 129, 0.5);
+          border: 1.5px solid rgba(5, 150, 105, 0.45);
         }
         .kpi-card.kpi-no-response {
-          border: 1.5px solid rgba(220, 38, 38, 0.5);
+          border: 1.5px solid rgba(190, 18, 60, 0.45);
         }
 
         .kpi-header {
@@ -822,11 +822,11 @@ export default function AnalyticsView({ applications = [] }) {
           color: #ffffff;
         }
 
-        .funnel-bar-fill.step-applied { background: #0d9488; }
-        .funnel-bar-fill.step-not-applied { background: #64748b; }
-        .funnel-bar-fill.step-oa { background: #8b5cf6; }
-        .funnel-bar-fill.step-interview { background: #f59e0b; }
-        .funnel-bar-fill.step-rejected { background: #ef4444; }
+        .funnel-bar-fill.step-applied { background: #0891b2; }
+        .funnel-bar-fill.step-not-applied { background: #3b4861; }
+        .funnel-bar-fill.step-oa { background: #6366f1; }
+        .funnel-bar-fill.step-interview { background: #d97706; }
+        .funnel-bar-fill.step-rejected { background: #be123c; }
 
         .funnel-zero-pill {
           margin-left: 6px;
@@ -837,11 +837,11 @@ export default function AnalyticsView({ applications = [] }) {
           color: #ffffff;
         }
 
-        .step-applied-zero { background: #0d9488; }
-        .step-not-applied-zero { background: #64748b; }
-        .step-oa-zero { background: #8b5cf6; }
-        .step-interview-zero { background: #f59e0b; }
-        .step-rejected-zero { background: #ef4444; }
+        .step-applied-zero { background: #0891b2; }
+        .step-not-applied-zero { background: #3b4861; }
+        .step-oa-zero { background: #6366f1; }
+        .step-interview-zero { background: #d97706; }
+        .step-rejected-zero { background: #be123c; }
 
         /* Footnote */
         .chart-footnote {
@@ -868,14 +868,14 @@ export default function AnalyticsView({ applications = [] }) {
         .donut-chart-wrapper {
           display: flex;
           align-items: center;
-          gap: 28px;
+          gap: 20px;
           flex-wrap: wrap;
           flex: 1;
         }
 
         .donut-svg-container {
-          width: 175px;
-          height: 175px;
+          width: 215px;
+          height: 215px;
           position: relative;
           flex-shrink: 0;
           margin: 0 auto;
@@ -900,34 +900,34 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .donut-center-value {
-          font-size: 30px;
+          font-size: 34px;
           font-weight: 800;
           color: #ffffff;
           line-height: 1;
         }
 
         .donut-center-label {
-          font-size: 9.5px;
+          font-size: 9px;
           font-weight: 700;
           color: #94a3b8;
           margin-top: 4px;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.08em;
         }
 
         .donut-legend {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 16px;
-          min-width: 180px;
+          gap: 9px;
+          min-width: 150px;
         }
 
         .legend-item {
           display: flex;
           align-items: center;
-          font-size: 13px;
-          color: #f1f5f9;
+          font-size: 11.5px;
+          color: #cbd5e1;
           padding: 2px 4px;
           border-radius: 6px;
           transition: background 0.15s ease;
@@ -939,29 +939,30 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .legend-dot {
-          width: 9px;
-          height: 9px;
+          width: 7.5px;
+          height: 7.5px;
           border-radius: 50%;
-          margin-right: 10px;
+          margin-right: 8px;
           flex-shrink: 0;
         }
 
         .legend-label {
           flex: 1;
           font-weight: 500;
-          color: #e2e8f0;
+          color: #cbd5e1;
         }
 
         .legend-count {
           font-weight: 700;
           color: #ffffff;
-          margin-right: 12px;
+          margin-right: 8px;
+          font-size: 12px;
         }
 
         .legend-percent {
-          font-size: 12px;
+          font-size: 11px;
           color: #94a3b8;
-          width: 32px;
+          width: 28px;
           text-align: right;
         }
 
@@ -1148,12 +1149,12 @@ export default function AnalyticsView({ applications = [] }) {
           }
 
           .donut-svg-container {
-            width: 150px;
-            height: 150px;
+            width: 175px;
+            height: 175px;
           }
 
           .donut-center-value {
-            font-size: 26px;
+            font-size: 28px;
           }
 
           .donut-center-label {
