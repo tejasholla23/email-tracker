@@ -34,6 +34,7 @@ export default function AnalyticsView({ applications = [] }) {
       const appTime = getLatestAppTime(app);
       const ageInDays = (now - appTime) / DAY_MS;
 
+      if (timeFilter === "7d" && ageInDays > 7) return false;
       if (timeFilter === "30d" && ageInDays > 30) return false;
       if (timeFilter === "60d" && ageInDays > 60) return false;
 
@@ -281,6 +282,7 @@ export default function AnalyticsView({ applications = [] }) {
               onChange={(e) => setTimeFilter(e.target.value)}
             >
               <option value="all">All</option>
+              <option value="7d">Last 1 week</option>
               <option value="30d">Last 1 month</option>
               <option value="60d">Last 2 months</option>
             </select>
@@ -379,29 +381,36 @@ export default function AnalyticsView({ applications = [] }) {
 
               <div className="funnel-container">
                 {/* 1. Applied */}
-                <div className="funnel-step">
-                  <div className="funnel-step-meta">
-                    <span className="funnel-step-name">Applied</span>
-                    <span className="funnel-step-count">{metrics.appliedCount}</span>
-                  </div>
-                  <div className="funnel-bar-track">
-                    <div
-                      className="funnel-bar-fill step-applied"
-                      style={{ width: `${Math.max(metrics.appliedCount > 0 ? 12 : 0, metrics.applyRate)}%` }}
-                    >
-                      {metrics.applyRate > 0 && (
-                        <span className="funnel-bar-percent">{metrics.applyRate}%</span>
-                      )}
+                {(() => {
+                  const currentCategoryTotal = categoryFilter === "events" ? metrics.nonPlacementCount : metrics.placementCount;
+                  const currentApplyRate = currentCategoryTotal > 0 ? Math.round((metrics.appliedCount / currentCategoryTotal) * 100) : 0;
+                  return (
+                    <div className="funnel-step">
+                      <div className="funnel-step-meta">
+                        <span className="funnel-step-name">Applied</span>
+                        <span className="funnel-step-count">{metrics.appliedCount}</span>
+                      </div>
+                      <div className="funnel-bar-track">
+                        <div
+                          className="funnel-bar-fill step-applied"
+                          style={{ width: `${Math.max(metrics.appliedCount > 0 ? 12 : 0, currentApplyRate)}%` }}
+                        >
+                          {currentApplyRate > 0 && (
+                            <span className="funnel-bar-percent">{currentApplyRate}%</span>
+                          )}
+                        </div>
+                        {currentApplyRate === 0 && (
+                          <span className="funnel-zero-pill step-applied-zero">0%</span>
+                        )}
+                      </div>
                     </div>
-                    {metrics.applyRate === 0 && (
-                      <span className="funnel-zero-pill step-applied-zero">0%</span>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* 2. Not Applied */}
                 {(() => {
-                  const notAppliedRate = metrics.placementCount > 0 ? Math.round((metrics.notAppliedCount / metrics.placementCount) * 100) : 0;
+                  const currentCategoryTotal = categoryFilter === "events" ? metrics.nonPlacementCount : metrics.placementCount;
+                  const notAppliedRate = currentCategoryTotal > 0 ? Math.round((metrics.notAppliedCount / currentCategoryTotal) * 100) : 0;
                   return (
                     <div className="funnel-step">
                       <div className="funnel-step-meta">
