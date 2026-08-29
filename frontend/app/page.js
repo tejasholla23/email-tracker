@@ -1550,7 +1550,7 @@ export default function JobTrackerDashboard() {
       manualEdits.displayFields = [];
     }
 
-    if (manualEdits.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered", "rejected_after_oa", "rejected_after_interview"].includes(manualEdits.stage)) {
+    if (manualEdits.status === "applied" || (manualEdits.stage && manualEdits.stage !== "none")) {
       manualEdits.hasApplied = true;
     }
 
@@ -1588,7 +1588,7 @@ export default function JobTrackerDashboard() {
   };
 
   const handleQuickUpdate = async (appId, updates) => {
-    const isApplied = updates.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered", "rejected_after_oa", "rejected_after_interview"].includes(updates.stage);
+    const isApplied = updates.status === "applied" || (updates.stage && updates.stage !== "none");
     const extraUpdates = isApplied ? { hasApplied: true } : {};
     setApplications(prev => prev.map(a => {
       if (a._id === appId) {
