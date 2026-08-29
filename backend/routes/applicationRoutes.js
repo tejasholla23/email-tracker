@@ -139,10 +139,32 @@ router.post("/", writeLimiter, async (req, res) => {
 // PATCH /applications/:id - update application status and/or note
 router.patch("/:id", writeLimiter, async (req, res) => {
   try {
-    const { status, note, manualEdits } = req.body;
+    const { status, stage, opportunityType, note, manualEdits } = req.body;
     const update = { needsCalendarSync: true, calendarRetryCount: 0, calendarSyncError: null };
-    if (status !== undefined) update.status = status;
-    if (note  !== undefined) update.note   = note;
+    
+    if (status !== undefined) {
+      update.status = status;
+      if (!update.$addToSet) update.$addToSet = {};
+      if (!update.$addToSet.manualOverrides) update.$addToSet.manualOverrides = { $each: [] };
+      update.$addToSet.manualOverrides.$each.push("status");
+    }
+
+    if (stage !== undefined) {
+      update.stage = stage;
+      if (!update.$addToSet) update.$addToSet = {};
+      if (!update.$addToSet.manualOverrides) update.$addToSet.manualOverrides = { $each: [] };
+      update.$addToSet.manualOverrides.$each.push("stage");
+    }
+
+    if (opportunityType !== undefined) {
+      update.opportunityType = opportunityType;
+      if (!update.$addToSet) update.$addToSet = {};
+      if (!update.$addToSet.manualOverrides) update.$addToSet.manualOverrides = { $each: [] };
+      update.$addToSet.manualOverrides.$each.push("opportunityType");
+    }
+
+    if (note !== undefined) update.note = note;
+
     // Auto-unpin when marking as done
     if (status === "done") {
       update.isPinned = false;
@@ -161,6 +183,14 @@ router.patch("/:id", writeLimiter, async (req, res) => {
           update.companyKey = normalizeCompany(value);
         }
       }
+    }
+
+    // Historical applied persistence: once applied, always count as applied in analytics
+    const isAppliedUpdate = update.status === "applied" ||
+      ["oa_scheduled", "interview_scheduled", "offered"].includes(update.stage);
+    if (isAppliedUpdate) {
+      update.hasApplied = true;
+      if (!update.appliedAt) update.appliedAt = new Date();
     }
 
     const updatedApplication = await Application.findOneAndUpdate(

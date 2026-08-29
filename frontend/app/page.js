@@ -4,6 +4,7 @@ let activeRefreshPromise = null;
 
 import React, { useEffect, useState, useRef } from "react";
 import OfflinePage from "./components/OfflinePage";
+import AnalyticsView from "./components/AnalyticsView";
 
 export default function JobTrackerDashboard() {
   const [applications, setApplications] = useState([]);
@@ -81,6 +82,27 @@ export default function JobTrackerDashboard() {
   // Email Reparse State
   const [reparsingId, setReparsingId] = useState(null);
   const [reparseToast, setReparseToast] = useState(null);
+
+  // Quick Status/Stage Menu State
+  const [activeStatusMenuId, setActiveStatusMenuId] = useState(null);
+
+  useEffect(() => {
+    if (!activeStatusMenuId) return;
+    const handleDocumentClick = (e) => {
+      if (!e.target.closest('.status-quick-container')) {
+        setActiveStatusMenuId(null);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setActiveStatusMenuId(null);
+    };
+    document.addEventListener("click", handleDocumentClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleDocumentClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeStatusMenuId]);
 
   // Student Profile State (Phase 2)
   const [studentProfile, setStudentProfile] = useState({
@@ -1275,11 +1297,11 @@ export default function JobTrackerDashboard() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ status: "applied" }),
+        body: JSON.stringify({ status: "applied", hasApplied: true }),
       });
       if (!response.ok) throw new Error("Failed to mark as applied");
       setApplications((prev) =>
-        prev.map((app) => app._id === id ? { ...app, status: "applied" } : app)
+        prev.map((app) => app._id === id ? { ...app, status: "applied", hasApplied: true } : app)
       );
     } catch (error) {
       console.error("Apply action failed:", error);
@@ -1491,6 +1513,9 @@ export default function JobTrackerDashboard() {
     if (editFormData.subtitle !== (original.subtitle || "")) {
       manualEdits.subtitle = editFormData.subtitle;
     }
+    if (editFormData.status && editFormData.status !== (original.status || "new")) manualEdits.status = editFormData.status;
+    if (editFormData.stage && editFormData.stage !== (original.stage || "none")) manualEdits.stage = editFormData.stage;
+    if (editFormData.opportunityType && editFormData.opportunityType !== (original.opportunityType || "JOB_APPLICATION")) manualEdits.opportunityType = editFormData.opportunityType;
     if (editFormData.stipend !== (original.programStipend || "")) manualEdits.programStipend = editFormData.stipend;
     if (editFormData.ctc !== (original.salaryText || "")) manualEdits.salaryText = editFormData.ctc;
     if (editFormData.duration !== (original.programDuration || "")) manualEdits.programDuration = editFormData.duration;
@@ -1525,6 +1550,10 @@ export default function JobTrackerDashboard() {
       manualEdits.displayFields = [];
     }
 
+    if (manualEdits.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered"].includes(manualEdits.stage)) {
+      manualEdits.hasApplied = true;
+    }
+
     if (Object.keys(manualEdits).length === 0) {
       setShowEditModal(false);
       setEditSubmitting(false);
@@ -1555,6 +1584,31 @@ export default function JobTrackerDashboard() {
       setEditFormError("Failed to update application. Please try again.");
     } finally {
       setEditSubmitting(false);
+    }
+  };
+
+  const handleQuickUpdate = async (appId, updates) => {
+    const isApplied = updates.status === "applied" || ["oa_scheduled", "interview_scheduled", "offered"].includes(updates.stage);
+    const extraUpdates = isApplied ? { hasApplied: true } : {};
+    setApplications(prev => prev.map(a => {
+      if (a._id === appId) {
+        return { ...a, ...updates, ...extraUpdates };
+      }
+      return a;
+    }));
+    setActiveStatusMenuId(null);
+
+    try {
+      const response = await apiFetch(`${BASE_URL}/applications/${appId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manualEdits: { ...updates, ...(isApplied ? { hasApplied: true } : {}) } })
+      });
+      if (!response.ok) {
+        console.error("Failed to update status/stage via quick update");
+      }
+    } catch (err) {
+      console.error("Quick update failed:", err);
     }
   };
 
@@ -2341,11 +2395,11 @@ export default function JobTrackerDashboard() {
         }
 
         /* Settings Page */
-        .settings-container { display: flex; flex-direction: column; gap: 24px; max-width: 100%; margin: 0 auto; width: 100%; padding-bottom: 40px; }
-        .settings-header { margin-bottom: 8px; }
+        .settings-container { display: flex; flex-direction: column; gap: 16px; max-width: 100%; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+        .settings-header { margin-bottom: 4px; }
         .settings-main-title { font-family: 'Manrope', sans-serif; font-size: 30px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px; }
         .settings-main-subtitle { color: var(--text-secondary); font-size: 15px; }
-        .settings-grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+        .settings-grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
         .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 28px; box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02); }
         .settings-title { font-size: 20px; font-weight: 700; color: var(--text-heading); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
         .settings-title-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(13, 148, 136, 0.1); color: #0d9488; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -2377,6 +2431,243 @@ export default function JobTrackerDashboard() {
         .dark .calendar-status-box { background: rgba(255, 255, 255, 0.02); }
         .feature-panel { padding: 16px; border-radius: 8px; background: #f8fafc; border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: flex-start; }
         .dark .feature-panel { background: rgba(255, 255, 255, 0.02); }
+
+        /* Modern Calendar Visual Styles */
+        .cal-cards-container {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .cal-panel-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 16px;
+          padding: 24px 28px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+        .dark .cal-panel-card {
+          background: #0d1525;
+          border-color: rgba(255, 255, 255, 0.08);
+          box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5);
+        }
+        .cal-status-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-left: 4px solid #10b981;
+          border-radius: 16px;
+          padding: 22px 28px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 16px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+        .dark .cal-status-card {
+          background: #0d1525;
+          border-color: rgba(255, 255, 255, 0.08);
+          border-left: 4px solid #10b981;
+          box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5);
+        }
+        .cal-status-card.paused {
+          border-left-color: #f59e0b;
+        }
+        .cal-status-icon-circle {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: rgba(16, 185, 129, 0.12);
+          color: #10b981;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .dark .cal-status-icon-circle {
+          background: rgba(16, 185, 129, 0.18);
+          color: #34d399;
+        }
+        .cal-status-pill {
+          padding: 3px 9px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          background: rgba(16, 185, 129, 0.12);
+          color: #10b981;
+        }
+        .dark .cal-status-pill {
+          background: rgba(16, 185, 129, 0.2);
+          color: #34d399;
+        }
+        .cal-status-pill.paused {
+          background: rgba(245, 158, 11, 0.12);
+          color: #f59e0b;
+        }
+        .cal-btn-pause {
+          border: 1px solid rgba(239, 68, 68, 0.4);
+          background: rgba(239, 68, 68, 0.06);
+          color: #ef4444;
+          border-radius: 8px;
+          padding: 9px 20px;
+          font-size: 13.5px;
+          font-weight: 600;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.15s ease;
+        }
+        .dark .cal-btn-pause {
+          border-color: rgba(239, 68, 68, 0.4);
+          background: rgba(239, 68, 68, 0.08);
+          color: #f87171;
+        }
+        .cal-btn-pause:hover:not(:disabled) {
+          background: rgba(239, 68, 68, 0.14);
+          border-color: #ef4444;
+        }
+        .cal-btn-resume {
+          border: 1px solid rgba(34, 197, 94, 0.4);
+          background: rgba(34, 197, 94, 0.06);
+          color: #16a34a;
+          border-radius: 8px;
+          padding: 9px 20px;
+          font-size: 13.5px;
+          font-weight: 600;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.15s ease;
+        }
+        .dark .cal-btn-resume {
+          border-color: rgba(34, 197, 94, 0.4);
+          background: rgba(34, 197, 94, 0.08);
+          color: #4ade80;
+        }
+        .cal-target-pill {
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.25);
+          color: #3b82f6;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 4px 12px;
+          border-radius: 20px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .dark .cal-target-pill {
+          background: rgba(59, 130, 246, 0.15);
+          border-color: rgba(59, 130, 246, 0.35);
+          color: #60a5fa;
+        }
+        .cal-select-box {
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          border-radius: 10px;
+          padding: 0 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          height: 48px;
+          width: 100%;
+          position: relative;
+        }
+        .dark .cal-select-box {
+          background: rgba(255, 255, 255, 0.03);
+          border-color: rgba(255, 255, 255, 0.12);
+        }
+        .cal-select-box select {
+          background: transparent;
+          border: none;
+          color: var(--text-primary);
+          font-size: 14px;
+          font-weight: 600;
+          width: 100%;
+          height: 100%;
+          outline: none;
+          cursor: pointer;
+          appearance: none;
+          padding-right: 24px;
+        }
+        .cal-select-box select option {
+          background: #ffffff;
+          color: #0f172a;
+        }
+        .dark .cal-select-box select option {
+          background: #0f172a;
+          color: #f8fafc;
+        }
+        .cal-create-link {
+          border: 1px dashed rgba(59, 130, 246, 0.35);
+          border-radius: 10px;
+          padding: 13px 18px;
+          margin-top: 14px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #3b82f6;
+          font-size: 13.5px;
+          font-weight: 500;
+          text-decoration: none;
+          transition: all 0.15s ease;
+        }
+        .dark .cal-create-link {
+          border-color: rgba(59, 130, 246, 0.3);
+          color: #60a5fa;
+        }
+        .cal-create-link:hover {
+          background: rgba(59, 130, 246, 0.06);
+          border-color: #3b82f6;
+        }
+        .cal-sync-pill {
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          color: #10b981;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 4px 12px;
+          border-radius: 20px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .dark .cal-sync-pill {
+          background: rgba(16, 185, 129, 0.15);
+          border-color: rgba(16, 185, 129, 0.35);
+          color: #34d399;
+        }
+        .cal-resync-wide-btn {
+          width: 100%;
+          border: 1px solid rgba(59, 130, 246, 0.35);
+          background: rgba(59, 130, 246, 0.06);
+          color: #2563eb;
+          border-radius: 10px;
+          padding: 13px 20px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          transition: all 0.15s ease;
+        }
+        .dark .cal-resync-wide-btn {
+          border-color: rgba(59, 130, 246, 0.35);
+          background: rgba(59, 130, 246, 0.06);
+          color: #60a5fa;
+        }
+        .cal-resync-wide-btn:hover:not(:disabled) {
+          background: rgba(59, 130, 246, 0.14);
+          border-color: #3b82f6;
+          color: #1d4ed8;
+        }
+        .dark .cal-resync-wide-btn:hover:not(:disabled) {
+          color: #93c5fd;
+        }
         
         .settings-container p { text-align: justify; }
         .legal-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); text-align: justify; }
@@ -2576,7 +2867,123 @@ export default function JobTrackerDashboard() {
         .status-applied { background: #f0fdfa; border-color: rgba(20, 184, 166, 0.25); color: #0f766e; }
         .status-no_response, .status-no-response { background: #fff7ed; border-color: rgba(249, 115, 22, 0.35); color: #ea580c; }
         .status-done { background: #f0fdf4; border-color: rgba(34, 197, 94, 0.25); color: #15803d; }
+        .stage-oa { background: #f3e8ff; border-color: rgba(168, 85, 247, 0.3); color: #7e22ce; }
+        .stage-interview { background: #fef3c7; border-color: rgba(245, 158, 11, 0.3); color: #b45309; }
+        .stage-offered { background: #dcfce7; border-color: rgba(34, 197, 94, 0.3); color: #15803d; }
+        .stage-rejected { background: #fee2e2; border-color: rgba(239, 68, 68, 0.3); color: #b91c1c; }
+        .opp-hackathon { background: #ede9fe; border-color: rgba(139, 92, 246, 0.3); color: #6d28d9; }
+        .opp-webinar { background: #e0f2fe; border-color: rgba(14, 165, 233, 0.3); color: #0369a1; }
+        .opp-event { background: #f1f5f9; border-color: rgba(100, 116, 139, 0.3); color: #475569; }
         .app-card.is-urgent { border-color: #dc2626; box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18); }
+
+        .status-quick-container {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+        }
+        .status-badge-interactive {
+          cursor: pointer;
+          user-select: none;
+          transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .status-badge-interactive:hover {
+          transform: translateY(-1px);
+          filter: brightness(0.95);
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .dark .status-badge-interactive:hover {
+          filter: brightness(1.2);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        .status-badge-chevron {
+          font-size: 7.5px;
+          opacity: 0.65;
+          margin-left: 2px;
+          transition: transform 0.15s ease;
+        }
+        .status-quick-container.open .status-badge-chevron {
+          transform: rotate(180deg);
+        }
+        .status-quick-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          right: 0;
+          z-index: 50;
+          min-width: 190px;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+          padding: 6px;
+          animation: scaleUp 0.15s ease-out;
+        }
+        .dark .status-quick-menu {
+          background: #0f172a;
+          border-color: #1e293b;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+        }
+        .status-quick-header {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: #94a3b8;
+          padding: 6px 8px 4px;
+        }
+        .status-quick-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          padding: 7px 8px;
+          border-radius: 8px;
+          font-size: 12.5px;
+          font-weight: 500;
+          color: #334155;
+          cursor: pointer;
+          background: transparent;
+          border: none;
+          text-align: left;
+          transition: background 0.12s ease, color 0.12s ease;
+        }
+        .dark .status-quick-item {
+          color: #e2e8f0;
+        }
+        .status-quick-item:hover {
+          background: #f1f5f9;
+          color: #0f172a;
+        }
+        .dark .status-quick-item:hover {
+          background: #1e293b;
+          color: #ffffff;
+        }
+        .status-quick-item.active {
+          background: #eff6ff;
+          color: #2563eb;
+          font-weight: 600;
+        }
+        .dark .status-quick-item.active {
+          background: rgba(37, 99, 235, 0.18);
+          color: #60a5fa;
+        }
+        .status-quick-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          display: inline-block;
+          margin-right: 6px;
+        }
+        .status-quick-divider {
+          height: 1px;
+          background: #e2e8f0;
+          margin: 4px 0;
+        }
+        .dark .status-quick-divider {
+          background: #1e293b;
+        }
         
         .app-footer { border-top: 1px solid #eaefed; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #6d7a77; }
         .email-info { display: flex; align-items: center; gap: 6px; }
@@ -3268,6 +3675,7 @@ export default function JobTrackerDashboard() {
             margin: 0 !important;
             animation: modalSlideUpMobile 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
           }
+          .edit-modal-content,
           .info-modal-content {
             padding: 0 !important;
             display: flex !important;
@@ -3278,6 +3686,7 @@ export default function JobTrackerDashboard() {
             -webkit-overflow-scrolling: touch !important;
             overscroll-behavior-y: contain !important;
           }
+          .edit-modal-header,
           .info-modal-header {
             position: sticky !important;
             top: 0 !important;
@@ -3287,10 +3696,12 @@ export default function JobTrackerDashboard() {
             flex-shrink: 0 !important;
             border-bottom: 1px solid var(--border-color) !important;
           }
+          .dark .edit-modal-header,
           .dark .info-modal-header {
             background: #0f172a !important;
             border-color: #1e293b !important;
           }
+          .edit-modal-body,
           .info-modal-body {
             flex: 1 0 auto !important;
             overflow: visible !important;
@@ -3305,6 +3716,7 @@ export default function JobTrackerDashboard() {
           .info-modal-section {
             overflow: visible !important;
           }
+          .edit-modal-footer,
           .info-modal-footer {
             position: sticky !important;
             bottom: 0 !important;
@@ -3314,6 +3726,7 @@ export default function JobTrackerDashboard() {
             flex-shrink: 0 !important;
             border-top: 1px solid var(--border-color) !important;
           }
+          .dark .edit-modal-footer,
           .dark .info-modal-footer {
             background: #0f172a !important;
             border-color: #1e293b !important;
@@ -3454,6 +3867,13 @@ export default function JobTrackerDashboard() {
         .dark .status-applied { background: rgba(20, 184, 166, 0.08); color: #14b8a6; border-color: #0d9488; }
         .dark .status-no_response, .dark .status-no-response { background: rgba(249, 115, 22, 0.12); color: #f97316; border-color: #ea580c; }
         .dark .status-done { background: rgba(34, 197, 94, 0.08); color: #22c55e; border-color: #16a34a; }
+        .dark .stage-oa { background: rgba(168, 85, 247, 0.15); border-color: #a855f7; color: #d8b4fe; }
+        .dark .stage-interview { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fcd34d; }
+        .dark .stage-offered { background: rgba(34, 197, 94, 0.15); border-color: #22c55e; color: #86efac; }
+        .dark .stage-rejected { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5; }
+        .dark .opp-hackathon { background: rgba(139, 92, 246, 0.15); border-color: #8b5cf6; color: #c4b5fd; }
+        .dark .opp-webinar { background: rgba(14, 165, 233, 0.15); border-color: #0ea5e9; color: #7dd3fc; }
+        .dark .opp-event { background: rgba(100, 116, 139, 0.15); border-color: #64748b; color: #cbd5e1; }
         .dark .app-footer { border-color: #334155; color: #94a3b8; }
         
         .dark .modal-content { background: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); }
@@ -3652,6 +4072,7 @@ export default function JobTrackerDashboard() {
           color: #94a3b8;
         }
 
+        .edit-modal-content,
         .info-modal-content {
           max-width: 640px;
           width: 100%;
@@ -3662,6 +4083,7 @@ export default function JobTrackerDashboard() {
           overflow: hidden;
           border-radius: 18px;
         }
+        .edit-modal-header,
         .info-modal-header {
           padding: 20px 24px 14px;
           border-bottom: 1px solid var(--border-color, #e2e8f0);
@@ -3683,6 +4105,7 @@ export default function JobTrackerDashboard() {
         .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
         .meta-chip.status-done { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 
+        .edit-modal-body,
         .info-modal-body {
           overflow-y: auto;
           overflow-x: hidden;
@@ -3696,10 +4119,27 @@ export default function JobTrackerDashboard() {
           gap: 16px;
           overscroll-behavior: contain;
         }
+        .edit-modal-body::-webkit-scrollbar,
         .info-modal-body::-webkit-scrollbar { width: 8px; }
+        .edit-modal-body::-webkit-scrollbar-track,
         .info-modal-body::-webkit-scrollbar-track { background: transparent; }
+        .edit-modal-body::-webkit-scrollbar-thumb,
         .info-modal-body::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 6px; }
+        .edit-modal-body::-webkit-scrollbar-thumb:hover,
         .info-modal-body::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.7); }
+        .edit-modal-footer {
+          padding: 16px 24px;
+          border-top: 1px solid var(--border-color, #e2e8f0);
+          flex-shrink: 0;
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          background: var(--surface-color, #ffffff);
+        }
+        .dark .edit-modal-footer {
+          background: var(--surface-color, #1e293b);
+          border-color: var(--border-color, #334155);
+        }
         .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: visible; }
         .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); border-top-left-radius: 13px; border-top-right-radius: 13px; }
         .info-modal-section-body { padding: 16px 18px; }
@@ -4110,7 +4550,7 @@ export default function JobTrackerDashboard() {
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div
-              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' ? 'active' : ''}`}
+              className={`nav-item ${activeFilter !== 'calendar' && activeFilter !== 'settings' && activeFilter !== 'analytics' ? 'active' : ''}`}
               onClick={() => { setActiveFilter('all'); setIsSidebarOpen(false); }}
             >
               <div className="nav-icon-wrapper">
@@ -4127,6 +4567,16 @@ export default function JobTrackerDashboard() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
               </div>
               <span className="nav-text">Calendar</span>
+            </div>
+
+            <div
+              className={`nav-item ${activeFilter === 'analytics' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('analytics'); setIsSidebarOpen(false); }}
+            >
+              <div className="nav-icon-wrapper">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="nav-icon"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+              </div>
+              <span className="nav-text">Analytics</span>
             </div>
 
             <div
@@ -4339,233 +4789,274 @@ export default function JobTrackerDashboard() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      gap: '8px',
                       textDecoration: 'none',
-                      padding: '10px 24px',
-                      borderRadius: '8px',
+                      padding: '10px 20px',
+                      borderRadius: '10px',
                       fontSize: '14px',
                       fontWeight: '600',
-                      minWidth: '180px'
+                      background: '#2563eb',
+                      color: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
                     }}
                   >
-                    Open Google Calendar
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    <span>Open Google Calendar</span>
                   </a>
                 </div>
 
-                <div className="settings-card" style={{ padding: '32px' }}>
-                    {calendarSuccessMsg && (
-                      <div className="success-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(46, 213, 115, 0.1)', border: '1px solid rgba(46, 213, 115, 0.3)', color: '#2ed573', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-                        <span>✅</span>
-                        <span>{calendarSuccessMsg}</span>
-                      </div>
-                    )}
+                {calendarSuccessMsg && (
+                  <div className="success-banner" style={{ marginBottom: '20px', padding: '12px 18px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
+                    <span>✅</span>
+                    <span>{calendarSuccessMsg}</span>
+                  </div>
+                )}
 
-                    {calendarErrorMsg && (
-                      <div className="error-banner" style={{ margin: '16px 0', padding: '12px 16px', borderRadius: '8px', background: 'rgba(255, 71, 87, 0.1)', border: '1px solid rgba(255, 71, 87, 0.3)', color: '#ff4757', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-                        <span>⚠️</span>
-                        <span>{calendarErrorMsg}</span>
-                      </div>
-                    )}
+                {calendarErrorMsg && (
+                  <div className="error-banner" style={{ marginBottom: '20px', padding: '12px 18px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
+                    <span>⚠️</span>
+                    <span>{calendarErrorMsg}</span>
+                  </div>
+                )}
 
-                    {loadingCalendarStatus ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
-                        <span className="spinner">Loading calendar settings...</span>
-                      </div>
-                    ) : !hasCalendarScope ? (
-                      <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
-                        <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>🔐</span>
-                          <span>Authorization Required</span>
-                        </h4>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
-                          To create and update calendar events automatically, Email Tracker needs permission to access your Google Calendar events. We request the <b>least-privilege</b> scope (<code>calendar.events</code>) strictly to read, create, and modify placement events. We will never view or edit unrelated personal events.
-                        </p>
-                        <a
-                          href={`${BASE_URL}/auth/google/calendar`}
-                          className="btn-primary"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', fontWeight: '500', padding: '12px 24px', borderRadius: '8px' }}
-                        >
-                          Authorize & Connect Google Calendar
-                        </a>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                        {/* Integration Status Card */}
-                        <div className="calendar-status-box" style={{ padding: '20px 24px' }}>
-                          <div style={{ flex: '1', minWidth: '250px' }}>
-                            <div style={{ fontWeight: '600', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <span>Integration Status:</span>
-                              <span style={{
-                                padding: '4px 10px',
-                                borderRadius: '12px',
-                                fontSize: '11px',
-                                fontWeight: '700',
-                                letterSpacing: '0.5px',
-                                background: calendarSyncEnabled ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                                color: calendarSyncEnabled ? '#2ed573' : 'var(--text-secondary)',
-                                border: calendarSyncEnabled ? '1px solid rgba(46, 213, 115, 0.3)' : '1px solid var(--border-color)'
-                              }}>
-                                {calendarSyncEnabled ? "ACTIVE" : "PAUSED"}
-                              </span>
-                            </div>
-                            <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                              {calendarSyncEnabled
-                                ? "Deadlines, OAs, and placement interviews are automatically synced to Google Calendar."
-                                : "Background calendar synchronization is currently paused."}
-                            </p>
+                {loadingCalendarStatus ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
+                    <span className="spinner">Loading calendar settings...</span>
+                  </div>
+                ) : !hasCalendarScope ? (
+                  <div className="cal-panel-card" style={{ padding: '28px' }}>
+                    <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '18px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span>🔐</span>
+                      <span>Authorization Required</span>
+                    </h4>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                      To create and update calendar events automatically, Email Tracker needs permission to access your Google Calendar events. We request the <b>least-privilege</b> scope (<code>calendar.events</code>) strictly to read, create, and modify placement events. We will never view or edit unrelated personal events.
+                    </p>
+                    <a
+                      href={`${BASE_URL}/auth/google/calendar`}
+                      className="btn-primary"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', fontWeight: '600', padding: '12px 24px', borderRadius: '10px' }}
+                    >
+                      Authorize & Connect Google Calendar
+                    </a>
+                  </div>
+                ) : (
+                  <div className="cal-cards-container">
+                    {/* Card 1: Integration Status */}
+                    <div className={`cal-status-card ${!calendarSyncEnabled ? 'paused' : ''}`}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: '1', minWidth: '260px' }}>
+                        <div className="cal-status-icon-circle">
+                          {calendarSyncEnabled ? (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="10" y1="15" x2="10" y2="9"></line>
+                              <line x1="14" y1="15" x2="14" y2="9"></line>
+                            </svg>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontWeight: '700', fontSize: '16px', color: 'var(--text-primary)' }}>Integration Status</span>
+                            <span className={`cal-status-pill ${!calendarSyncEnabled ? 'paused' : ''}`}>
+                              {calendarSyncEnabled ? "ACTIVE" : "PAUSED"}
+                            </span>
                           </div>
+                          <p style={{ margin: '4px 0 0 0', fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                            {calendarSyncEnabled
+                              ? "Deadlines, OAs, and placement interviews are automatically synced to Google Calendar."
+                              : "Background calendar synchronization is currently paused."}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        className={calendarSyncEnabled ? "cal-btn-pause" : "cal-btn-resume"}
+                        onClick={handleToggleCalendarSync}
+                        disabled={syncingCalendar}
+                      >
+                        {calendarSyncEnabled ? (
+                          <>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="10" y1="15" x2="10" y2="9"></line>
+                              <line x1="14" y1="15" x2="14" y2="9"></line>
+                            </svg>
+                            <span>{syncingCalendar ? "Updating..." : "Pause Sync"}</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            <span>{syncingCalendar ? "Updating..." : "Resume Sync"}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Card 2: Destination Calendar */}
+                    <div className="cal-panel-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                          </svg>
+                          <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>Destination Calendar</span>
+                        </div>
+                        <span className="cal-target-pill">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="22" y1="12" x2="18" y2="12"></line>
+                            <line x1="6" y1="12" x2="2" y2="12"></line>
+                            <line x1="12" y1="6" x2="12" y2="2"></line>
+                            <line x1="12" y1="22" x2="12" y2="18"></line>
+                          </svg>
+                          <span>Active Target: {calendarTargetId ? (availableCalendars.find(c => c.id === calendarTargetId)?.summary || calendarTargetId) : "Primary Calendar"}</span>
+                        </span>
+                      </div>
+
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '13.5px', lineHeight: '1.5', margin: '8px 0 16px 0' }}>
+                        Choose where Email Tracker creates and syncs placement events. Changing the destination calendar automatically migrates all existing synced events in the background.
+                      </p>
+
+                      {availableCalendars.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                          <div className="cal-select-box">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                              <line x1="16" y1="2" x2="16" y2="6"></line>
+                              <line x1="8" y1="2" x2="8" y2="6"></line>
+                              <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <select
+                              value={calendarTargetId || "primary"}
+                              onChange={(e) => {
+                                const val = e.target.value === "primary" ? "" : e.target.value;
+                                setCalendarTargetId(val);
+                                handleSaveCalendarTarget(val);
+                              }}
+                              disabled={savingTargetCalendar}
+                            >
+                              <option value="primary">Primary Calendar (Default)</option>
+                              {availableCalendars
+                                .filter(c => !c.primary)
+                                .map(c => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.summary} ({c.id})
+                                  </option>
+                                ))
+                              }
+                            </select>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: '16px', pointerEvents: 'none' }}>
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                          </div>
+                          {savingTargetCalendar && (
+                            <span style={{ fontSize: '13px', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                              <span className="spinner" style={{ width: '14px', height: '14px' }}></span>
+                              Saving & Migrating...
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="calendar-manual-input-container">
+                          <input
+                            type="text"
+                            placeholder="Calendar ID (leave blank for Primary)"
+                            value={calendarTargetId}
+                            onChange={(e) => setCalendarTargetId(e.target.value)}
+                            className="calendar-target-input"
+                          />
                           <button
-                            className={calendarSyncEnabled ? "btn-danger" : "btn-primary"}
-                            onClick={handleToggleCalendarSync}
-                            disabled={syncingCalendar}
-                            style={{ minWidth: '130px', padding: '10px 18px', borderRadius: '8px' }}
+                            className="btn-primary calendar-target-btn"
+                            onClick={() => handleSaveCalendarTarget(calendarTargetId)}
+                            disabled={savingTargetCalendar}
                           >
-                            {syncingCalendar ? "Updating..." : calendarSyncEnabled ? "Pause Sync" : "Enable Sync"}
+                            {savingTargetCalendar ? "Saving..." : "Save & Migrate"}
                           </button>
                         </div>
+                      )}
 
-                        {/* Destination Calendar Card */}
-                        {hasCalendarScope && (
-                          <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
-                              <h4 style={{ margin: 0, fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span></span>
-                                <span>Destination Calendar</span>
-                              </h4>
-                              <span style={{
-                                fontSize: '12px',
-                                padding: '3px 10px',
-                                borderRadius: '12px',
-                                background: 'rgba(52, 152, 219, 0.12)',
-                                color: '#3498db',
-                                border: '1px solid rgba(52, 152, 219, 0.25)',
-                                fontWeight: '500'
-                              }}>
-                                Active Target: {calendarTargetId ? (availableCalendars.find(c => c.id === calendarTargetId)?.summary || calendarTargetId) : "Primary Calendar"}
-                              </span>
-                            </div>
+                      <a
+                        href="https://calendar.google.com/calendar/u/0/r/settings/createcalendar"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cal-create-link"
+                      >
+                        <span style={{ fontSize: '16px', fontWeight: '600' }}>+</span>
+                        <span>Create a new secondary calendar in Google Calendar</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ marginLeft: 'auto' }}>
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                          <polyline points="15 3 21 3 21 9"></polyline>
+                          <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                      </a>
+                    </div>
 
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', marginBottom: '16px' }}>
-                              Select which Google Calendar Email Tracker should sync placement events into. Changing the destination calendar automatically migrates all existing synced events in the background.
-                            </p>
-
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
-                              {availableCalendars.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-                                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <select
-                                      value={calendarTargetId || "primary"}
-                                      onChange={(e) => {
-                                        const val = e.target.value === "primary" ? "" : e.target.value;
-                                        setCalendarTargetId(val);
-                                        handleSaveCalendarTarget(val);
-                                      }}
-                                      disabled={savingTargetCalendar}
-                                      style={{
-                                        padding: '10px 14px',
-                                        borderRadius: '8px',
-                                        background: 'var(--bg-secondary)',
-                                        border: '1px solid var(--border-color)',
-                                        color: 'var(--text-primary)',
-                                        fontSize: '14px',
-                                        cursor: 'pointer',
-                                        flex: 1,
-                                        minWidth: '240px',
-                                        outline: 'none'
-                                      }}
-                                    >
-                                      <option value="primary">Primary Calendar (Default)</option>
-                                      {availableCalendars
-                                        .filter(c => !c.primary)
-                                        .map(c => (
-                                          <option key={c.id} value={c.id}>
-                                            {c.summary} ({c.id})
-                                          </option>
-                                        ))
-                                      }
-                                    </select>
-                                    {savingTargetCalendar && (
-                                      <span style={{ fontSize: '13px', color: '#3498db', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <span className="spinner" style={{ width: '14px', height: '14px' }}></span>
-                                        Saving & Migrating...
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="calendar-manual-input-container">
-                                  <input
-                                    type="text"
-                                    placeholder="Calendar ID (leave blank for Primary)"
-                                    value={calendarTargetId}
-                                    onChange={(e) => setCalendarTargetId(e.target.value)}
-                                    className="calendar-target-input"
-                                  />
-                                  <button
-                                    className="btn-primary calendar-target-btn"
-                                    onClick={() => handleSaveCalendarTarget(calendarTargetId)}
-                                    disabled={savingTargetCalendar}
-                                  >
-                                    {savingTargetCalendar ? "Saving..." : "Save & Migrate"}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-
-                            <div style={{ marginTop: '12px', fontSize: '12px' }}>
-                              <a
-                                href="https://calendar.google.com/calendar/u/0/r/settings/createcalendar"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ color: '#3498db', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                              >
-                                ➕ Create a new secondary calendar in Google Calendar ↗
-                              </a>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Diagnostics Card */}
-                        {calendarSyncEnabled && (
-                          <div className="about-info-box calendar-card-panel" style={{ padding: '24px' }}>
-                            <h4 style={{ marginTop: 0, marginBottom: '10px', fontSize: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span></span>
-                              <span>Sync Diagnostics & Controls</span>
-                            </h4>
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', marginBottom: '18px' }}>
-                              Email Tracker is the single source of truth. If any calendar events are out of sync or if you want to push all active deadlines to your Google Calendar immediately, click "Re-sync All" below. This runs a delta sync using payload verification to ensure zero duplicate events are created.
-                            </p>
-                            <button
-                              className="btn-outline-primary"
-                              onClick={handleManualCalendarSync}
-                              disabled={syncingCalendar}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px' }}
-                            >
-                              <svg 
-                                width="15" 
-                                height="15" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="2.2" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round"
-                                style={{
-                                  animation: syncingCalendar ? 'spin 1s linear infinite' : 'none',
-                                  flexShrink: 0
-                                }}
-                              >
-                                <path d="M21.5 2v6h-6"/>
-                                <path d="M2.5 22v-6h6"/>
-                                <path d="M2 11.5a10 10 0 0 1 18.8-4.3"/>
-                                <path d="M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                              </svg>
-                              <span>{syncingCalendar ? "Syncing..." : "Re-sync All Calendar Events"}</span>
-                            </button>
-                          </div>
-                        )}
+                    {/* Card 3: Diagnostics & Controls */}
+                    <div className="cal-panel-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21.5 2v6h-6"/>
+                            <path d="M2.5 22v-6h6"/>
+                            <path d="M2 11.5a10 10 0 0 1 18.8-4.3"/>
+                            <path d="M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                          </svg>
+                          <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>Sync Diagnostics & Controls</span>
+                        </div>
+                        <span className="cal-sync-pill">
+                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                          <span>Last sync: Just now</span>
+                        </span>
                       </div>
-                    )}
-                </div>
+
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '13.5px', lineHeight: '1.5', margin: '8px 0 16px 0' }}>
+                        Email Tracker is the single source of truth. If any calendar events are out of sync or you want to push all active deadlines to your Google Calendar immediately, click &quot;Re-sync All&quot; below.
+                      </p>
+
+                      <button
+                        className="cal-resync-wide-btn"
+                        onClick={handleManualCalendarSync}
+                        disabled={syncingCalendar}
+                      >
+                        <svg 
+                          width="16" 
+                          height="16" 
+                          viewBox="0 0 24 24" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          strokeWidth="2.2" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round"
+                          style={{
+                            animation: syncingCalendar ? 'spin 1s linear infinite' : 'none',
+                            flexShrink: 0
+                          }}
+                        >
+                          <path d="M21.5 2v6h-6"/>
+                          <path d="M2.5 22v-6h6"/>
+                          <path d="M2 11.5a10 10 0 0 1 18.8-4.3"/>
+                          <path d="M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                        </svg>
+                        <span>{syncingCalendar ? "Syncing Calendar Events..." : "Re-sync All Calendar Events"}</span>
+                      </button>
+
+                      <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        <span>Runs a delta sync using payload verification to ensure zero duplicate events.</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : activeFilter === "settings" ? (
               <div className="settings-container">
@@ -4575,7 +5066,7 @@ export default function JobTrackerDashboard() {
                       <h1 className="settings-main-title">Settings & Help</h1>
                     </div>
 
-                    <div className="settings-about-card" style={{ marginBottom: '24px' }}>
+                    <div className="settings-about-card">
                       <div className="about-info-box">
                         <h3>About Email Tracker</h3>
                         <span className="about-version-badge">VERSION 2.5.0 STABLE</span>
@@ -5203,6 +5694,8 @@ export default function JobTrackerDashboard() {
                   </div>
                 )}
               </div>
+            ) : activeFilter === "analytics" ? (
+              <AnalyticsView applications={applications} />
             ) : (
               <>
                 <div className="page-header">
@@ -5424,7 +5917,7 @@ export default function JobTrackerDashboard() {
                         className={`app-card status-outline-${statusKey}${isUrgent ? " is-urgent" : ""}${isDone ? " is-done" : ""}`}
                         style={{ cursor: "pointer" }}
                         onClick={(e) => {
-                          if (e.target.closest('.card-btn') || e.target.closest('.pin-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button')) return;
+                          if (e.target.closest('.card-btn') || e.target.closest('.pin-btn') || e.target.closest('.note-input') || e.target.closest('a') || e.target.closest('button') || e.target.closest('.status-quick-container')) return;
                           setSelectedApp(app);
                           setShowInfoModal(true);
                           if (app.companyInfo?.isEnriched) {
@@ -5486,10 +5979,210 @@ export default function JobTrackerDashboard() {
                               </svg>
                             </button>
                           )}
-                          <div className="status-badge-container">
-                            <span className={`status-badge status-${app.derivedStatus}`}>
-                              {app.derivedStatus === "no_response" ? "No response" : app.derivedStatus}
-                            </span>
+                          <div className="status-badge-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', position: 'relative' }}>
+                            {/* Main Status Badge (Top) */}
+                            <div className={`status-quick-container ${activeStatusMenuId === `${app._id}-status` ? "open" : ""}`}>
+                              <span
+                                className={`status-badge status-${app.derivedStatus} status-badge-interactive`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveStatusMenuId(activeStatusMenuId === `${app._id}-status` ? null : `${app._id}-status`);
+                                }}
+                                title="Click to change status or stage"
+                              >
+                                {app.derivedStatus === "no_response" ? "No response" : app.derivedStatus}
+                                <span className="status-badge-chevron">▼</span>
+                              </span>
+
+                              {activeStatusMenuId === `${app._id}-status` && (
+                                <div className="status-quick-menu" onClick={(e) => e.stopPropagation()}>
+                                  <div className="status-quick-header">Application Status</div>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.status === "new" || (!app.status && app.derivedStatus === "new") ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { status: "new" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#3b82f6' }}></span>New</span>
+                                    {(app.status === "new" || (!app.status && app.derivedStatus === "new")) && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.status === "applied" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { status: "applied" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#0f766e' }}></span>Applied</span>
+                                    {app.status === "applied" && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.status === "done" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { status: "done" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#15803d' }}></span>Marked Done</span>
+                                    {app.status === "done" && <span>✓</span>}
+                                  </button>
+
+                                  <div className="status-quick-divider" />
+                                  <div className="status-quick-header">Recruitment Stage</div>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${(!app.stage || app.stage === "none") ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { stage: "none" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#94a3b8' }}></span>None</span>
+                                    {(!app.stage || app.stage === "none") && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.stage === "oa_scheduled" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { stage: "oa_scheduled" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#a855f7' }}></span>OA</span>
+                                    {app.stage === "oa_scheduled" && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.stage === "interview_scheduled" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { stage: "interview_scheduled" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#f59e0b' }}></span>Interview</span>
+                                    {app.stage === "interview_scheduled" && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.stage === "offered" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { stage: "offered" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#22c55e' }}></span>Offered</span>
+                                    {app.stage === "offered" && <span>✓</span>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`status-quick-item ${app.stage === "rejected" ? "active" : ""}`}
+                                    onClick={() => handleQuickUpdate(app._id, { stage: "rejected" })}
+                                  >
+                                    <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected</span>
+                                    {app.stage === "rejected" && <span>✓</span>}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Recruitment Stage Badge (Below status tag) */}
+                            {app.stage && app.stage !== "none" && (
+                              <div className={`status-quick-container ${activeStatusMenuId === `${app._id}-stage` ? "open" : ""}`}>
+                                <span
+                                  className={`status-badge stage-badge stage-${app.stage === "oa_scheduled" ? "oa" : app.stage === "interview_scheduled" ? "interview" : app.stage} status-badge-interactive`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveStatusMenuId(activeStatusMenuId === `${app._id}-stage` ? null : `${app._id}-stage`);
+                                  }}
+                                  title="Click to change recruitment stage"
+                                >
+                                  {app.stage === "oa_scheduled" ? "OA" : app.stage === "interview_scheduled" ? "Interview" : app.stage === "offered" ? "Offered" : app.stage === "rejected" ? "Rejected" : app.stage}
+                                  <span className="status-badge-chevron">▼</span>
+                                </span>
+                                {activeStatusMenuId === `${app._id}-stage` && (
+                                  <div className="status-quick-menu" onClick={(e) => e.stopPropagation()}>
+                                    <div className="status-quick-header">Recruitment Stage</div>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${(!app.stage || app.stage === "none") ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { stage: "none" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#94a3b8' }}></span>None / Initial</span>
+                                      {(!app.stage || app.stage === "none") && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.stage === "oa_scheduled" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { stage: "oa_scheduled" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#a855f7' }}></span>OA</span>
+                                      {app.stage === "oa_scheduled" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.stage === "interview_scheduled" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { stage: "interview_scheduled" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#f59e0b' }}></span>Interview</span>
+                                      {app.stage === "interview_scheduled" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.stage === "offered" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { stage: "offered" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#22c55e' }}></span>Offered</span>
+                                      {app.stage === "offered" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.stage === "rejected" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { stage: "rejected" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected</span>
+                                      {app.stage === "rejected" && <span>✓</span>}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Opportunity Type Badge (if event/hackathon/webinar) */}
+                            {app.opportunityType && app.opportunityType !== "JOB_APPLICATION" && (
+                              <div className={`status-quick-container ${activeStatusMenuId === `${app._id}-type` ? "open" : ""}`}>
+                                <span
+                                  className={`status-badge opp-type-badge opp-${app.opportunityType === "HACKATHON" ? "hackathon" : app.opportunityType === "WEBINAR" ? "webinar" : "event"} status-badge-interactive`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveStatusMenuId(activeStatusMenuId === `${app._id}-type` ? null : `${app._id}-type`);
+                                  }}
+                                  title="Click to change opportunity type"
+                                >
+                                  {app.opportunityType === "HACKATHON" ? "Hackathon" : app.opportunityType === "WEBINAR" ? "Webinar" : "Event"}
+                                  <span className="status-badge-chevron">▼</span>
+                                </span>
+                                {activeStatusMenuId === `${app._id}-type` && (
+                                  <div className="status-quick-menu" onClick={(e) => e.stopPropagation()}>
+                                    <div className="status-quick-header">Opportunity Type</div>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.opportunityType === "JOB_APPLICATION" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { opportunityType: "JOB_APPLICATION" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#3b82f6' }}></span>Placement Drive</span>
+                                      {app.opportunityType === "JOB_APPLICATION" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.opportunityType === "HACKATHON" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { opportunityType: "HACKATHON" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#8b5cf6' }}></span>Hackathon</span>
+                                      {app.opportunityType === "HACKATHON" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.opportunityType === "WEBINAR" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { opportunityType: "WEBINAR" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#0ea5e9' }}></span>Webinar</span>
+                                      {app.opportunityType === "WEBINAR" && <span>✓</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`status-quick-item ${app.opportunityType === "OTHER_PLACEMENT_EVENT" ? "active" : ""}`}
+                                      onClick={() => handleQuickUpdate(app._id, { opportunityType: "OTHER_PLACEMENT_EVENT" })}
+                                    >
+                                      <span><span className="status-quick-dot" style={{ background: '#64748b' }}></span>College Event</span>
+                                      {app.opportunityType === "OTHER_PLACEMENT_EVENT" && <span>✓</span>}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -5658,6 +6351,9 @@ export default function JobTrackerDashboard() {
                                         setEditFormData({
                                           company: app.company || "",
                                           subtitle: app.subtitle || "",
+                                          status: app.status || "new",
+                                          stage: app.stage || "none",
+                                          opportunityType: app.opportunityType || "JOB_APPLICATION",
                                           role: getField("Role", app.role),
                                           stipend: getField("Stipend", app.programStipend),
                                           ctc: getField("CTC", app.salaryText),
@@ -6011,76 +6707,153 @@ export default function JobTrackerDashboard() {
       )}
 
       {showEditModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content edit-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="edit-modal-header modal-header">
               <h3 className="modal-title">Edit Details</h3>
               <button className="modal-close" onClick={() => setShowEditModal(false)}>&times;</button>
             </div>
 
-            <form onSubmit={handleEditSubmit}>
-              {editFormError && <div className="form-error">{editFormError}</div>}
+            <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
+              <div className="edit-modal-body">
+                {editFormError && <div className="form-error">{editFormError}</div>}
 
-              <div className="form-group">
-                <label className="form-label">Company *</label>
-                <input type="text" className="form-input" value={editFormData.company || ""} onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })} required />
-              </div>
+                <div className="form-group">
+                  <label className="form-label">Company *</label>
+                  <input type="text" className="form-input" value={editFormData.company || ""} onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })} required />
+                </div>
 
-              <div className="modal-grid-2col">
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Subtitle</label>
-                  <input type="text" className="form-input" value={editFormData.subtitle || ""} onChange={(e) => setEditFormData({ ...editFormData, subtitle: e.target.value })} />
+                <div className="modal-grid-2col">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Subtitle</label>
+                    <input type="text" className="form-input" value={editFormData.subtitle || ""} onChange={(e) => setEditFormData({ ...editFormData, subtitle: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Role</label>
+                    <input type="text" className="form-input" value={editFormData.role || ""} onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Stipend</label>
+                    <input type="text" className="form-input" value={editFormData.stipend || ""} onChange={(e) => setEditFormData({ ...editFormData, stipend: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">CTC</label>
+                    <input type="text" className="form-input" value={editFormData.ctc || ""} onChange={(e) => setEditFormData({ ...editFormData, ctc: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Duration</label>
+                    <input type="text" className="form-input" value={editFormData.duration || ""} onChange={(e) => setEditFormData({ ...editFormData, duration: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Location</label>
+                    <input type="text" className="form-input" value={editFormData.location || ""} onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Joining</label>
+                    <input type="text" className="form-input" value={editFormData.joining || ""} onChange={(e) => setEditFormData({ ...editFormData, joining: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Deadline</label>
+                    <input type="text" className="form-input" value={editFormData.deadline || ""} onChange={(e) => setEditFormData({ ...editFormData, deadline: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Date</label>
+                    <input type="date" className="form-input" value={editFormData.date || ""} onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Recruitment Stage</label>
+                    <select
+                      className="form-select"
+                      value={editFormData.stage || "none"}
+                      onChange={(e) => setEditFormData({ ...editFormData, stage: e.target.value })}
+                    >
+                      <option value="none">None / Initial</option>
+                      <option value="oa_scheduled">Online Assessment (OA)</option>
+                      <option value="interview_scheduled">Interview Scheduled</option>
+                      <option value="offered">Offered / Selected</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Application Status</label>
+                    <select
+                      className="form-select"
+                      value={editFormData.status || "new"}
+                      onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    >
+                      <option value="new">New</option>
+                      <option value="applied">Applied</option>
+                      <option value="done">Marked Done</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Opportunity Type</label>
+                    <select
+                      className="form-select"
+                      value={editFormData.opportunityType || "JOB_APPLICATION"}
+                      onChange={(e) => setEditFormData({ ...editFormData, opportunityType: e.target.value })}
+                    >
+                      <option value="JOB_APPLICATION">Placement Drive</option>
+                      <option value="HACKATHON">Hackathon</option>
+                      <option value="WEBINAR">Webinar / Talk</option>
+                      <option value="OTHER_PLACEMENT_EVENT">Other College Event</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Role</label>
-                  <input type="text" className="form-input" value={editFormData.role || ""} onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Stipend</label>
-                  <input type="text" className="form-input" value={editFormData.stipend || ""} onChange={(e) => setEditFormData({ ...editFormData, stipend: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">CTC</label>
-                  <input type="text" className="form-input" value={editFormData.ctc || ""} onChange={(e) => setEditFormData({ ...editFormData, ctc: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Duration</label>
-                  <input type="text" className="form-input" value={editFormData.duration || ""} onChange={(e) => setEditFormData({ ...editFormData, duration: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Location</label>
-                  <input type="text" className="form-input" value={editFormData.location || ""} onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Joining</label>
-                  <input type="text" className="form-input" value={editFormData.joining || ""} onChange={(e) => setEditFormData({ ...editFormData, joining: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Deadline</label>
-                  <input type="text" className="form-input" value={editFormData.deadline || ""} onChange={(e) => setEditFormData({ ...editFormData, deadline: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Date</label>
-                  <input type="date" className="form-input" value={editFormData.date || ""} onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })} />
-                </div>
-              </div>
 
-              <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
+                <div className="custom-fields-section" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                  <h4 className="form-section-title" style={{ fontSize: '14.5px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>Custom Fields</h4>
 
-                {editFormData.dynamicFields && editFormData.dynamicFields.map((df, index) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  {editFormData.dynamicFields && editFormData.dynamicFields.map((df, index) => (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Label"
+                          value={df.label}
+                          onChange={(e) => {
+                            const updated = [...editFormData.dynamicFields];
+                            updated[index].label = e.target.value;
+                            setEditFormData({ ...editFormData, dynamicFields: updated });
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Value"
+                          value={df.value}
+                          onChange={(e) => {
+                            const updated = [...editFormData.dynamicFields];
+                            updated[index].value = e.target.value;
+                            setEditFormData({ ...editFormData, dynamicFields: updated });
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-remove-custom"
+                        style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '18px', cursor: 'pointer', padding: '0 4px' }}
+                        onClick={() => {
+                          const updated = editFormData.dynamicFields.filter((_, i) => i !== index);
+                          setEditFormData({ ...editFormData, dynamicFields: updated });
+                        }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
                     <div style={{ flex: 1 }}>
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="Label"
-                        value={df.label}
-                        onChange={(e) => {
-                          const updated = [...editFormData.dynamicFields];
-                          updated[index].label = e.target.value;
-                          setEditFormData({ ...editFormData, dynamicFields: updated });
-                        }}
+                        placeholder="New field label"
+                        value={editCustomLabel}
+                        onChange={(e) => setEditCustomLabel(e.target.value)}
                       />
                     </div>
                     <div style={{ flex: 1 }}>
@@ -6088,79 +6861,43 @@ export default function JobTrackerDashboard() {
                         type="text"
                         className="form-input"
                         placeholder="Value"
-                        value={df.value}
-                        onChange={(e) => {
-                          const updated = [...editFormData.dynamicFields];
-                          updated[index].value = e.target.value;
-                          setEditFormData({ ...editFormData, dynamicFields: updated });
-                        }}
+                        value={editCustomValue}
+                        onChange={(e) => setEditCustomValue(e.target.value)}
                       />
                     </div>
                     <button
                       type="button"
-                      className="btn-remove-custom"
-                      style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '18px', cursor: 'pointer', padding: '0 4px' }}
+                      className="btn-add-custom"
+                      style={{
+                        backgroundColor: 'var(--brand-primary)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '8px 14px',
+                        fontWeight: '600',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
                       onClick={() => {
-                        const updated = editFormData.dynamicFields.filter((_, i) => i !== index);
+                        if (!editCustomLabel.trim()) return;
+                        const updated = [...(editFormData.dynamicFields || []), { label: editCustomLabel.trim(), value: editCustomValue.trim() }];
                         setEditFormData({ ...editFormData, dynamicFields: updated });
+                        setEditCustomLabel("");
+                        setEditCustomValue("");
                       }}
                     >
-                      &times;
+                      Add Field
                     </button>
                   </div>
-                ))}
+                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="New field label"
-                      value={editCustomLabel}
-                      onChange={(e) => setEditCustomLabel(e.target.value)}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Value"
-                      value={editCustomValue}
-                      onChange={(e) => setEditCustomValue(e.target.value)}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-add-custom"
-                    style={{
-                      backgroundColor: 'var(--brand-primary)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '8px 14px',
-                      fontWeight: '600',
-                      fontSize: '13px',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => {
-                      if (!editCustomLabel.trim()) return;
-                      const updated = [...(editFormData.dynamicFields || []), { label: editCustomLabel.trim(), value: editCustomValue.trim() }];
-                      setEditFormData({ ...editFormData, dynamicFields: updated });
-                      setEditCustomLabel("");
-                      setEditCustomValue("");
-                    }}
-                  >
-                    Add Field
-                  </button>
+                <div className="form-group" style={{ marginTop: '16px' }}>
+                  <label className="form-label">Link (Google Form, etc.)</label>
+                  <input type="url" className="form-input" value={editFormData.link || ""} onChange={(e) => setEditFormData({ ...editFormData, link: e.target.value })} />
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginTop: '16px' }}>
-                <label className="form-label">Link (Google Form, etc.)</label>
-                <input type="url" className="form-input" value={editFormData.link || ""} onChange={(e) => setEditFormData({ ...editFormData, link: e.target.value })} />
-              </div>
-
-              <div className="modal-actions" style={{ marginTop: '24px' }}>
+              <div className="edit-modal-footer">
                 <button type="button" className="btn-cancel" onClick={() => setShowEditModal(false)}>Cancel</button>
                 <button type="submit" className="btn-submit" disabled={editSubmitting}>{editSubmitting ? "Saving..." : "Save Changes"}</button>
               </div>
@@ -6247,6 +6984,16 @@ export default function JobTrackerDashboard() {
                   <button className="modal-close" onClick={closeInfoModal}>&times;</button>
                 </div>
                 <div className="info-modal-meta-chips">
+                  {app.stage && app.stage !== 'none' && (
+                    <span className={`meta-chip stage-badge stage-${app.stage === 'oa_scheduled' ? 'oa' : app.stage === 'interview_scheduled' ? 'interview' : app.stage}`} style={{ textTransform: 'capitalize' }}>
+                      {app.stage === 'oa_scheduled' ? 'OA' : app.stage === 'interview_scheduled' ? 'Interview Scheduled' : app.stage === 'offered' ? 'Offered' : app.stage === 'rejected' ? 'Rejected' : app.stage}
+                    </span>
+                  )}
+                  {app.opportunityType && app.opportunityType !== 'JOB_APPLICATION' && (
+                    <span className="meta-chip" style={{ textTransform: 'capitalize' }}>
+                      {app.opportunityType === 'HACKATHON' ? 'Hackathon' : app.opportunityType === 'WEBINAR' ? 'Webinar' : 'Event'}
+                    </span>
+                  )}
                   <span className={`meta-chip status-${app.derivedStatus || statusKey}`} style={{ textTransform: 'capitalize' }}>
                     {app.derivedStatus === 'no_response' ? 'No response' : (app.status || 'New')}
                   </span>
@@ -6323,7 +7070,7 @@ export default function JobTrackerDashboard() {
                             <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
                             <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
                           </svg>
-                          <span>DRIVE & OPPORTUNITY DETAILS ({details.length})</span>
+                          <span>DRIVE & OPPORTUNITY DETAILS</span>
                         </div>
                       </div>
                       <div className="info-modal-section-body">

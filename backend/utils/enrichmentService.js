@@ -416,6 +416,32 @@ function enrichApplicationRecord(existingApp, parsed, emailDate, options = {}) {
       updatePayload.type = parsed.type;
     }
 
+    // Opportunity Category (opportunityType)
+    if (!ov.includes("opportunityType") && parsed.opportunityType) {
+      updatePayload.opportunityType = parsed.opportunityType;
+    }
+
+    // Recruitment Stage progression
+    if (!ov.includes("stage") && parsed.stage && parsed.stage !== "none") {
+      const currentStage = existingApp.stage || "none";
+      const STAGE_ORDER = { none: 0, oa_scheduled: 1, interview_scheduled: 2, offered: 3 };
+
+      if (parsed.stage === "rejected") {
+        // Rejection is a terminal outcome that can occur from any previous stage
+        updatePayload.stage = "rejected";
+      } else if (currentStage !== "rejected" && STAGE_ORDER[parsed.stage] !== undefined) {
+        const currentRank = STAGE_ORDER[currentStage] ?? 0;
+        const incomingRank = STAGE_ORDER[parsed.stage] ?? 0;
+        if (incomingRank > currentRank) {
+          updatePayload.stage = parsed.stage;
+          if (["oa_scheduled", "interview_scheduled", "offered"].includes(parsed.stage)) {
+            updatePayload.hasApplied = true;
+            if (!existingApp.appliedAt) updatePayload.appliedAt = incomingDateObj;
+          }
+        }
+      }
+    }
+
     // Date advancement to the newest email
     if (!ov.includes("date") && !isNaN(incomingDateObj.getTime())) {
       updatePayload.date = incomingDateObj;
@@ -430,6 +456,12 @@ function enrichApplicationRecord(existingApp, parsed, emailDate, options = {}) {
     }
     if (!ov.includes("type") && (!existingApp.type || existingApp.type === "unknown") && parsed.type && parsed.type !== "unknown") {
       updatePayload.type = parsed.type;
+    }
+    if (!ov.includes("opportunityType") && !existingApp.opportunityType && parsed.opportunityType) {
+      updatePayload.opportunityType = parsed.opportunityType;
+    }
+    if (!ov.includes("stage") && (!existingApp.stage || existingApp.stage === "none") && parsed.stage && parsed.stage !== "none") {
+      updatePayload.stage = parsed.stage;
     }
   }
 

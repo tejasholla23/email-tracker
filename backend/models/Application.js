@@ -4,6 +4,16 @@ const applicationSchema = new mongoose.Schema(
   {
     company: { type: String, default: null, trim: true },
     emailType: { type: String, enum: ["job", "event", "nonRecruitment"], default: "job" },
+    opportunityType: {
+      type: String,
+      enum: ["JOB_APPLICATION", "HACKATHON", "WEBINAR", "OTHER_PLACEMENT_EVENT"],
+      default: "JOB_APPLICATION",
+    },
+    stage: {
+      type: String,
+      enum: ["none", "oa_scheduled", "interview_scheduled", "offered", "rejected"],
+      default: "none",
+    },
     subtitle: { type: String, default: "" },
     // Legacy: old string-array field display list. Kept for backward compat with pre-redesign records.
     fieldsToDisplay: { type: [String], default: [] },
@@ -35,6 +45,8 @@ const applicationSchema = new mongoose.Schema(
       type: String,
       default: "new",
     },
+    hasApplied: { type: Boolean, default: false },
+    appliedAt: { type: Date },
     isDeleted: { type: Boolean, default: false },
     rawText: { type: String },
     accountEmail: { type: String, default: "" }, // Receiving inbox email (primary or linked)

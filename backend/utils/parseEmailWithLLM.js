@@ -1196,6 +1196,39 @@ function classifyEmail({ subject = "", body = "", forwarded = {}, hasLink = fals
   };
 }
 
+function deriveStageFromEmail({ classification = "", subject = "", body = "", opportunityType = "JOB_APPLICATION" } = {}) {
+  // Non-placement events/hackathons/webinars have no placement stage
+  if (opportunityType !== "JOB_APPLICATION") {
+    return "none";
+  }
+
+  const combined = `${subject} ${body}`.toLowerCase();
+
+  // 1. Explicit rejection detection (terminal outcome from any stage)
+  const rejectionRegex = /\b(?:regret to inform|not shortlisted|unsuccessful in (?:this|the) drive|cannot move forward with your candidature|did not make it to the next round|unfortunately, you have not been selected|we will not be proceeding with your application|not selected for this role)\b/i;
+  if (rejectionRegex.test(combined)) {
+    return "rejected";
+  }
+
+  // 2. Explicit selection / offer detection (only when explicit selection cues are present)
+  const offerRegex = /\b(?:offer letter|pleased to offer|congratulations on your selection|selected for the role of|finally selected|list of selected candidates|happy to announce your selection|you have been selected|we are pleased to extend this offer)\b/i;
+  if (offerRegex.test(combined) && (classification === "Interview Result" || classification === "New Hiring Opportunity" || classification === "Generic Placement Notice")) {
+    return "offered";
+  }
+
+  // 3. Interview Schedule / Reminder
+  if (classification === "Interview Schedule" || classification === "Interview Reminder") {
+    return "interview_scheduled";
+  }
+
+  // 4. Assessment Announcement
+  if (classification === "Assessment Announcement") {
+    return "oa_scheduled";
+  }
+
+  // Default: stage is "none" (e.g. New Hiring Opportunity, Registration Link, or ambiguous Interview Result)
+  return "none";
+}
 
 function parseDateString(input = "", referenceDate = new Date()) {
   const text = normalizeText(input);
@@ -2088,6 +2121,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     return {
       emailType: "job",
       opportunityType: "JOB_APPLICATION",
+      stage: "none",
       isRelevant: true,
       classification: "Pending Analysis",
       type: "unknown",
@@ -2269,9 +2303,17 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     },
   } : undefined;
 
+  const finalStage = deriveStageFromEmail({
+    classification: finalClassification,
+    subject: sourceSubject,
+    body: sourceBody,
+    opportunityType: finalOppType,
+  });
+
   const parsed = {
     emailType,
     opportunityType: finalOppType,
+    stage:           finalStage,
     isRelevant:     emailType !== "nonRecruitment",
     classification: finalClassification,
     type:           finalType,
@@ -2341,7 +2383,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   };
 
   console.log(
-    `[PARSER_SUMMARY] Company: ${parsed.company || "None"} (via ${companySource}) | emailType: ${emailType} | Classification: ${parsed.classification} | subtitle: "${parsed.subtitle}" | displayFields: ${parsed.displayFields.length} fields`
+    `[PARSER_SUMMARY] Company: ${parsed.company || "None"} (via ${companySource}) | emailType: ${emailType} | Classification: ${parsed.classification} | stage: ${parsed.stage} | subtitle: "${parsed.subtitle}" | displayFields: ${parsed.displayFields.length} fields`
   );
 
   if (isDev && parseTrace) {
@@ -2354,6 +2396,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
     return {
       emailType: "job",
       opportunityType: "JOB_APPLICATION",
+      stage: "none",
       isRelevant: false,
       classification: "Generic Placement Notice",
       type: "unknown",
@@ -2454,5 +2497,6 @@ module.exports = {
   deriveFromDisplayFields,
   mergeAlternativeTexts,
   getFullBodyText,
-  sanitizeCompany
+  sanitizeCompany,
+  deriveStageFromEmail
 };
