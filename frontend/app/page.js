@@ -6065,7 +6065,7 @@ export default function JobTrackerDashboard() {
                                     className={`status-quick-item ${app.stage === "rejected" ? "active" : ""}`}
                                     onClick={() => handleQuickUpdate(app._id, { stage: "rejected" })}
                                   >
-                                    <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected (Direct)</span>
+                                    <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Not Shortlisted</span>
                                     {app.stage === "rejected" && <span>✓</span>}
                                   </button>
                                   <button
@@ -6099,7 +6099,7 @@ export default function JobTrackerDashboard() {
                                   }}
                                   title="Click to change recruitment stage"
                                 >
-                                  {app.stage === "oa_scheduled" ? "OA" : app.stage === "interview_scheduled" ? "Interview" : app.stage === "offered" ? "Offered" : app.stage === "rejected" ? "Rejected" : app.stage === "rejected_after_oa" ? "OA • Rejected" : app.stage === "rejected_after_interview" ? "Interview • Rejected" : app.stage}
+                                  {app.stage === "oa_scheduled" ? "OA" : app.stage === "interview_scheduled" ? "Interview" : app.stage === "offered" ? "Offered" : app.stage === "rejected" ? "Not Shortlisted" : app.stage === "rejected_after_oa" ? "OA • Rejected" : app.stage === "rejected_after_interview" ? "Interview • Rejected" : app.stage}
                                   <span className="status-badge-chevron">▼</span>
                                 </span>
                                 {activeStatusMenuId === `${app._id}-stage` && (
@@ -6142,7 +6142,7 @@ export default function JobTrackerDashboard() {
                                       className={`status-quick-item ${app.stage === "rejected" ? "active" : ""}`}
                                       onClick={() => handleQuickUpdate(app._id, { stage: "rejected" })}
                                     >
-                                      <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Rejected (Direct)</span>
+                                      <span><span className="status-quick-dot" style={{ background: '#ef4444' }}></span>Not Shortlisted</span>
                                       {app.stage === "rejected" && <span>✓</span>}
                                     </button>
                                     <button
@@ -6807,7 +6807,7 @@ export default function JobTrackerDashboard() {
                       <option value="oa_scheduled">Online Assessment (OA)</option>
                       <option value="interview_scheduled">Interview Scheduled</option>
                       <option value="offered">Offered / Selected</option>
-                      <option value="rejected">Rejected (Direct / Resume)</option>
+                      <option value="rejected">Not Shortlisted</option>
                       <option value="rejected_after_oa">Rejected (after OA)</option>
                       <option value="rejected_after_interview">Rejected (after Interview)</option>
                     </select>
@@ -7024,7 +7024,7 @@ export default function JobTrackerDashboard() {
                 <div className="info-modal-meta-chips">
                   {app.stage && app.stage !== 'none' && (
                     <span className={`meta-chip stage-badge stage-${app.stage === 'oa_scheduled' ? 'oa' : app.stage === 'interview_scheduled' ? 'interview' : app.stage}`} style={{ textTransform: 'capitalize' }}>
-                      {app.stage === 'oa_scheduled' ? 'OA' : app.stage === 'interview_scheduled' ? 'Interview Scheduled' : app.stage === 'offered' ? 'Offered' : app.stage === 'rejected' ? 'Rejected' : app.stage === 'rejected_after_oa' ? 'OA • Rejected' : app.stage === 'rejected_after_interview' ? 'Interview • Rejected' : app.stage}
+                      {app.stage === 'oa_scheduled' ? 'OA' : app.stage === 'interview_scheduled' ? 'Interview Scheduled' : app.stage === 'offered' ? 'Offered' : app.stage === 'rejected' ? 'Not Shortlisted' : app.stage === 'rejected_after_oa' ? 'OA • Rejected' : app.stage === 'rejected_after_interview' ? 'Interview • Rejected' : app.stage}
                     </span>
                   )}
                   {app.opportunityType && app.opportunityType !== 'JOB_APPLICATION' && (
