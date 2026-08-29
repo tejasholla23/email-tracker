@@ -532,7 +532,7 @@ export default function AnalyticsView({ applications = [] }) {
           padding: 0 0 32px 0;
           display: flex;
           flex-direction: column;
-          gap: 22px;
+          gap: 32px;
           color: #f8fafc;
         }
 
@@ -542,6 +542,7 @@ export default function AnalyticsView({ applications = [] }) {
           align-items: center;
           flex-wrap: wrap;
           gap: 16px;
+          margin-bottom: 4px;
         }
 
         .analytics-title {
@@ -711,12 +712,13 @@ export default function AnalyticsView({ applications = [] }) {
         .analytics-charts-row {
           display: grid;
           grid-template-columns: 1.1fr 1fr;
-          gap: 16px;
+          gap: 24px;
         }
 
         @media (max-width: 960px) {
           .analytics-charts-row {
             grid-template-columns: 1fr;
+            gap: 20px;
           }
         }
 
@@ -724,14 +726,14 @@ export default function AnalyticsView({ applications = [] }) {
           background: #070e1e;
           border: 1px solid #172338;
           border-radius: 14px;
-          padding: 24px;
+          padding: 26px;
           display: flex;
           flex-direction: column;
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
         }
 
         .chart-card-header {
-          margin-bottom: 22px;
+          margin-bottom: 26px;
         }
 
         .chart-card-header h3 {
@@ -752,7 +754,7 @@ export default function AnalyticsView({ applications = [] }) {
         .funnel-container {
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 20px;
           flex: 1;
         }
 
@@ -840,7 +842,7 @@ export default function AnalyticsView({ applications = [] }) {
 
         /* Footnote */
         .chart-footnote {
-          margin-top: 24px;
+          margin-top: 30px;
           background: rgba(11, 21, 40, 0.6);
           border: 1px solid #172338;
           border-radius: 8px;
@@ -914,7 +916,7 @@ export default function AnalyticsView({ applications = [] }) {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 14px;
+          gap: 16px;
           min-width: 180px;
         }
 
