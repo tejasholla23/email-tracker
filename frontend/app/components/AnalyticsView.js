@@ -1,11 +1,46 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 
 export default function AnalyticsView({ applications = [] }) {
-  const [timeFilter, setTimeFilter] = useState("all"); // "all" | "30d" | "60d"
+  const [timeFilter, setTimeFilter] = useState("all"); // "all" | "7d" | "30d" | "60d"
   const [categoryFilter, setCategoryFilter] = useState("all"); // "all" | "placement" | "events"
   const [hoveredDonutSegment, setHoveredDonutSegment] = useState(null);
+
+  // Restore saved filter preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedTime = localStorage.getItem("analytics_timeFilter");
+      if (savedTime && ["all", "7d", "30d", "60d"].includes(savedTime)) {
+        setTimeFilter(savedTime);
+      }
+      const savedCategory = localStorage.getItem("analytics_categoryFilter");
+      if (savedCategory && ["all", "placement", "events"].includes(savedCategory)) {
+        setCategoryFilter(savedCategory);
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  }, []);
+
+  const handleTimeFilterChange = (val) => {
+    setTimeFilter(val);
+    try {
+      localStorage.setItem("analytics_timeFilter", val);
+    } catch (e) {}
+  };
+
+  const handleCategoryFilterChange = (val) => {
+    setCategoryFilter(val);
+    try {
+      localStorage.setItem("analytics_categoryFilter", val);
+    } catch (e) {}
+  };
+
+  const handleResetFilters = () => {
+    handleTimeFilterChange("all");
+    handleCategoryFilterChange("all");
+  };
 
   // Helper to extract the most recent email/update timestamp for an application
   const getLatestAppTime = (app) => {
@@ -256,19 +291,19 @@ export default function AnalyticsView({ applications = [] }) {
           <div className="analytics-filter-group">
             <button
               className={`analytics-pill ${categoryFilter === "all" ? "active" : ""}`}
-              onClick={() => setCategoryFilter("all")}
+              onClick={() => handleCategoryFilterChange("all")}
             >
               All Types
             </button>
             <button
               className={`analytics-pill ${categoryFilter === "placement" ? "active" : ""}`}
-              onClick={() => setCategoryFilter("placement")}
+              onClick={() => handleCategoryFilterChange("placement")}
             >
               Placements
             </button>
             <button
               className={`analytics-pill ${categoryFilter === "events" ? "active" : ""}`}
-              onClick={() => setCategoryFilter("events")}
+              onClick={() => handleCategoryFilterChange("events")}
             >
               Hackathons & Events
             </button>
@@ -279,7 +314,7 @@ export default function AnalyticsView({ applications = [] }) {
             <select
               className="analytics-time-select"
               value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value)}
+              onChange={(e) => handleTimeFilterChange(e.target.value)}
             >
               <option value="all">All</option>
               <option value="7d">Last 1 week</option>
@@ -301,10 +336,7 @@ export default function AnalyticsView({ applications = [] }) {
           <button
             className="btn-primary"
             style={{ marginTop: "16px" }}
-            onClick={() => {
-              setTimeFilter("all");
-              setCategoryFilter("all");
-            }}
+            onClick={handleResetFilters}
           >
             Reset Filters
           </button>
