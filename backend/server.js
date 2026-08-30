@@ -17,6 +17,7 @@ const { getCompanyInfo } = require("./utils/companyInfoService");
 const { enrichCompanyProfile } = require("./utils/enrichCompanyProfile");
 const { normalizeCompany, isValidCompany } = require("./utils/normalizeCompany");
 const { advanceStatus, classificationToStatus } = require("./utils/statusMachine");
+const { enrichApplicationRecord } = require("./utils/enrichmentService");
 const { generateAccessToken, generateRefreshToken, hashRefreshToken } = require("./utils/jwt");
 const { extractAttachmentMetadata, mergeAttachments } = require("./utils/attachmentUtils");
 const {
