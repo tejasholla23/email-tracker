@@ -294,36 +294,109 @@ export default function InfoModal({
             </div>
           )}
 
-          {/* ── Key Opportunity Details Section (All Extracted Fields) ── */}
+          {/* 1. Company Overview Section (About Company) */}
+          {companyProfileLoading ? (
+            <div className="info-modal-section">
+              <div className="info-modal-section-header">About {app.company}</div>
+              <div className="info-modal-section-body">
+                <div className="company-skeleton">
+                  <div className="skeleton-line" style={{ width: '92%' }}></div>
+                  <div className="skeleton-line" style={{ width: '80%' }}></div>
+                  <div className="skeleton-line" style={{ width: '65%' }}></div>
+                </div>
+              </div>
+            </div>
+          ) : (() => {
+            const profile = companyProfile || app.companyInfo;
+            if (!profile || (!profile.description && !profile.industry && !profile.companyType && (!profile.knownFor || profile.knownFor.length === 0))) return null;
+
+            return (
+              <div className="info-modal-section">
+                <div className="info-modal-section-header">About {app.company}</div>
+                <div className="info-modal-section-body">
+                  {profile.description && (
+                    <p className="company-description" style={{ marginBottom: '8px', lineHeight: '1.55', fontSize: '13px', textAlign: 'justify' }}>
+                      {profile.description}
+                    </p>
+                  )}
+                  
+                  <div className="company-info-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                    gap: '8px 12px',
+                    margin: '8px 0 10px',
+                    padding: '10px 12px',
+                    background: 'var(--bg-color, #f8fafc)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color, #e2e8f0)'
+                  }}>
+                    {profile.industry && (
+                      <div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Industry</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.industry}</div>
+                      </div>
+                    )}
+                    {profile.companyType && (
+                      <div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Type</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.companyType}</div>
+                      </div>
+                    )}
+                    {profile.headquarters && (
+                      <div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Headquarters</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.headquarters}</div>
+                      </div>
+                    )}
+                    {profile.website && (
+                      <div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Website</div>
+                        <a href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12.5px', fontWeight: '600', color: '#3b82f6', textDecoration: 'underline', marginTop: '2px', display: 'inline-block' }}>
+                          {profile.website.replace(/^https?:\/\//, '')} ↗
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {Array.isArray(profile.knownFor) && profile.knownFor.length > 0 && (
+                    <div style={{ marginTop: '6px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Key Highlights</div>
+                      <ul className="known-for-list">
+                        {profile.knownFor.map((item, idx) => (
+                          <li key={idx}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 2. Key Opportunity Details Section (Drive & Opportunity Details) */}
           {(() => {
             const details = displayFieldRows.length > 0 ? displayFieldRows : displayRowsFromFields;
             if (details.length === 0) return null;
 
             return (
               <div className="info-modal-section">
-                <div className="info-modal-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #3b82f6)', flexShrink: 0 }}>
-                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                    </svg>
-                    <span>DRIVE & OPPORTUNITY DETAILS</span>
-                  </div>
+                <div className="info-modal-section-header">
+                  Drive & Opportunity Details
                 </div>
                 <div className="info-modal-section-body">
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: '10px 14px',
-                    padding: '12px 14px',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                    gap: '8px 12px',
+                    padding: '10px 12px',
                     background: 'var(--bg-secondary, rgba(255, 255, 255, 0.04))',
-                    borderRadius: '10px',
+                    borderRadius: '8px',
                     border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))'
                   }}>
                     {details.map(({ label, value }, idx) => (
                       <div key={idx} style={{ minWidth: 0 }}>
                         <div style={{
-                          fontSize: '11px',
+                          fontSize: '10.5px',
                           fontWeight: '700',
                           color: 'var(--text-secondary, #94a3b8)',
                           textTransform: 'uppercase',
@@ -333,7 +406,7 @@ export default function InfoModal({
                           {label}
                         </div>
                         <div style={{
-                          fontSize: '13.5px',
+                          fontSize: '13px',
                           fontWeight: '600',
                           color: 'var(--text-primary, #f8fafc)',
                           wordBreak: 'break-word',
@@ -349,16 +422,11 @@ export default function InfoModal({
             );
           })()}
 
-          {/* ── Attachments Section ── */}
+          {/* 3. Attachments Section */}
           {realAttachments.length > 0 && (
             <div className="info-modal-section">
               <div className="info-modal-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #3b82f6)', flexShrink: 0 }}>
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                  </svg>
-                  <span>ATTACHMENTS ({realAttachments.length})</span>
-                </div>
+                <span>Attachments ({realAttachments.length})</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
                   <polyline points="18 15 12 9 6 15" />
                 </svg>
@@ -461,86 +529,7 @@ export default function InfoModal({
             </div>
           )}
 
-          {/* Company Overview Section */}
-          {companyProfileLoading ? (
-            <div className="info-modal-section">
-              <div className="info-modal-section-header">About {app.company}</div>
-              <div className="info-modal-section-body">
-                <div className="company-skeleton">
-                  <div className="skeleton-line" style={{ width: '92%' }}></div>
-                  <div className="skeleton-line" style={{ width: '80%' }}></div>
-                  <div className="skeleton-line" style={{ width: '65%' }}></div>
-                </div>
-              </div>
-            </div>
-          ) : (() => {
-            const profile = companyProfile || app.companyInfo;
-            if (!profile || (!profile.description && !profile.industry && !profile.companyType && (!profile.knownFor || profile.knownFor.length === 0))) return null;
-
-            return (
-              <div className="info-modal-section">
-                <div className="info-modal-section-header">About {app.company}</div>
-                <div className="info-modal-section-body">
-                  {profile.description && (
-                    <p className="company-description" style={{ marginBottom: '14px', lineHeight: '1.6', fontSize: '13.5px' }}>
-                      {profile.description}
-                    </p>
-                  )}
-                  
-                  <div className="company-info-grid" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                    gap: '10px 14px',
-                    margin: '12px 0 14px',
-                    padding: '12px 14px',
-                    background: 'var(--bg-color, #f8fafc)',
-                    borderRadius: '10px',
-                    border: '1px solid var(--border-color, #e2e8f0)'
-                  }}>
-                    {profile.industry && (
-                      <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Industry</div>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.industry}</div>
-                      </div>
-                    )}
-                    {profile.companyType && (
-                      <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Type</div>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.companyType}</div>
-                      </div>
-                    )}
-                    {profile.headquarters && (
-                      <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Headquarters</div>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.headquarters}</div>
-                      </div>
-                    )}
-                    {profile.website && (
-                      <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Website</div>
-                        <a href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', fontWeight: '600', color: '#3b82f6', textDecoration: 'underline', marginTop: '2px', display: 'inline-block' }}>
-                          {profile.website.replace(/^https?:\/\//, '')} ↗
-                        </a>
-                      </div>
-                    )}
-                  </div>
-
-                  {Array.isArray(profile.knownFor) && profile.knownFor.length > 0 && (
-                    <div style={{ marginTop: '10px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Key Highlights</div>
-                      <ul className="known-for-list">
-                        {profile.knownFor.map((item, idx) => (
-                          <li key={idx}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Application Timeline */}
+          {/* 4. Application Timeline */}
           {app.events && app.events.length > 0 && (
             <div className="info-modal-section">
               <div className="info-modal-section-header">Application Timeline</div>
@@ -550,17 +539,17 @@ export default function InfoModal({
                     const d = new Date(ev.date);
                     const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
                     return (
-                      <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === app.events.length - 1 ? '0' : '18px' }}>
-                        <div className="timeline-date" style={{ width: '48px', fontSize: '13px', color: '#64748b', textAlign: 'right', marginRight: '16px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
+                      <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === app.events.length - 1 ? '0' : '12px' }}>
+                        <div className="timeline-date" style={{ width: '48px', fontSize: '12.5px', color: '#64748b', textAlign: 'right', marginRight: '14px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
                           {formattedD}
                         </div>
-                        <div className="timeline-dot" style={{ position: 'absolute', left: '59px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
+                        <div className="timeline-dot" style={{ position: 'absolute', left: '57px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
                         {i !== app.events.length - 1 && (
-                          <div className="timeline-line" style={{ position: 'absolute', left: '62px', top: '15px', bottom: '-18px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
+                          <div className="timeline-line" style={{ position: 'absolute', left: '60px', top: '15px', bottom: '-12px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
                         )}
-                        <div className="timeline-content" style={{ marginLeft: '24px', flex: 1, paddingBottom: '4px' }}>
+                        <div className="timeline-content" style={{ marginLeft: '22px', flex: 1, paddingBottom: '2px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-                            <div className="timeline-title" style={{ fontSize: '14.5px', fontWeight: '600', color: '#0f172a' }}>
+                            <div className="timeline-title" style={{ fontSize: '13.5px', fontWeight: '600', color: '#0f172a' }}>
                               {ev.title || ev.classification || 'Email Notification'}
                             </div>
                             {ev.messageId && (
@@ -571,13 +560,13 @@ export default function InfoModal({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleReparseEmail(app._id, ev.messageId);
-                                  }}
+                                }}
                                 style={{
                                   background: 'rgba(37, 99, 235, 0.06)',
                                   border: '1px solid rgba(37, 99, 235, 0.2)',
                                   borderRadius: '5px',
-                                  padding: '2px 8px',
-                                  fontSize: '11px',
+                                  padding: '2px 7px',
+                                  fontSize: '10.5px',
                                   fontWeight: '600',
                                   color: '#2563eb',
                                   cursor: (reparsingId === `${app._id}_${ev.messageId}` || reparsingId === app._id) ? 'not-allowed' : 'pointer',
@@ -599,13 +588,13 @@ export default function InfoModal({
                               </button>
                             )}
                           </div>
-                          <div className="timeline-subtitle" style={{ fontSize: '12.5px', color: '#475569', marginTop: '3px', lineHeight: '1.5' }}>
+                          <div className="timeline-subtitle" style={{ fontSize: '12px', color: '#475569', marginTop: '2px', lineHeight: '1.45' }}>
                             {ev.summary ? ev.summary : (ev.subject ? (ev.subject.length > 80 ? ev.subject.substring(0, 80) + '...' : ev.subject) : '')}
                           </div>
                           {ev.link && (
-                            <div style={{ marginTop: '6px' }}>
+                            <div style={{ marginTop: '4px' }}>
                               <a href={ev.link} target="_blank" rel="noopener noreferrer"
-                                style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'underline', fontWeight: '500' }}
+                                style={{ fontSize: '11.5px', color: '#3b82f6', textDecoration: 'underline', fontWeight: '500' }}
                                 onClick={e => e.stopPropagation()}>
                                 {ev.classification === 'Registration Link' || ev.classification === 'New Hiring Opportunity' || ev.classification === 'Internship Opportunity' ? 'Apply Link ↗' : 'Open Link ↗'}
                               </a>

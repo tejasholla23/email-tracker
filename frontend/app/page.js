@@ -3699,7 +3699,7 @@ export default function JobTrackerDashboard() {
             top: 0 !important;
             z-index: 20 !important;
             background: var(--surface-color) !important;
-            padding: 16px 18px 12px !important;
+            padding: 12px 16px 10px !important;
             flex-shrink: 0 !important;
             border-bottom: 1px solid var(--border-color) !important;
           }
@@ -3714,11 +3714,11 @@ export default function JobTrackerDashboard() {
             overflow: visible !important;
             height: auto !important;
             max-height: none !important;
-            padding: 16px 18px !important;
+            padding: 12px 14px !important;
             min-height: 0 !important;
             display: flex !important;
             flex-direction: column !important;
-            gap: 16px !important;
+            gap: 10px !important;
           }
           .info-modal-section {
             overflow: visible !important;
@@ -3729,7 +3729,7 @@ export default function JobTrackerDashboard() {
             bottom: 0 !important;
             z-index: 20 !important;
             background: var(--surface-color) !important;
-            padding: 12px 18px calc(12px + env(safe-area-inset-bottom)) !important;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom)) !important;
             flex-shrink: 0 !important;
             border-top: 1px solid var(--border-color) !important;
           }
@@ -4083,28 +4083,28 @@ export default function JobTrackerDashboard() {
 
         .edit-modal-content,
         .info-modal-content {
-          max-width: 640px;
+          max-width: 620px;
           width: 100%;
           max-height: 85vh;
           display: flex;
           flex-direction: column;
           padding: 0 !important;
           overflow: hidden;
-          border-radius: 18px;
+          border-radius: 16px;
         }
         .edit-modal-header,
         .info-modal-header {
-          padding: 20px 24px 14px;
+          padding: 16px 20px 10px;
           border-bottom: 1px solid var(--border-color, #e2e8f0);
           flex-shrink: 0;
         }
-        .info-modal-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-        .info-modal-company-row { display: flex; align-items: center; gap: 14px; }
-        .info-modal-logo { width: 44px; height: 44px; border-radius: 10px; object-fit: contain; background: #f1f5f9; padding: 4px; }
-        .info-modal-company-name { font-family: 'Manrope', sans-serif; font-size: 22px; font-weight: 700; color: var(--text-heading, #0f172a); margin: 0; }
-        .info-modal-subtitle { font-size: 13px; color: #64748b; margin: 2px 0 0; }
-        .info-modal-meta-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-        .meta-chip { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color, #e2e8f0); color: var(--text-secondary, #64748b); background: var(--bg-color, #f8fafc); }
+        .info-modal-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .info-modal-company-row { display: flex; align-items: center; gap: 12px; }
+        .info-modal-logo { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: #f1f5f9; padding: 3px; }
+        .info-modal-company-name { font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 700; color: var(--text-heading, #0f172a); margin: 0; }
+        .info-modal-subtitle { font-size: 12.5px; color: #64748b; margin: 2px 0 0; }
+        .info-modal-meta-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .meta-chip { font-size: 11.5px; font-weight: 500; padding: 3px 8px; border-radius: 16px; border: 1px solid var(--border-color, #e2e8f0); color: var(--text-secondary, #64748b); background: var(--bg-color, #f8fafc); }
         .meta-chip.urgent { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
         .meta-chip.status-new { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
         .meta-chip.status-applied { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
@@ -4122,14 +4122,14 @@ export default function JobTrackerDashboard() {
           flex: 1 1 auto;
           min-height: 0;
           max-height: none;
-          padding: 20px 24px;
+          padding: 14px 20px;
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 10px;
           overscroll-behavior: contain;
         }
         .edit-modal-body::-webkit-scrollbar,
-        .info-modal-body::-webkit-scrollbar { width: 8px; }
+        .info-modal-body::-webkit-scrollbar { width: 6px; }
         .edit-modal-body::-webkit-scrollbar-track,
         .info-modal-body::-webkit-scrollbar-track { background: transparent; }
         .edit-modal-body::-webkit-scrollbar-thumb,
@@ -4137,41 +4137,41 @@ export default function JobTrackerDashboard() {
         .edit-modal-body::-webkit-scrollbar-thumb:hover,
         .info-modal-body::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.7); }
         .edit-modal-footer {
-          padding: 16px 24px;
+          padding: 12px 20px;
           border-top: 1px solid var(--border-color, #e2e8f0);
           flex-shrink: 0;
           display: flex;
           justify-content: flex-end;
-          gap: 12px;
+          gap: 10px;
           background: var(--surface-color, #ffffff);
         }
         .dark .edit-modal-footer {
           background: var(--surface-color, #1e293b);
           border-color: var(--border-color, #334155);
         }
-        .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 14px; overflow: visible; }
-        .info-modal-section-header { padding: 14px 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); border-top-left-radius: 13px; border-top-right-radius: 13px; }
-        .info-modal-section-body { padding: 16px 18px; }
+        .info-modal-section { background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px; overflow: visible; }
+        .info-modal-section-header { padding: 10px 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #64748b); border-bottom: 1px solid var(--border-color, #e2e8f0); background: var(--bg-color, #f8fafc); border-top-left-radius: 9px; border-top-right-radius: 9px; }
+        .info-modal-section-body { padding: 10px 14px; }
 
-        .info-detail-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color, #f1f5f9); }
+        .info-detail-row { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-color, #f1f5f9); }
         .info-detail-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .info-detail-label { font-size: 13px; font-weight: 600; color: var(--text-secondary, #64748b); min-width: 90px; flex-shrink: 0; }
-        .info-detail-value { font-size: 13.5px; color: var(--text-primary, #1e293b); line-height: 1.5; }
+        .info-detail-label { font-size: 12.5px; font-weight: 600; color: var(--text-secondary, #64748b); min-width: 85px; flex-shrink: 0; }
+        .info-detail-value { font-size: 13px; color: var(--text-primary, #1e293b); line-height: 1.45; }
 
-        .company-description { font-size: 13.5px; color: var(--text-primary, #1e293b); line-height: 1.65; margin: 0 0 12px; }
-        .known-for-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-        .known-for-list li { font-size: 13px; color: var(--text-secondary, #64748b); display: flex; align-items: flex-start; gap: 8px; }
+        .company-description { font-size: 13px; color: var(--text-primary, #1e293b); line-height: 1.55; margin: 0 0 8px; text-align: justify; }
+        .known-for-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+        .known-for-list li { font-size: 12.5px; color: var(--text-secondary, #64748b); display: flex; align-items: flex-start; gap: 6px; }
         .known-for-list li::before { content: "•"; color: #3b82f6; font-weight: 700; flex-shrink: 0; }
 
-        .skills-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-        .skill-chip { font-size: 12.5px; font-weight: 500; padding: 5px 12px; border-radius: 20px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; display: flex; align-items: center; gap: 6px; }
+        .skills-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+        .skill-chip { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 16px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; display: flex; align-items: center; gap: 5px; }
         .skill-chip::before { content: "✓"; font-weight: 700; }
 
-        .company-skeleton { display: flex; flex-direction: column; gap: 10px; }
-        .skeleton-line { height: 14px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+        .company-skeleton { display: flex; flex-direction: column; gap: 8px; }
+        .skeleton-line { height: 12px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-        .info-modal-footer { padding: 16px 28px; border-top: 1px solid var(--border-color, #e2e8f0); display: flex; justify-content: flex-end; flex-shrink: 0; background: var(--surface-color, #fff); }
+        .info-modal-footer { padding: 12px 20px; border-top: 1px solid var(--border-color, #e2e8f0); display: flex; justify-content: flex-end; flex-shrink: 0; background: var(--surface-color, #fff); }
 
         .dark .info-modal-section { background: var(--surface-color); border-color: var(--border-color); }
         .dark .info-modal-section-header { background: rgba(255,255,255,0.04); }
