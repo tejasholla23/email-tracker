@@ -15,7 +15,7 @@
 
 **Email Tracker** is a production-grade, multi-user web application designed to automatically track, parse, and organize campus placement communications into a sleek, centralized dashboard.
 
-Powered by a **Pure Dual-LLM Ingestion Pipeline** (OpenAI GPT-OSS 20B + NVIDIA Nemotron 3.5 Lightning), **Google Pub/Sub real-time webhooks**, **Linked Gmail accounts**, **Spreadsheet Shortlist Parsing**, **Google Calendar auto-synchronization**, and **Web Push alerts**, Email Tracker ensures students never miss a registration deadline, test announcement, or shortlist update.
+Powered by a **3-Provider LLM Fallback Ingestion Pipeline** (OpenAI GPT-OSS 20B $\rightarrow$ OpenAI GPT-OSS 120B $\rightarrow$ Mistral Small), **Google Pub/Sub real-time webhooks**, **Linked Gmail accounts**, **Spreadsheet Shortlist Parsing**, **Google Calendar auto-synchronization**, and **Web Push alerts**, Email Tracker ensures students never miss a registration deadline, test announcement, or shortlist update.
 
 ---
 
@@ -27,10 +27,10 @@ Powered by a **Pure Dual-LLM Ingestion Pipeline** (OpenAI GPT-OSS 20B + NVIDIA N
 
 ## Key Features
 
-### 1. Pure Dual-LLM Ingestion & In-Flight Coalescing
-- **Primary & Fallback Models:** Employs **OpenAI GPT-OSS 20B** (`openai/gpt-oss-20b`) as the primary structured extractor with automatic fallback to **NVIDIA Nemotron 3.5 Lightning** (`nvidia/nemotron-3.5-lightning-30b-a3b`) via NVIDIA NIM API.
+### 1. Three-Provider LLM Fallback Chain & In-Flight Coalescing
+- **Resilient Multi-Provider Fallback:** Employs **OpenAI GPT-OSS 20B** (`openai/gpt-oss-20b` via NVIDIA NIM) as primary extractor, with automated instant failover to **OpenAI GPT-OSS 120B** (`openai/gpt-oss-120b` via Groq) and **Mistral Small** (`mistral-small-latest` via Mistral AI).
 - **Single-Flight Coalescing:** When hundreds of students receive the same placement broadcast simultaneously, the backend coalesces concurrent parses into **exactly one LLM request**, caching the structured result by `Message-ID` across all users in milliseconds.
-- **Structured Schema Extraction:** Accurately extracts company name, role, CTC, stipend, location, deadline, eligibility criteria, registration links, and interview rounds without brittle regex guessing.
+- **Structured Schema Extraction:** Accurately extracts company name, role, CTC, stipend, location, deadline, eligibility criteria, registration links, and interview rounds with native JSON schema constraints and deterministic regex fallbacks.
 
 ### 2. Bounded Persistent Retry Queue & Backoff
 - **Freshness-First Guarantee:** Fresh inbox messages always take absolute priority.
@@ -53,6 +53,7 @@ Powered by a **Pure Dual-LLM Ingestion Pipeline** (OpenAI GPT-OSS 20B + NVIDIA N
 ### 6. Real-Time Push Notifications & Live Webhooks
 - **Google Cloud Pub/Sub Webhooks:** Listens for instant mailbox changes via `/notifications/gmail` push endpoints.
 - **Browser Push Notifications:** Delivers real-time notifications for critical deadlines, registration reminders, and shortlist results via Service Workers.
+- **Milestone & Retry Alerts:** Automatically triggers push notifications when retry parsing finishes or when new interview/shortlist rounds are added to existing applications.
 
 ### 7. Unified Timeline & Application Management
 - **Company Grouping:** Chronologically groups multiple emails from the same recruitment drive under a single interactive application card.
@@ -65,14 +66,14 @@ Powered by a **Pure Dual-LLM Ingestion Pipeline** (OpenAI GPT-OSS 20B + NVIDIA N
 
 | Layer | Technologies Used |
 |---|---|
-| **Frontend** | Next.js 14, React, CSS Modules / CSS Variables Design System, Service Workers |
+| **Frontend** | Next.js 16, React, CSS Modules / CSS Variables Design System, Service Workers |
 | **Backend** | Node.js, Express.js, Mongoose ODM |
 | **Database** | MongoDB Atlas |
 | **Authentication & Security** | Google OAuth 2.0 (PKCE), JWT Access/Refresh Rotation, Rate Limiters |
-| **AI & LLM Pipeline** | OpenAI GPT-OSS 20B & NVIDIA Nemotron 3.5 Lightning (NVIDIA NIM API) |
+| **AI & LLM Pipeline** | OpenAI GPT-OSS 20B, OpenAI GPT-OSS 120B, Mistral Small |
 | **Spreadsheet & Attachment Engine** | SheetJS (`xlsx`), Gmail Attachment API |
 | **External APIs** | Gmail API (Push & History API), Google Calendar API, Web Push API |
-| **Deployment** | Vercel (Frontend), Node.js Cloud Platform (Backend) |
+| **Deployment** | Vercel (Frontend), Render (Backend) |
 
 ---
 
@@ -91,7 +92,7 @@ flowchart TD
         PUBSUB["Gmail Pub/Sub Webhook Handler"]
         SYNC["Freshness-First Sync Engine"]
         SINGLEFLIGHT["Single-Flight Coalescer"]
-        PARSER["Dual-LLM Extractor (GPT-OSS / Nemotron 3.5)"]
+        PARSER["3-Tier LLM Extractor"]
         EXCEL["Attachment & Shortlist Engine (xlsx)"]
         CAL_SERVICE["Google Calendar Service"]
         PUSH_SERVICE["Web Push Service"]
@@ -104,7 +105,9 @@ flowchart TD
     subgraph External["External APIs & Services"]
         GMAIL["Gmail API (History & Attachments)"]
         GCAL["Google Calendar API"]
-        NVIDIA["NVIDIA NIM API"]
+        NVIDIA["Primary: NVIDIA NIM (openai/gpt-oss-20b)"]
+        GROQ["Secondary: Groq (openai/gpt-oss-120b)"]
+        MISTRAL["Tertiary: Mistral (mistral-small-latest)"]
         WEBPUSH["Web Push Relays"]
         GCP_PUBSUB["Google Cloud Pub/Sub"]
     end
@@ -116,9 +119,11 @@ flowchart TD
     LIMIT --> SYNC
     SYNC -->|Fetch Messages| GMAIL
     SYNC -->|Check Single-Flight| SINGLEFLIGHT
-    SINGLEFLIGHT -->|Deduplicated LLM Request| PARSER
-    PARSER -->|Structured Prompt| NVIDIA
-    NVIDIA -->|JSON Data| PARSER
+    SINGLEFLIGHT -->|Deduplicated Request| PARSER
+    PARSER -->|1. Primary| NVIDIA
+    NVIDIA -.->|On Failure| GROQ
+    GROQ -.->|On Failure| MISTRAL
+    PARSER -->|JSON Structured Output| SYNC
     SYNC -->|Fetch Attachments| EXCEL
     SYNC -->|Upsert Applications & Events| MONGO
     SYNC -->|Sync Deadlines| CAL_SERVICE
@@ -137,35 +142,37 @@ flowchart TD
 email-tracker/
 ├── backend/
 │   ├── config/
-│   │   └── appConfig.js            # Configuration, models, and domain allowlists
+│   │   └── appConfig.js            # Configuration, models, and provider keys
 │   ├── middleware/
 │   │   ├── authenticate.js         # JWT verification & token rotation
 │   │   └── rateLimiters.js         # Endpoint rate limiting
 │   ├── models/
-│   │   ├── Account.js              # User account, tokens & sync state
+│   │   ├── Account.js              # User account, tokens, push subscriptions & profile
 │   │   ├── LinkedGmailAccount.js   # Secondary linked Gmail accounts
 │   │   ├── Application.js          # Applications, attachments & timeline events
-│   │   └── CompanyInfo.js          # Shared company metadata & logo cache
+│   │   └── CompanyInfo.js          # Shared company metadata, profile & logo cache
 │   ├── routes/
 │   │   └── applicationRoutes.js    # REST endpoints for applications, sync & profile
 │   ├── utils/
 │   │   ├── attachmentUtils.js      # Attachment downloading & formatting
 │   │   ├── calendarService.js      # Google Calendar synchronization & diffing
 │   │   ├── companyInfoService.js   # Company logo & domain resolution
+│   │   ├── enrichCompanyProfile.js # 3-Tier company profile generation
+│   │   ├── enrichmentService.js    # Multi-email progressive data enrichment
 │   │   ├── gmailWatchService.js    # Gmail Pub/Sub watch renewal & verification
 │   │   ├── jwt.js                  # JWT issuance & refresh token rotation
 │   │   ├── normalizeCompany.js     # Company name canonicalization
-│   │   ├── parseEmailWithLLM.js    # Pure Dual-LLM extraction & single-flight
+│   │   ├── parseEmailWithLLM.js    # 3-Provider LLM extraction & single-flight
 │   │   ├── pushService.js          # Web Push notification dispatcher
 │   │   ├── shortlistMatcher.js     # Excel/Spreadsheet applicant shortlist detection
 │   │   └── statusMachine.js        # Application status transitions
-│   ├── tests/                      # Comprehensive test suite (40+ automated tests)
+│   ├── tests/                      # Comprehensive test suite (30+ automated tests)
 │   ├── package.json
 │   └── server.js                   # Express server, Pub/Sub webhook & cron engine
 │
 ├── frontend/
 │   ├── app/
-│   │   ├── components/             # Reusable UI components
+│   │   ├── components/             # Reusable UI components (Modals, Cards, Settings)
 │   │   ├── offline/page.js         # Offline fallback page
 │   │   ├── privacy/page.js         # Privacy Policy page
 │   │   ├── terms/page.js           # Terms of Service page
@@ -181,8 +188,6 @@ email-tracker/
 └── README.md
 ```
 
-<<<<<<< HEAD
-=======
 ---
 
 ## Installation & Setup
@@ -192,7 +197,7 @@ email-tracker/
 - **npm**: v9.0.0 or higher
 - **MongoDB**: Local MongoDB or MongoDB Atlas instance
 - **Google Cloud Project**: OAuth 2.0 Client ID with **Gmail API**, **Google Calendar API**, and **Google Cloud Pub/Sub** enabled
-- **NVIDIA NIM API Key**: For OpenAI GPT-OSS 20B and Nemotron 3.5 access
+- **LLM API Keys**: NVIDIA NIM, Groq, and Mistral API keys
 
 ---
 
@@ -240,16 +245,25 @@ GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
 GOOGLE_LINK_REDIRECT_URI=http://localhost:5000/auth/google/link-callback
 
 # Google Cloud Pub/Sub
-PUBSUB_TOPIC_NAME=projects/your-project-id/topics/gmail-notifications
-PUBSUB_VERIFICATION_TOKEN=your_random_verification_token
+GCP_PROJECT_ID=your-gcp-project-id
+GMAIL_PUBSUB_TOPIC=gmail-push-notifications
+GMAIL_PUBSUB_SERVICE_ACCOUNT=pubsub-account@project.iam.gserviceaccount.com
+GMAIL_WEBHOOK_AUDIENCE=https://your-backend.onrender.com/webhooks/gmail
 
-# NVIDIA NIM API (Dual-LLM Pipeline)
-NVIDIA_PRIMARY_MODEL=openai/gpt-oss-20b
-NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b
-NVIDIA_PRIMARY_API_KEY=nvapi-your_primary_key
-NVIDIA_SECONDARY_API_KEY=nvapi-your_secondary_key
-NVIDIA_API_KEY=nvapi-your_fallback_key
-LLM_TEMPERATURE=0.2
+# Primary LLM (NVIDIA NIM)
+NVIDIA_API_KEY=your_nvidia_api_key
+NVIDIA_MODEL=openai/gpt-oss-20b
+
+# Secondary LLM (Groq)
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=openai/gpt-oss-120b
+
+# Tertiary LLM (Mistral)
+MISTRAL_API_KEY=your_mistral_api_key
+MISTRAL_MODEL=mistral-small-latest
+
+# Parser Temperature (Low for deterministic extraction)
+LLM_TEMPERATURE=0.1
 
 # Web Push VAPID Keys
 VAPID_SUBJECT=mailto:admin@example.com
@@ -264,7 +278,7 @@ CRON_API_KEY=your_cron_secret_api_key
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:5000
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 ```
 
 ---
@@ -289,13 +303,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Running Automated Tests
 
-The test suite covers LLM fallbacks, single-flight coalescing, persistent retry bounds, linked accounts, attachment parsing, and calendar sync:
+The test suite covers LLM fallbacks, single-flight coalescing, persistent retry bounds, linked accounts, attachment parsing, company logos, and calendar sync:
 
 ```bash
 cd backend
 npm test
 ```
->>>>>>> e97725b (Switch primary LLM to openai/gpt-oss-20b, add dual-key authorization, and set temperature to 0.2)
 
 ---
 
@@ -303,13 +316,13 @@ npm test
 
 ### Frontend (Vercel)
 - Live Deployment: **[https://email-tracker-seven-rho.vercel.app/](https://email-tracker-seven-rho.vercel.app/)**
-- Connect your GitHub repository to Vercel and configure `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
+- Connect your GitHub repository to Vercel and configure `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
 
-### Backend (Cloud / Container)
-- Deploy `backend/` to your preferred cloud provider (Render, Railway, AWS ECS).
+### Backend (Render / Cloud Container)
+- Deploy `backend/` to Render (or your preferred cloud provider).
 - Configure all environment variables in the provider dashboard.
 - Set up an automated periodic cron (e.g. `cron-job.org` every 1 hour) hitting `GET https://<your-backend>/run-cron?cron_key=<CRON_API_KEY>` for backup maintenance syncs.
-- Register your webhook URL `https://<your-backend>/notifications/gmail` as a push subscription in Google Cloud Pub/Sub.
+- Register your webhook URL `https://<your-backend>/webhooks/gmail` as a push subscription in Google Cloud Pub/Sub.
 
 ---
 
