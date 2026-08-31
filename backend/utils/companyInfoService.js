@@ -1,5 +1,42 @@
 const CompanyInfo = require("../models/CompanyInfo");
 
+const KNOWN_COMPANY_DOMAINS = {
+  "te connectivity": "te.com",
+  "te": "te.com",
+  "mindsprint": "mindsprint.ai",
+  "eightfold": "eightfold.ai",
+  "eightfold ai": "eightfold.ai",
+  "atos": "atos.net",
+  "atos ai": "atos.net",
+  "atos syntel": "atos.net",
+  "atos evidian": "atos.net",
+  "prime numbers": "primenumbers.io",
+  "cred": "cred.club",
+  "cynlr": "cynlr.com",
+  "lam research": "lamresearch.com",
+  "wipro": "wipro.com",
+  "infosys": "infosys.com",
+  "tcs": "tcs.com",
+  "tata consultancy services": "tcs.com",
+  "accenture": "accenture.com",
+  "amazon": "amazon.com",
+  "google": "google.com",
+  "microsoft": "microsoft.com",
+  "adobe": "adobe.com",
+  "cisco": "cisco.com",
+  "oracle": "oracle.com",
+  "salesforce": "salesforce.com",
+  "intel": "intel.com",
+  "qualcomm": "qualcomm.com",
+  "nvidia": "nvidia.com",
+  "ibm": "ibm.com",
+  "dell": "dell.com",
+  "hp": "hp.com",
+  "sap": "sap.com",
+  "capgemini": "capgemini.com",
+  "cognizant": "cognizant.com",
+};
+
 /**
  * Get company information (domain and logo only).
  * Checks CompanyInfo collection for cached info first.
@@ -21,22 +58,18 @@ async function getCompanyInfo(companyName, parsedDomain = "") {
       return cachedInfo;
     }
 
-    // Resolve domain: use parsedDomain from LLM if available, otherwise fall back to deterministic guess
+    // Resolve domain: check known mapping first, then parsedDomain, then fallback
     const lowerName = normalizedName.toLowerCase();
-    let domain = parsedDomain ? parsedDomain.replace(/[^a-z0-9.-]/gi, "").toLowerCase() : "";
+    let domain = KNOWN_COMPANY_DOMAINS[lowerName] || "";
+
+    if (!domain && parsedDomain) {
+      domain = parsedDomain.replace(/[^a-z0-9.-]/gi, "").toLowerCase();
+    }
 
     if (!domain) {
       domain = `${lowerName.replace(/[^a-z0-9]/g, "")}.com`;
-      
-      if (lowerName === "eightfold" || lowerName === "eightfold ai") {
-        domain = "eightfold.ai";
-      } else if (lowerName === "atos" || lowerName === "atos ai" || lowerName === "atos syntel" || lowerName === "atos evidian") {
-        domain = "atos.net";
-      }
     }
 
-    const clearbitUrl = `https://logo.clearbit.com/${domain}`;
-    
     let hash = 0;
     const str = normalizedName || "U";
     for (let i = 0; i < str.length; i++) {
@@ -48,31 +81,7 @@ async function getCompanyInfo(companyName, parsedDomain = "") {
 
     const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=https://${domain}&sz=128`;
 
-    let finalLogo = uiAvatarUrl;
-
-    async function checkUrl(url) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4000);
-        const res = await fetch(url, { method: "HEAD", signal: controller.signal });
-        clearTimeout(timeout);
-        return res.ok;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    const clearbitOk = await checkUrl(clearbitUrl);
-    if (clearbitOk) {
-      finalLogo = clearbitUrl;
-    } else {
-      const googleFaviconOk = await checkUrl(googleFaviconUrl);
-      if (googleFaviconOk) {
-        finalLogo = googleFaviconUrl;
-      } else {
-        finalLogo = uiAvatarUrl;
-      }
-    }
+    const finalLogo = domain ? googleFaviconUrl : uiAvatarUrl;
 
     const newCompanyInfo = await CompanyInfo.create({
       name: normalizedName,
