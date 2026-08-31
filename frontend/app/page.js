@@ -650,15 +650,12 @@ export default function JobTrackerDashboard() {
       setIsSubscribed(active);
 
       if (perm === "granted") {
-        if (!active) {
-          // If permission is granted but no active browser subscription exists, try to register
-          try {
-            await registerAndSubscribe(apiFetch);
-            if (isMounted) setIsSubscribed(true);
-          } catch (e) {
-            console.warn("[PushManager] Silent subscription registration failed:", e.message);
-            if (isMounted) setIsSubscribed(false);
-          }
+        try {
+          await registerAndSubscribe(apiFetch);
+          if (isMounted) setIsSubscribed(true);
+        } catch (e) {
+          console.warn("[PushManager] Silent subscription registration/sync failed:", e.message);
+          if (isMounted) setIsSubscribed(false);
         }
 
         // Refresh registered device count

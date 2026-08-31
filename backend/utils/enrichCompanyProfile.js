@@ -3,16 +3,81 @@ const config = require("../config/appConfig");
 const CompanyInfo = require("../models/CompanyInfo");
 
 const nvidiaClient = new OpenAI({
-  apiKey: process.env.NVIDIA_API_KEY || "dummy_key",
+  apiKey: config.NVIDIA_API_KEY || process.env.NVIDIA_API_KEY || config.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || "dummy_key",
   baseURL: "https://integrate.api.nvidia.com/v1",
-  timeout: 20000, // 20s timeout
-  maxRetries: 1,
+  timeout: 15000,
+  maxRetries: 0,
 });
 
-const MODEL_NAME = config.NVIDIA_PRIMARY_MODEL || "google/gemma-4-31b-it";
+const groqClient = new OpenAI({
+  apiKey: config.GROQ_API_KEY || process.env.GROQ_API_KEY || "dummy_key",
+  baseURL: "https://api.groq.com/openai/v1",
+  timeout: 15000,
+  maxRetries: 0,
+});
+
+const mistralClient = new OpenAI({
+  apiKey: config.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY || "dummy_key",
+  baseURL: "https://api.mistral.ai/v1",
+  timeout: 15000,
+  maxRetries: 0,
+});
+
+const PRIMARY_MODEL = config.NVIDIA_MODEL || config.NVIDIA_PRIMARY_MODEL || "openai/gpt-oss-20b";
+const SECONDARY_MODEL = config.GROQ_MODEL || "openai/gpt-oss-120b";
+const TERTIARY_MODEL = config.MISTRAL_MODEL || "mistral-small-latest";
+
+async function fetchCompanyProfileLLM(prompt) {
+  const providers = [
+    { name: "NVIDIA", client: nvidiaClient, model: PRIMARY_MODEL },
+    { name: "Groq", client: groqClient, model: SECONDARY_MODEL },
+    { name: "Mistral", client: mistralClient, model: TERTIARY_MODEL },
+  ];
+
+  for (const provider of providers) {
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: config.LLM_TEMPERATURE ?? 0.2,
+        max_tokens: 1024,
+        response_format: { type: "json_object" },
+        stream: false,
+      });
+
+      const content = response.choices?.[0]?.message?.content || "";
+      let cleanJsonStr = content
+        .replace(/<thought[\s\S]*?<\/thought>/gi, "")
+        .replace(/<think[\s\S]*?<\/think>/gi, "")
+        .trim();
+
+      const jsonMatch = cleanJsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (jsonMatch) {
+        cleanJsonStr = jsonMatch[1].trim();
+      } else {
+        const firstBrace = cleanJsonStr.indexOf("{");
+        const lastBrace = cleanJsonStr.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          cleanJsonStr = cleanJsonStr.substring(firstBrace, lastBrace + 1).trim();
+        }
+      }
+
+      if (cleanJsonStr) {
+        const parsed = JSON.parse(cleanJsonStr);
+        if (parsed && typeof parsed === "object") {
+          return { success: true, data: parsed, provider: provider.name };
+        }
+      }
+    } catch (err) {
+      console.warn(`[COMPANY_ENRICH_PROVIDER_WARN] ${provider.name} (${provider.model}) failed:`, err.message);
+    }
+  }
+
+  return { success: false, reason: "All enrichment providers failed" };
+}
 
 /**
- * Enrich company profile using NVIDIA LLM.
+ * Enrich company profile using 3-provider fallback chain (NVIDIA -> Groq -> Mistral).
  * Caches profile in MongoDB CompanyInfo model.
  * 
  * @param {string} companyName - Name of company to enrich
@@ -31,12 +96,14 @@ async function enrichCompanyProfile(companyName) {
       return existing;
     }
 
-    if (existing && existing.isEnriching) {
+    // Stale lock check: if lock is older than 2 minutes, allow retry
+    const isStaleLock = existing?.updatedAt && (Date.now() - new Date(existing.updatedAt).getTime() > 2 * 60 * 1000);
+    if (existing && existing.isEnriching && !isStaleLock) {
       console.log(`[COMPANY_ENRICH_IN_FLIGHT] ${normalizedName} is already enriching...`);
       return existing;
     }
 
-    // Set lock
+    // Set in-flight lock
     await CompanyInfo.updateOne(
       { name: normalizedName },
       { $set: { isEnriching: true } },
@@ -56,64 +123,42 @@ Output MUST be a valid JSON object with the following fields:
 - "website": Official domain (e.g. "ibm.com" or "zycus.com").
 - "knownFor": An array of 3-4 short, clear bullet strings of key things students should know about this company (e.g. ["Enterprise software & cloud", "Regular campus hiring", "Strong R&D focus"]).
 
-Return ONLY valid raw JSON. No markdown code blocks, no preamble, no extra text.`;
+Return ONLY valid raw JSON.`;
 
-    const response = await nvidiaClient.chat.completions.create({
-      model: MODEL_NAME,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 1,
-      top_p: 0.95,
-      max_tokens: 16384,
-      stream: false,
-      chat_template_kwargs: { enable_thinking: true },
-    });
+    const result = await fetchCompanyProfileLLM(prompt);
 
-    const content = response.choices?.[0]?.message?.content || "";
-    let cleanJsonStr = content
-      .replace(/<thought[\s\S]*?<\/thought>/gi, "")
-      .replace(/<think[\s\S]*?<\/think>/gi, "")
-      .trim();
-
-    const jsonMatch = cleanJsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-    if (jsonMatch) {
-      cleanJsonStr = jsonMatch[1].trim();
-    } else {
-      const firstBrace = cleanJsonStr.indexOf("{");
-      const lastBrace = cleanJsonStr.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        cleanJsonStr = cleanJsonStr.substring(firstBrace, lastBrace + 1).trim();
-      }
-    }
-
-    let parsed = {};
-    try {
-      parsed = JSON.parse(cleanJsonStr);
-    } catch (parseErr) {
-      console.error(`[COMPANY_ENRICH_JSON_PARSE_ERROR] ${normalizedName}:`, parseErr.message, "Raw content:", content);
-    }
-
-    const updated = await CompanyInfo.findOneAndUpdate(
-      { name: normalizedName },
-      {
-        $set: {
-          description: parsed.description || `${normalizedName} is a prominent organization.`,
-          industry: parsed.industry || "Technology",
-          companyType: parsed.companyType || "Enterprise",
-          headquarters: parsed.headquarters || "",
-          website: parsed.website || "",
-          knownFor: Array.isArray(parsed.knownFor) ? parsed.knownFor : [],
-          isEnriched: true,
-          isEnriching: false,
-          lastEnriched: new Date(),
+    if (result.success) {
+      const parsed = result.data;
+      const updated = await CompanyInfo.findOneAndUpdate(
+        { name: normalizedName },
+        {
+          $set: {
+            description: parsed.description || `${normalizedName} is a prominent organization.`,
+            industry: parsed.industry || "Technology",
+            companyType: parsed.companyType || "Enterprise",
+            headquarters: parsed.headquarters || "",
+            website: parsed.website || "",
+            knownFor: Array.isArray(parsed.knownFor) ? parsed.knownFor : [],
+            isEnriched: true,
+            isEnriching: false,
+            lastEnriched: new Date(),
+          },
         },
-      },
-      { returnDocument: 'after', upsert: true }
-    );
+        { returnDocument: 'after', upsert: true }
+      );
 
-    console.log(`[COMPANY_ENRICH_SUCCESS] ${normalizedName} profile saved.`);
-    return updated;
+      console.log(`[COMPANY_ENRICH_SUCCESS] ${normalizedName} profile saved (via ${result.provider}).`);
+      return updated;
+    } else {
+      console.warn(`[COMPANY_ENRICH_FAILED] ${normalizedName}: All providers failed.`);
+      await CompanyInfo.updateOne(
+        { name: normalizedName },
+        { $set: { isEnriching: false } }
+      ).catch(() => {});
+      return null;
+    }
   } catch (error) {
-    console.error(`[COMPANY_ENRICH_FAILED] ${companyName}:`, error.message);
+    console.error(`[COMPANY_ENRICH_FATAL] ${companyName}:`, error.message);
     await CompanyInfo.updateOne(
       { name: companyName.trim() },
       { $set: { isEnriching: false } }

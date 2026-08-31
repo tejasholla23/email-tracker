@@ -2,24 +2,35 @@ const { OpenAI } = require("openai");
 const he = require("he");
 const config = require("../config/appConfig");
 
-const primaryClient = new OpenAI({
-  apiKey: config.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_API_KEY || "dummy_key",
+const nvidiaClient = new OpenAI({
+  apiKey: config.NVIDIA_API_KEY || process.env.NVIDIA_API_KEY || config.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || "dummy_key",
   baseURL: "https://integrate.api.nvidia.com/v1",
   timeout: 25000, // 25s timeout for fast bounded failure
-  maxRetries: 1,  // Prevent excessive retries
+  maxRetries: 0,  // Hand off directly to next provider on failure
 });
 
-const fallbackClient = new OpenAI({
-  apiKey: config.NVIDIA_SECONDARY_API_KEY || process.env.NVIDIA_SECONDARY_API_KEY || config.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_API_KEY || "dummy_key",
-  baseURL: "https://integrate.api.nvidia.com/v1",
-  timeout: 30000, // 30s timeout for fallback
-  maxRetries: 1,
+const groqClient = new OpenAI({
+  apiKey: config.GROQ_API_KEY || process.env.GROQ_API_KEY || "dummy_key",
+  baseURL: "https://api.groq.com/openai/v1",
+  timeout: 25000, // 25s timeout for fast bounded failure
+  maxRetries: 0,
 });
 
-const nvidiaClient = primaryClient; // backward compatibility
+const mistralClient = new OpenAI({
+  apiKey: config.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY || "dummy_key",
+  baseURL: "https://api.mistral.ai/v1",
+  timeout: 25000, // 25s timeout for fast bounded failure
+  maxRetries: 0,
+});
 
-const PRIMARY_MODEL = config.NVIDIA_PRIMARY_MODEL || "openai/gpt-oss-20b";
-const FALLBACK_MODEL = config.NVIDIA_FALLBACK_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b";
+const primaryClient = nvidiaClient; // backward compatibility
+const fallbackClient = groqClient;  // backward compatibility
+const nvidiaClientCompat = nvidiaClient;
+
+const PRIMARY_MODEL = config.NVIDIA_MODEL || config.NVIDIA_PRIMARY_MODEL || "openai/gpt-oss-20b";
+const SECONDARY_MODEL = config.GROQ_MODEL || "openai/gpt-oss-120b";
+const TERTIARY_MODEL = config.MISTRAL_MODEL || "mistral-small-latest";
+const FALLBACK_MODEL = SECONDARY_MODEL; // backward compatibility
 
 // ---------------------------------------------------------------------------
 // In-flight Single-Flight Promise Coalescing Map
@@ -780,6 +791,21 @@ function extractCompanyFromText(text = "") {
     }
   }
 
+  // Try pipe/dash separated segments from subject lines (e.g. "Internship Requirement | 2027 Graduates | TE Connectivity")
+  if (text.includes("|") || text.includes(" - ") || text.includes(" – ") || text.includes(" — ")) {
+    const segments = text.split(/[|\-–—]+/).map(s => s.trim()).filter(Boolean);
+    for (const seg of segments) {
+      const candidate = sanitizeCompany(seg);
+      if (candidate && !isGenericCompanyName(candidate)) {
+        const lowerCand = candidate.toLowerCase();
+        if (lowerCand !== "here" && lowerCand !== "there" && lowerCand !== "this" && !lowerCand.startsWith("potential") && !/^\d{4}(\s+(?:graduates|batch|passouts|students))?$/i.test(lowerCand) && !/^(?:internship|job|campus|hiring)\s+(?:requirement|opportunity|drive|notice|update)$/i.test(lowerCand)) {
+          const alias = matchKnownCompany(candidate);
+          return alias || candidate;
+        }
+      }
+    }
+  }
+
   const cleanedText = stripPlatformReferences(cleanMarkdown(normalizeText(text)));
 
   const patterns = [
@@ -787,8 +813,8 @@ function extractCompanyFromText(text = "") {
     /(?:Company(?:\s+Name)?|Organization|Employer|Recruiter)\s*[:\-]\s*([A-Z0-9][A-Za-z0-9&.\-\s]{1,50}?)(?=\s+(?:Job\s+Role|Role|Eligibility|Stipend|CTC|Location|Package|Duration|Salary|Selection|Process|Deadline|Registration|Branches|CGPA|Department)|[.,;]|$)/i,
     // 2. Legal entities (Pvt Ltd, Inc, Corp)
     /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\s+(?:Pvt\b\.?\s*Ltd\b\.?|Private\s+Limited|Ltd\b\.?|Limited|Inc\b\.?|Incorporated|Corp\b\.?|Corporation|LLC|India\b\s+(?:Pvt\b\.?\s*Ltd\b\.?|Ltd\b\.?|Limited))\b/,
-    // 3. Subject / drive delimiters: e.g. "Campus Drive for Prime Numbers - 2027" or "Campus Recruitment 2026 | Acme Technologies - Online Assessment"
-    /(?:\||\b(?:campus\s+drive\s+(?:for|by|at)|recruitment\s+drive\s+(?:for|by|at)|drive\s+(?:for|by|at)|hiring\s+(?:for|by|at)|for|at)\b)\s+([A-Z][A-Za-z0-9&.\s]{1,50}?)(?=\s*(?:-|–|—|\||Online Assessment|Registration|Recruitment|Drive|Interview|Hiring|Opportunity|Batch|test|\r|\n|$))/i,
+    // 3. Subject / drive delimiters: e.g. "Campus Drive for Prime Numbers - 2027", "Campus recruitment by Mindsprint 2027", or "Campus Recruitment 2026 | Acme Technologies"
+    /(?:\||\b(?:campus\s+drive\s+(?:for|by|at)|recruitment\s+drive\s+(?:for|by|at)|campus\s+recruitment\s+(?:for|by|at)|drive\s+(?:for|by|at)|hiring\s+(?:for|by|at)|for|at)\b)\s+([A-Z][A-Za-z0-9&.\s]{1,50}?)(?=\s*(?:-|–|—|\||Online Assessment|Registration|Recruitment|Drive|Interview|Hiring|Opportunity|Batch|\b202\d\b|test|\r|\n|$))/i,
     // 4. Action verbs: "... Acme Technologies is visiting / invites / conducts ..."
     /\b([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*){0,3})\b(?=\s+(?:is\s+visiting|is\s+hiring|is\s+conducting|has\s+scheduled|offers|invites|announces|conducts))/i,
     // 5. Prepositions: from/by/at Company for/hiring
@@ -824,7 +850,8 @@ function sanitizeCompany(raw = "") {
     "design", "registration", "assessment", "interview", "reminder", "opportunity", 
     "deadline", "hiring process", "campus recruitment", "placement drive", 
     "aptitude test", "roadshow", "sep roadshow", "lpa registration", "guidelines", 
-    "instructions", "hiring", "placement", "recruitment", "drive"
+    "instructions", "hiring", "placement", "recruitment", "drive", "internship requirement",
+    "internship opportunity", "requirement", "graduates", "2027 graduates"
   ];
   const rejectIfContains = [
     "your institution", "your college", "your university", "your institute",
@@ -1761,18 +1788,21 @@ function validateLLMResponse(raw) {
 const validateGeminiResponse = validateLLMResponse;
 
 /**
- * Attempt structured extraction with a single model.
- * Returns { success: true, data: validated } or { success: false, reason: string, errorType: "auth_error"|"transport_error"|"content_error" }
+ * Attempt structured extraction with a single provider/model.
+ * Returns { success: true, data: validated } or { success: false, reason: string, errorType: "auth_error"|"rate_limit_error"|"timeout_error"|"content_error"|"schema_validation_error"|"transport_error" }
  */
-async function executeSingleModelAttempt(modelName, prompt, client = primaryClient) {
+async function executeSingleModelAttempt(providerName, modelName, prompt, client = nvidiaClient) {
   try {
     const isNemotron = /nemotron/i.test(modelName);
     const requestParams = {
       model: modelName,
       messages: [{ role: "user", content: prompt }],
-      temperature: config.LLM_TEMPERATURE ?? 0.2,
+      temperature: config.LLM_TEMPERATURE ?? 0.1,
       stream: false,
     };
+
+    // Use native structured JSON mode where supported
+    requestParams.response_format = { type: "json_object" };
 
     if (isNemotron) {
       requestParams.top_p = 0.95;
@@ -1825,7 +1855,7 @@ async function executeSingleModelAttempt(modelName, prompt, client = primaryClie
       return {
         success: false,
         reason: "Schema validation failed (missing/invalid fields)",
-        errorType: "content_error",
+        errorType: "schema_validation_error",
       };
     }
 
@@ -1857,11 +1887,20 @@ async function executeSingleModelAttempt(modelName, prompt, client = primaryClie
       return {
         success: false,
         reason: "Rate limit / quota exceeded (HTTP 429)",
-        errorType: "transport_error",
+        errorType: "rate_limit_error",
       };
     }
 
-    // 408 / 5xx / Network / Timeout
+    // 408 / Timeout
+    if (err?.name === "AbortError" || /timed?\s*out|ETIMEDOUT|ESOCKETTIMEDOUT/i.test(errorMsg)) {
+      return {
+        success: false,
+        reason: `Request timed out (${errorMsg})`,
+        errorType: "timeout_error",
+      };
+    }
+
+    // 5xx / Service Unavailable / Network
     return {
       success: false,
       reason: `API/Network error (${errorMsg})`,
@@ -1871,10 +1910,11 @@ async function executeSingleModelAttempt(modelName, prompt, client = primaryClie
 }
 
 /**
- * Call LLM with a two-tier hierarchy:
- * 1. Primary: OpenAI GPT-OSS (openai/gpt-oss-20b)
- * 2. Secondary Fallback: Nemotron 3.5 Lightning 30B-A3B
- * Falls back to null/error status if both fail.
+ * Call LLM with a three-tier hierarchy:
+ * 1. Primary: NVIDIA NIM (openai/gpt-oss-20b)
+ * 2. Secondary: Groq (openai/gpt-oss-120b)
+ * 3. Tertiary: Mistral (mistral-small-latest)
+ * Drops to deterministic fallback if all three fail.
  */
 async function callLLMStructured({ subject = "", sender = "", body = "", opportunityType = "JOB_APPLICATION" }) {
   const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + "..." : body;
@@ -1954,48 +1994,61 @@ Subject: ${subject}
 Sender: ${sender}
 Body: ${truncatedBody}`;
 
-  // ── Tier 1: Primary Model (GPT-OSS / configured primary) ──────────────────
-  console.log(`[NVIDIA_PRIMARY] Using ${PRIMARY_MODEL}`);
-  const primaryResult = await executeSingleModelAttempt(PRIMARY_MODEL, prompt, primaryClient);
+  // ── Tier 1: Primary Model (NVIDIA NIM) ──────────────────
+  console.log(`[LLM_PRIMARY] NVIDIA / ${PRIMARY_MODEL}`);
+  const primaryResult = await executeSingleModelAttempt("NVIDIA", PRIMARY_MODEL, prompt, nvidiaClient);
 
   if (primaryResult.success) {
     const validated = primaryResult.data;
-    console.log(`[LLM_STRUCTURED] Primary model (${PRIMARY_MODEL}) succeeded: emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+    console.log(`[LLM_STRUCTURED] Primary model (NVIDIA / ${PRIMARY_MODEL}) succeeded: emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
     validated.parseMeta = {
       llmUsed: true,
       geminiUsed: true,
       model: PRIMARY_MODEL,
-      llmProvider: PRIMARY_MODEL,
+      llmProvider: "nvidia",
     };
-    return { status: "success", data: validated, modelUsed: PRIMARY_MODEL };
+    return { status: "success", data: validated, modelUsed: PRIMARY_MODEL, providerUsed: "nvidia" };
   }
 
-  console.warn(`[NVIDIA_PRIMARY_FAILED] Primary model (${PRIMARY_MODEL}) failed: ${primaryResult.reason}.`);
+  console.warn(`[LLM_PRIMARY_FAILED] Primary model (NVIDIA / ${PRIMARY_MODEL}) failed: ${primaryResult.reason}.`);
 
-  // If the failure is a fatal authentication error (401/403) and we share keys, check if secondary key exists
-  if (primaryResult.errorType === "auth_error" && (!config.NVIDIA_SECONDARY_API_KEY || config.NVIDIA_SECONDARY_API_KEY === config.NVIDIA_PRIMARY_API_KEY)) {
-    console.error(`[NVIDIA_AUTH_ERROR] Authentication/credential failure. Skipping secondary model fallback.`);
-    return { status: "transport_error" };
-  }
+  // ── Tier 2: Secondary Fallback Model (Groq) ──────────────
+  console.log(`[LLM_SECONDARY] Groq / ${SECONDARY_MODEL}`);
+  const secondaryResult = await executeSingleModelAttempt("Groq", SECONDARY_MODEL, prompt, groqClient);
 
-  // ── Tier 2: Secondary Fallback Model (Nemotron / configured fallback) ──────
-  console.log(`[NVIDIA_FALLBACK] Using ${FALLBACK_MODEL}`);
-  const fallbackResult = await executeSingleModelAttempt(FALLBACK_MODEL, prompt, fallbackClient);
-
-  if (fallbackResult.success) {
-    const validated = fallbackResult.data;
-    console.log(`[NVIDIA_FALLBACK_SUCCESS] Secondary model (${FALLBACK_MODEL}) succeeded: emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+  if (secondaryResult.success) {
+    const validated = secondaryResult.data;
+    console.log(`[LLM_FALLBACK_SUCCESS] Secondary model (Groq / ${SECONDARY_MODEL}) succeeded: emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
     validated.parseMeta = {
       llmUsed: true,
       geminiUsed: true,
-      model: FALLBACK_MODEL,
-      llmProvider: FALLBACK_MODEL,
+      model: SECONDARY_MODEL,
+      llmProvider: "groq",
     };
-    return { status: "success", data: validated, modelUsed: FALLBACK_MODEL };
+    return { status: "success", data: validated, modelUsed: SECONDARY_MODEL, providerUsed: "groq" };
   }
 
-  console.warn(`[NVIDIA_FALLBACK_FAILED] Secondary model (${FALLBACK_MODEL}) failed: ${fallbackResult.reason}. Dropping to deterministic fallback.`);
-  return { status: fallbackResult.errorType || primaryResult.errorType || "transport_error" };
+  console.warn(`[LLM_SECONDARY_FAILED] Secondary model (Groq / ${SECONDARY_MODEL}) failed: ${secondaryResult.reason}.`);
+
+  // ── Tier 3: Tertiary Fallback Model (Mistral) ────────────
+  console.log(`[LLM_TERTIARY] Mistral / ${TERTIARY_MODEL}`);
+  const tertiaryResult = await executeSingleModelAttempt("Mistral", TERTIARY_MODEL, prompt, mistralClient);
+
+  if (tertiaryResult.success) {
+    const validated = tertiaryResult.data;
+    console.log(`[LLM_FALLBACK_SUCCESS] Tertiary model (Mistral / ${TERTIARY_MODEL}) succeeded: emailType=${validated.emailType}, classification=${validated.classification}, subtitle="${validated.subtitle}", displayFields=${JSON.stringify(validated.displayFields)}`);
+    validated.parseMeta = {
+      llmUsed: true,
+      geminiUsed: true,
+      model: TERTIARY_MODEL,
+      llmProvider: "mistral",
+    };
+    return { status: "success", data: validated, modelUsed: TERTIARY_MODEL, providerUsed: "mistral" };
+  }
+
+  console.warn(`[LLM_TERTIARY_FAILED] Tertiary model (Mistral / ${TERTIARY_MODEL}) failed: ${tertiaryResult.reason}. Dropping to deterministic fallback.`);
+  console.warn(`[PARSE_FAILED] All three LLM providers (NVIDIA, Groq, Mistral) failed. Deferring parse for retry.`);
+  return { status: tertiaryResult.errorType || secondaryResult.errorType || primaryResult.errorType || "transport_error" };
 }
 
 const callGeminiStructured = callLLMStructured;
@@ -2173,7 +2226,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
         geminiEmailType: null,
         geminiClassification: null,
         internetMessageId: "",
-        error: llmResult.error || "Dual-model failure: both primary and secondary LLM calls failed"
+        error: llmResult.error || "Triple-model failure: all three LLM calls (NVIDIA, Groq, Mistral) failed"
       }
     };
   }
@@ -2369,7 +2422,7 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
       companyConfidence,
       hasLink:              !!linkInfo.primary,
       shouldRetry:          false,
-      llmProvider:          llmResult.modelUsed || PRIMARY_MODEL,
+      llmProvider:          llmResult.providerUsed || "nvidia",
       model:                llmResult.modelUsed || PRIMARY_MODEL,
       llmStatus:            llmResult.status,
       llmUsed:              true,

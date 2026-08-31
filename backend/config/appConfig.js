@@ -20,10 +20,22 @@ const config = {
   LLM_DELAY_MS: Number(process.env.LLM_DELAY_MS ?? process.env.GEMINI_DELAY_MS ?? 6500),
   LLM_TEMPERATURE: Number(process.env.LLM_TEMPERATURE ?? 0.2),
   MAX_EMAILS_PER_SYNC: Number(process.env.MAX_EMAILS_PER_SYNC ?? 10),
-  NVIDIA_PRIMARY_MODEL: process.env.NVIDIA_PRIMARY_MODEL || process.env.NVIDIA_MODEL || "openai/gpt-oss-20b",
+  // Primary LLM (NVIDIA NIM)
+  NVIDIA_MODEL: process.env.NVIDIA_MODEL || process.env.NVIDIA_PRIMARY_MODEL || "openai/gpt-oss-20b",
+  NVIDIA_API_KEY: process.env.NVIDIA_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || "dummy_key",
+  // Backward-compat aliases
+  NVIDIA_PRIMARY_MODEL: process.env.NVIDIA_MODEL || process.env.NVIDIA_PRIMARY_MODEL || "openai/gpt-oss-20b",
   NVIDIA_FALLBACK_MODEL: process.env.NVIDIA_FALLBACK_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b",
-  NVIDIA_PRIMARY_API_KEY: process.env.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_API_KEY || "dummy_key",
+  NVIDIA_PRIMARY_API_KEY: process.env.NVIDIA_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || "dummy_key",
   NVIDIA_SECONDARY_API_KEY: process.env.NVIDIA_SECONDARY_API_KEY || process.env.NVIDIA_API_KEY || "dummy_key",
+
+  // Secondary LLM (Groq)
+  GROQ_MODEL: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+  GROQ_API_KEY: process.env.GROQ_API_KEY || "dummy_key",
+
+  // Tertiary LLM (Mistral)
+  MISTRAL_MODEL: process.env.MISTRAL_MODEL || "mistral-small-latest",
+  MISTRAL_API_KEY: process.env.MISTRAL_API_KEY || "dummy_key",
   GCP_PROJECT_ID: process.env.GCP_PROJECT_ID || null,
   GMAIL_PUBSUB_TOPIC: process.env.GMAIL_PUBSUB_TOPIC || "gmail-push-notifications",
   GMAIL_WEBHOOK_SECRET: process.env.GMAIL_WEBHOOK_SECRET || null,

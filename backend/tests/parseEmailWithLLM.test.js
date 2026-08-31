@@ -85,8 +85,8 @@ require.cache[require.resolve('openai')] = {
 // Re-require parseEmailWithLLM to use our mocked OpenAI
 const { parseEmailWithLLM } = require('../utils/parseEmailWithLLM');
 
-// ── Test 1: Primary success (GPT-OSS) → No fallback ──
-test('1. Primary model (openai/gpt-oss-20b) success: returns primary llmProvider without invoking fallback', async () => {
+// ── Test 1: Primary success (NVIDIA: openai/gpt-oss-20b) → No fallback ──
+test('1. Primary model (NVIDIA: openai/gpt-oss-20b) success: returns primary llmProvider without invoking fallback', async () => {
   mockShouldThrow = null;
   mockModelBehavior = null;
   calledModels = [];
@@ -107,14 +107,15 @@ test('1. Primary model (openai/gpt-oss-20b) success: returns primary llmProvider
   );
 
   assert.strictEqual(parsed.company, "GemmaTech");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "openai/gpt-oss-20b");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia");
+  assert.strictEqual(parsed.parseMeta.model, "openai/gpt-oss-20b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
   assert.strictEqual(calledModels.length, 1);
   assert.strictEqual(calledModels[0], "openai/gpt-oss-20b");
 });
 
-// ── Test 2: Primary rate limit (429) → Secondary model fallback (Nemotron) ──
-test('2. Primary rate limit 429: seamlessly falls back to nvidia/nemotron-3.5-lightning-30b-a3b', async () => {
+// ── Test 2: Primary rate limit (429) → Secondary model fallback (Groq: openai/gpt-oss-120b) ──
+test('2. Primary rate limit 429: seamlessly falls back to Groq (openai/gpt-oss-120b)', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
     if (params.model === "openai/gpt-oss-20b") {
@@ -129,7 +130,7 @@ test('2. Primary rate limit 429: seamlessly falls back to nvidia/nemotron-3.5-li
             emailType: "job",
             opportunityType: "JOB_APPLICATION",
             classification: "New Hiring Opportunity",
-            company: "NemotronCorp",
+            company: "GroqCorp",
             subtitle: "Backend Engineer",
             type: "full-time",
             displayFields: [{ label: "Role", value: "Backend Engineer" }]
@@ -140,19 +141,20 @@ test('2. Primary rate limit 429: seamlessly falls back to nvidia/nemotron-3.5-li
   };
 
   const parsed = await parseEmailWithLLM(
-    "Job Opening at NemotronCorp",
-    "hr@nemotroncorp.com",
-    "NemotronCorp is hiring backend engineers."
+    "Job Opening at GroqCorp",
+    "hr@groqcorp.com",
+    "GroqCorp is hiring backend engineers."
   );
 
-  assert.strictEqual(parsed.company, "NemotronCorp");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.company, "GroqCorp");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "groq");
+  assert.strictEqual(parsed.parseMeta.model, "openai/gpt-oss-120b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
-  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
+  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]);
 });
 
-// ── Test 3: Primary 503/timeout → Secondary model fallback (Nemotron) ──
-test('3. Primary 503 service unavailable: falls back to secondary model', async () => {
+// ── Test 3: Primary 503/timeout → Secondary model fallback (Groq) ──
+test('3. Primary 503 service unavailable: falls back to secondary model (Groq)', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
     if (params.model === "openai/gpt-oss-20b") {
@@ -184,12 +186,14 @@ test('3. Primary 503 service unavailable: falls back to secondary model', async 
   );
 
   assert.strictEqual(parsed.company, "FallbackCorp");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "groq");
+  assert.strictEqual(parsed.parseMeta.model, "openai/gpt-oss-120b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]);
 });
 
-// ── Test 4: Primary malformed JSON → Secondary model fallback ──
-test('4. Primary malformed JSON: falls back to secondary model', async () => {
+// ── Test 4: Primary malformed JSON → Secondary model fallback (Groq) ──
+test('4. Primary malformed JSON: falls back to secondary model (Groq)', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
     if (params.model === "openai/gpt-oss-20b") {
@@ -219,12 +223,13 @@ test('4. Primary malformed JSON: falls back to secondary model', async () => {
   );
 
   assert.strictEqual(parsed.company, "ValidJsonCorp");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "groq");
+  assert.strictEqual(parsed.parseMeta.model, "openai/gpt-oss-120b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
 });
 
-// ── Test 5: Primary schema validation failure → Secondary model fallback ──
-test('5. Primary schema validation failure: falls back to secondary model', async () => {
+// ── Test 5: Primary schema validation failure → Secondary model fallback (Groq) ──
+test('5. Primary schema validation failure: falls back to secondary model (Groq)', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
     if (params.model === "openai/gpt-oss-20b") {
@@ -260,35 +265,57 @@ test('5. Primary schema validation failure: falls back to secondary model', asyn
   );
 
   assert.strictEqual(parsed.company, "ValidSchemaCorp");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia/nemotron-3.5-lightning-30b-a3b");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "groq");
+  assert.strictEqual(parsed.parseMeta.model, "openai/gpt-oss-120b");
   assert.strictEqual(parsed.parseMeta.llmStatus, "success");
 });
 
-// ── Test 6: Primary 401/403 auth error → Fatal (No secondary retry loop) ──
-test('6. Primary 401/403 auth error: does not retry secondary model with bad credentials', async () => {
+// ── Test 6: Primary & Secondary fail → Tertiary model (Mistral: mistral-small-latest) succeeds ──
+test('6. Primary and Secondary fail: seamlessly falls back to Tertiary model (Mistral: mistral-small-latest)', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
-    const err = new Error("Unauthorized (401) Invalid API Key");
-    err.status = 401;
-    throw err;
+    if (params.model === "openai/gpt-oss-20b") {
+      const err = new Error("NVIDIA Gateway Timeout (504)");
+      err.status = 504;
+      throw err;
+    }
+    if (params.model === "openai/gpt-oss-120b") {
+      const err = new Error("Groq Rate Limit (429)");
+      err.status = 429;
+      throw err;
+    }
+    return {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            emailType: "job",
+            opportunityType: "JOB_APPLICATION",
+            classification: "New Hiring Opportunity",
+            company: "MistralCorp",
+            subtitle: "AI Engineer",
+            type: "full-time",
+            displayFields: [{ label: "Role", value: "AI Engineer" }]
+          })
+        }
+      }]
+    };
   };
 
   const parsed = await parseEmailWithLLM(
-    "Test Auth Failure Email",
-    "jobs@authcorp.com",
-    "Company Name: AuthCorp\nJob Role: Software Engineer"
+    "Job Opening at MistralCorp",
+    "hr@mistralcorp.com",
+    "MistralCorp is hiring AI engineers."
   );
 
-  // Should have attempted ONLY primary model, not secondary
-  assert.strictEqual(calledModels.length, 1);
-  assert.strictEqual(calledModels[0], "openai/gpt-oss-20b");
-  assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
-  assert.strictEqual(parsed.parseMeta.shouldRetry, true);
-  assert.strictEqual(parsed.status, "pending");
+  assert.strictEqual(parsed.company, "MistralCorp");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "mistral");
+  assert.strictEqual(parsed.parseMeta.model, "mistral-small-latest");
+  assert.strictEqual(parsed.parseMeta.llmStatus, "success");
+  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "mistral-small-latest"]);
 });
 
-// ── Test 7: Both models fail → Pure Dual-LLM: Defers parse for retry (shouldRetry = true) ──
-test('7. Both models fail: defers parse for retry without fragile regex guessing', async () => {
+// ── Test 7: All three providers fail → Drops to deterministic fallback & defers parse for retry ──
+test('7. All three models fail: defers parse for retry without fragile guessing', async () => {
   calledModels = [];
   mockModelBehavior = (params) => {
     const err = new Error("All endpoints overloaded (503)");
@@ -312,7 +339,7 @@ test('7. Both models fail: defers parse for retry without fragile regex guessing
     body
   );
 
-  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "nvidia/nemotron-3.5-lightning-30b-a3b"]);
+  assert.deepStrictEqual(calledModels, ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "mistral-small-latest"]);
   assert.strictEqual(parsed.parseMeta.llmStatus, "transport_error");
   assert.strictEqual(parsed.parseMeta.llmProvider, "none");
   assert.strictEqual(parsed.parseMeta.shouldRetry, true);
@@ -406,7 +433,8 @@ Placement Department`;
   assert.strictEqual(parsed.company, "Prime Numbers");
   assert.strictEqual(parsed.emailType, "job");
   assert.strictEqual(parsed.link, "https://forms.gle/HaSF5SzSaJSk8RB36");
-  assert.strictEqual(parsed.parseMeta.llmProvider, "openai/gpt-oss-20b");
+  assert.strictEqual(parsed.parseMeta.llmProvider, "nvidia");
+  assert.strictEqual(parsed.parseMeta.model, "openai/gpt-oss-20b");
 });
 
 // ── Test 10: Deterministic time extraction: CTC/compensation does not bleed into eventTime ──

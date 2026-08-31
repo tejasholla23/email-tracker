@@ -37,11 +37,18 @@ const URGENCY_MAP = {
  * Handles stale/expired subscriptions by removing them.
  * 
  * @param {object} account - The Account document
- * @param {object} app - The newly saved Application document
+ * @param {object} app - The Application document
+ * @param {object} options - Optional settings (isUpdate, timelineTitle)
  */
-async function sendNewEmailNotification(account, app) {
-  if (!account.pushEnabled) {
-    console.log(`[PUSH_SERVICE] Notifications disabled for account ${account.email}`);
+async function sendNewEmailNotification(account, app, options = {}) {
+  if (!account || !account.pushEnabled) {
+    console.log(`[PUSH_SERVICE] Notifications disabled or missing for account ${account?.email}`);
+    return;
+  }
+
+  // Guard: Do NOT send notifications for pending / unparsed emails
+  if (!app || app.status === "pending" || !app.company || app.company === "IGNORED" || app.company === "PENDING_PARSE") {
+    console.log(`[PUSH_SERVICE] Skipping notification for pending or unparsed application ${app?._id}`);
     return;
   }
 
@@ -54,22 +61,38 @@ async function sendNewEmailNotification(account, app) {
   // 1. Determine priority/urgency based on classification
   const urgency = URGENCY_MAP[app.classification] || "normal";
 
-  // 2. Build the notification payload
+  // 2. Build the notification title & body
   const role = app.role && app.role !== "Unknown Role" ? app.role : "";
   const subtitlePart = app.subtitle || role || "New Placement Update";
   const deadlineText = app.deadlineText || app.deadline;
-  
-  const body = deadlineText 
-    ? `${app.company}\n\n${subtitlePart}\n\nDeadline: ${deadlineText}`
-    : `${app.company}\n\n${subtitlePart}`;
+
+  let title = app.company;
+  let body = "";
+
+  if (options.isUpdate) {
+    if (app.isShortlisted) {
+      title = `🟢 Shortlisted - ${app.company}`;
+      body = options.timelineTitle || app.shortlistSummary || subtitlePart;
+    } else {
+      title = `Update: ${app.company}`;
+      body = options.timelineTitle ? `${options.timelineTitle}\n\n${subtitlePart}` : subtitlePart;
+    }
+  } else {
+    if (app.isShortlisted) {
+      title = `🟢 Shortlisted - ${app.company}`;
+    }
+    body = deadlineText 
+      ? `${subtitlePart}\n\nDeadline: ${deadlineText}`
+      : subtitlePart;
+  }
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   const deepLink = `${frontendUrl}/?id=${app._id}`;
 
   const payload = JSON.stringify({
-    title: "Email Tracker",
+    title: title || "Email Tracker",
     body: body,
-    tag: `email-tracker-${app._id}`,
+    tag: `email-tracker-${app._id}-${options.isUpdate ? 'update' : 'new'}`,
     url: deepLink,
     appId: app._id.toString()
   });

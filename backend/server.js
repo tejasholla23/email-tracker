@@ -1575,8 +1575,18 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
                 }
               }
 
-              await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
+              const updatedApp = await Application.findByIdAndUpdate(exists._id, updatePayload, { returnDocument: 'after' });
               console.log(`[UPDATED] ${id} | Existing application enriched & upgraded from pending (${CURRENT_PARSER_VERSION})`);
+
+              // Trigger push notification for newly resolved/upgraded email
+              if (isPending && updatedApp) {
+                try {
+                  const { sendNewEmailNotification } = require("./utils/pushService");
+                  await sendNewEmailNotification(acc, updatedApp);
+                } catch (pushErr) {
+                  console.error(`[PUSH_RETRY_ERROR] ${id}:`, pushErr.message);
+                }
+              }
             }
           } else {
             const currentAttempts = (exists.parseMeta?.retryCount || 0) + 1;
@@ -1874,8 +1884,21 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       }
 
       if (Object.keys(updatePayload).length > 0) {
-        await Application.findByIdAndUpdate(contentExists._id, updatePayload, { returnDocument: 'after' });
+        const updatedApp = await Application.findByIdAndUpdate(contentExists._id, updatePayload, { returnDocument: 'after' });
         console.log(`[UPDATED] ${id} | Duplicate company match enriched (${contentExists.company})`);
+
+        // Trigger push notification for milestone updates (e.g. shortlists, assessment links, interview calls)
+        if (eventAdded && updatedApp) {
+          try {
+            const { sendNewEmailNotification } = require("./utils/pushService");
+            await sendNewEmailNotification(acc, updatedApp, {
+              isUpdate: true,
+              timelineTitle: parsed.timelineTitle || parsed.title || parsed.classification
+            });
+          } catch (pushErr) {
+            console.error(`[PUSH_UPDATE_ERROR] ${id}:`, pushErr.message);
+          }
+        }
       }
 
       console.log(`[SKIP] ${id} | Reason: Duplicate content (company match)`);
