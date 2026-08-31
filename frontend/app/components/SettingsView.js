@@ -57,8 +57,7 @@ export default function SettingsView({
                   <span className="about-tech-tag">Next.js & React</span>
                   <span className="about-tech-tag">Node.js & Express</span>
                   <span className="about-tech-tag">MongoDB Atlas</span>
-                  <span className="about-tech-tag">OpenAI GPT-OSS 20B</span>
-                  <span className="about-tech-tag">OpenAI GPT-OSS 120B</span>
+                  <span className="about-tech-tag">OpenAI GPT-OSS 20B/120B</span>
                   <span className="about-tech-tag">Mistral Small</span>
                   <span className="about-tech-tag">Gmail Pub/Sub</span>
                   <span className="about-tech-tag">Google Calendar API</span>
