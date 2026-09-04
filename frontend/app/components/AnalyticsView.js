@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 
 export default function AnalyticsView({ applications = [] }) {
   const [timeFilter, setTimeFilter] = useState("all"); // "all" | "7d" | "30d" | "60d"
-  const [categoryFilter, setCategoryFilter] = useState("all"); // "all" | "placement" | "events"
+  const [categoryFilter, setCategoryFilter] = useState("placement"); // "placement" | "events"
   const [hoveredDonutSegment, setHoveredDonutSegment] = useState(null);
 
   // Restore saved filter preferences from localStorage on mount
@@ -15,8 +15,10 @@ export default function AnalyticsView({ applications = [] }) {
         setTimeFilter(savedTime);
       }
       const savedCategory = localStorage.getItem("analytics_categoryFilter");
-      if (savedCategory && ["all", "placement", "events"].includes(savedCategory)) {
+      if (savedCategory && ["placement", "events"].includes(savedCategory)) {
         setCategoryFilter(savedCategory);
+      } else {
+        setCategoryFilter("placement");
       }
     } catch (e) {
       // Ignore localStorage errors
@@ -39,7 +41,7 @@ export default function AnalyticsView({ applications = [] }) {
 
   const handleResetFilters = () => {
     handleTimeFilterChange("all");
-    handleCategoryFilterChange("all");
+    handleCategoryFilterChange("placement");
   };
 
   // Helper to extract the most recent email/update timestamp for an application
@@ -73,7 +75,7 @@ export default function AnalyticsView({ applications = [] }) {
       if (timeFilter === "30d" && ageInDays > 30) return false;
       if (timeFilter === "60d" && ageInDays > 60) return false;
 
-      // 2. Category Filter
+      // 2. Category Filter (Placement vs Hackathons & Others)
       const isPlacement = !app.opportunityType || app.opportunityType === "JOB_APPLICATION";
       if (categoryFilter === "placement" && !isPlacement) return false;
       if (categoryFilter === "events" && isPlacement) return false;
@@ -88,13 +90,16 @@ export default function AnalyticsView({ applications = [] }) {
     const now = Date.now();
     const DAY_MS = 24 * 60 * 60 * 1000;
 
+    // Placement counts
     let placementCount = 0;
-    let nonPlacementCount = 0;
-
     let placementAppliedCount = 0;
-    let eventsAppliedCount = 0;
+    let oaCount = 0;
+    let interviewCount = 0;
+    let offerCount = 0;
+    let rejectedCount = 0;
+    let noResponseCount = 0;
 
-    // Mutually exclusive status breakdown for placement opportunities (sum = placementCount)
+    // Mutually exclusive status breakdown for Placement Donut Chart
     let donutPlacementOffers = 0;
     let donutPlacementRejected = 0;
     let donutPlacementDone = 0;
@@ -102,18 +107,21 @@ export default function AnalyticsView({ applications = [] }) {
     let donutPlacementApplied = 0;
     let donutPlacementNew = 0;
 
-    // Mutually exclusive status breakdown for non-placement events (sum = nonPlacementCount)
-    let donutEventsDone = 0;
-    let donutEventsAwaitingResponse = 0;
-    let donutEventsApplied = 0;
-    let donutEventsNew = 0;
+    // Non-placement (Hackathons & Others) counts
+    let nonPlacementCount = 0;
+    let eventsAppliedCount = 0;
+    let eventsShortlistedCount = 0;
+    let eventsRejectedCount = 0;
+    let eventsFinishedCount = 0;
+    let eventsNoResponseCount = 0;
 
-    // Funnel & KPI cumulative metrics
-    let oaCount = 0;
-    let interviewCount = 0;
-    let offerCount = 0;
-    let rejectedCount = 0;
-    let noResponseCount = 0;
+    // Mutually exclusive status breakdown for Hackathons & Others Donut Chart
+    let donutEventsFinished = 0;
+    let donutEventsRejected = 0;
+    let donutEventsShortlisted = 0;
+    let donutEventsApplied = 0;
+    let donutEventsNotApplied = 0;
+
     let upcomingDeadlinesCount = 0;
 
     filteredApps.forEach((app) => {
@@ -123,8 +131,11 @@ export default function AnalyticsView({ applications = [] }) {
       const latestTime = getLatestAppTime(app);
       const ageInDays = (now - latestTime) / DAY_MS;
 
-      const hasApplied = app.hasApplied || status === "applied" || (stage && stage !== "none");
-      const isNoResponse = status === "applied" && ageInDays >= 20;
+      const isFinished = status === "done" || status === "finished" || stage === "finished" || !!app.isFinished;
+      const isRejected = stage === "rejected" || stage.startsWith("rejected") || status === "rejected" || !!app.isRejected || (app.classification && /rejection|rejected/i.test(app.classification));
+      const isShortlisted = !isRejected && (!!app.isShortlisted || stage === "shortlisted" || stage === "oa_scheduled" || stage === "interview_scheduled" || stage === "offered" || (app.classification && /shortlist/i.test(app.classification)));
+      const hasApplied = !!app.hasApplied || status === "applied" || isShortlisted || isRejected || isFinished || (stage && stage !== "none");
+      const isNoResponse = (status === "applied" || hasApplied) && !isFinished && !isRejected && !isShortlisted && ageInDays >= 20;
 
       if (isPlacement) {
         placementCount++;
@@ -154,7 +165,7 @@ export default function AnalyticsView({ applications = [] }) {
           rejectedCount++;
         }
 
-        // Mutually exclusive status partition for Donut Chart (exactly 1 category per app)
+        // Mutually exclusive partition for Placement Donut Chart
         if (stage === "offered") {
           donutPlacementOffers++;
         } else if (["rejected", "rejected_after_oa", "rejected_after_interview"].includes(stage)) {
@@ -169,18 +180,26 @@ export default function AnalyticsView({ applications = [] }) {
           donutPlacementNew++;
         }
       } else {
+        // Non-placement (Hackathons & Others)
         nonPlacementCount++;
-        if (hasApplied) eventsAppliedCount++;
 
-        // Mutually exclusive status partition for Non-Placement Donut Chart
-        if (status === "done") {
-          donutEventsDone++;
-        } else if (isNoResponse) {
-          donutEventsAwaitingResponse++;
+        if (hasApplied) eventsAppliedCount++;
+        if (isShortlisted) eventsShortlistedCount++;
+        if (isRejected) eventsRejectedCount++;
+        if (isFinished) eventsFinishedCount++;
+        if (isNoResponse) eventsNoResponseCount++;
+
+        // Mutually exclusive partition for Hackathons & Others Donut Chart
+        if (isFinished) {
+          donutEventsFinished++;
+        } else if (isRejected) {
+          donutEventsRejected++;
+        } else if (isShortlisted) {
+          donutEventsShortlisted++;
         } else if (hasApplied || status === "applied") {
           donutEventsApplied++;
         } else {
-          donutEventsNew++;
+          donutEventsNotApplied++;
         }
       }
 
@@ -197,47 +216,56 @@ export default function AnalyticsView({ applications = [] }) {
     const placementNotAppliedCount = Math.max(0, placementCount - placementAppliedCount);
     const eventsNotAppliedCount = Math.max(0, nonPlacementCount - eventsAppliedCount);
 
-    const appliedCount = categoryFilter === "events" ? eventsAppliedCount : placementAppliedCount;
-    const notAppliedCount = categoryFilter === "events" ? eventsNotAppliedCount : placementNotAppliedCount;
-
     const applyRate = placementCount > 0 ? Math.round((placementAppliedCount / placementCount) * 100) : 0;
     const oaRate = placementAppliedCount > 0 ? Math.round((oaCount / placementAppliedCount) * 100) : 0;
     const interviewRate = oaCount > 0 ? Math.round((interviewCount / oaCount) * 100) : (placementAppliedCount > 0 ? Math.round((interviewCount / placementAppliedCount) * 100) : 0);
     const offerRate = interviewCount > 0 ? Math.round((offerCount / interviewCount) * 100) : (placementAppliedCount > 0 ? Math.round((offerCount / placementAppliedCount) * 100) : 0);
 
+    const eventsShortlistedRate = eventsAppliedCount > 0 ? Math.round((eventsShortlistedCount / eventsAppliedCount) * 100) : 0;
+    const eventsFinishedRate = nonPlacementCount > 0 ? Math.round((eventsFinishedCount / nonPlacementCount) * 100) : 0;
+
     return {
       total,
+      // Placement Metrics
       placementCount,
-      nonPlacementCount,
       placementAppliedCount,
       placementNotAppliedCount,
-      eventsAppliedCount,
-      eventsNotAppliedCount,
-      appliedCount,
-      notAppliedCount,
-      noResponseCount,
       oaCount,
       interviewCount,
       offerCount,
       rejectedCount,
-      upcomingDeadlinesCount,
+      noResponseCount,
       applyRate,
       oaRate,
       interviewRate,
       offerRate,
-      // Donut partition counts
+      // Placement Donut partition counts
       donutPlacementOffers,
       donutPlacementRejected,
       donutPlacementDone,
       donutPlacementAwaitingResponse,
       donutPlacementApplied,
       donutPlacementNew,
-      donutEventsDone,
-      donutEventsAwaitingResponse,
+      // Events Metrics
+      nonPlacementCount,
+      eventsAppliedCount,
+      eventsNotAppliedCount,
+      eventsShortlistedCount,
+      eventsRejectedCount,
+      eventsFinishedCount,
+      eventsNoResponseCount,
+      eventsShortlistedRate,
+      eventsFinishedRate,
+      // Events Donut partition counts
+      donutEventsFinished,
+      donutEventsRejected,
+      donutEventsShortlisted,
       donutEventsApplied,
-      donutEventsNew,
+      donutEventsNotApplied,
+      // General
+      upcomingDeadlinesCount,
     };
-  }, [filteredApps, categoryFilter]);
+  }, [filteredApps]);
 
   // ── Donut Chart Data Calculation ───────────────────────────────────────────
   const donutData = useMemo(() => {
@@ -247,15 +275,16 @@ export default function AnalyticsView({ applications = [] }) {
     const segments = isEvents
       ? [
           { label: "Applied", count: metrics.donutEventsApplied, color: "#0891b2" },
-          { label: "Awaiting Response", count: metrics.donutEventsAwaitingResponse, color: "#d97706" },
-          { label: "New / Unmarked", count: metrics.donutEventsNew, color: "#2563eb" },
-          { label: "Marked Done", count: metrics.donutEventsDone, color: "#475569" },
+          { label: "Not applied", count: metrics.donutEventsNotApplied, color: "#64748b" },
+          { label: "Shortlisted", count: metrics.donutEventsShortlisted, color: "#8b5cf6" },
+          { label: "Rejected", count: metrics.donutEventsRejected, color: "#ef4444" },
+          { label: "Finished", count: metrics.donutEventsFinished, color: "#10b981" },
         ].filter((s) => s.count > 0)
       : [
           { label: "Applied", count: metrics.donutPlacementApplied, color: "#0891b2" },
           { label: "Awaiting Response", count: metrics.donutPlacementAwaitingResponse, color: "#d97706" },
           { label: "New / Unmarked", count: metrics.donutPlacementNew, color: "#2563eb" },
-          { label: "Marked Done", count: metrics.donutPlacementDone, color: "#475569" },
+          { label: "Marked Done", count: metrics.donutPlacementDone, color: "#64748b" },
           { label: "Offers / Selected", count: metrics.donutPlacementOffers, color: "#059669" },
           { label: "Rejected", count: metrics.donutPlacementRejected, color: "#be123c" },
         ].filter((s) => s.count > 0);
@@ -278,6 +307,8 @@ export default function AnalyticsView({ applications = [] }) {
     return { segments: segmentsWithGeometry, totalCount };
   }, [metrics, categoryFilter]);
 
+  const isEvents = categoryFilter === "events";
+
   return (
     <div className="analytics-container">
       {/* Header & Filter Bar */}
@@ -290,22 +321,16 @@ export default function AnalyticsView({ applications = [] }) {
           {/* Category Filter Tabs */}
           <div className="analytics-filter-group">
             <button
-              className={`analytics-pill ${categoryFilter === "all" ? "active" : ""}`}
-              onClick={() => handleCategoryFilterChange("all")}
-            >
-              All Types
-            </button>
-            <button
               className={`analytics-pill ${categoryFilter === "placement" ? "active" : ""}`}
               onClick={() => handleCategoryFilterChange("placement")}
             >
-              Placements
+              Placement
             </button>
             <button
               className={`analytics-pill ${categoryFilter === "events" ? "active" : ""}`}
               onClick={() => handleCategoryFilterChange("events")}
             >
-              Hackathons & Events
+              Hackathons & Others
             </button>
           </div>
 
@@ -345,204 +370,361 @@ export default function AnalyticsView({ applications = [] }) {
         <>
           {/* KPI Cards Grid */}
           <div className="analytics-kpi-grid">
+            {/* KPI 1: Drives / Total Events */}
             <div className="kpi-card kpi-drives">
               <div className="kpi-header">
-                <span className="kpi-label">RECRUITMENT DRIVES</span>
+                <span className="kpi-label">{isEvents ? "EVENTS & HACKATHONS" : "RECRUITMENT DRIVES"}</span>
               </div>
               <div className="kpi-value">
-                {categoryFilter === "events" ? metrics.nonPlacementCount : metrics.placementCount}
+                {isEvents ? metrics.nonPlacementCount : metrics.placementCount}
               </div>
               <div className="kpi-subtext">
-                {metrics.nonPlacementCount > 0 && categoryFilter === "all" ? `Includes ${metrics.nonPlacementCount} events / hackathons` : "Total campus opportunities"}
+                {isEvents ? "Total hackathons & college events" : "Total campus opportunities"}
               </div>
             </div>
 
+            {/* KPI 2: Applied */}
             <div className="kpi-card kpi-applied">
               <div className="kpi-header">
                 <span className="kpi-label">APPLIED</span>
               </div>
-              <div className="kpi-value">{metrics.appliedCount}</div>
-              <div className="kpi-subtext">{metrics.notAppliedCount} drives not applied for</div>
+              <div className="kpi-value">{isEvents ? metrics.eventsAppliedCount : metrics.placementAppliedCount}</div>
+              <div className="kpi-subtext">
+                {isEvents
+                  ? `${metrics.eventsNotAppliedCount} events not applied for`
+                  : `${metrics.placementNotAppliedCount} drives not applied for`}
+              </div>
             </div>
 
+            {/* KPI 3: OA (Placement) / Shortlisted (Events) */}
             <div className="kpi-card kpi-oa">
               <div className="kpi-header">
-                <span className="kpi-label">ONLINE ASSESSMENTS</span>
+                <span className="kpi-label">{isEvents ? "SHORTLISTED" : "ONLINE ASSESSMENTS"}</span>
               </div>
-              <div className="kpi-value">{metrics.oaCount}</div>
-              <div className="kpi-subtext">{metrics.oaRate}% conversion from applied</div>
+              <div className="kpi-value">{isEvents ? metrics.eventsShortlistedCount : metrics.oaCount}</div>
+              <div className="kpi-subtext">
+                {isEvents
+                  ? `${metrics.eventsShortlistedRate}% shortlisted from applied`
+                  : `${metrics.oaRate}% conversion from applied`}
+              </div>
             </div>
 
+            {/* KPI 4: Interviews (Placement) / Finished (Events) */}
             <div className="kpi-card kpi-interviews">
               <div className="kpi-header">
-                <span className="kpi-label">INTERVIEWS</span>
+                <span className="kpi-label">{isEvents ? "FINISHED" : "INTERVIEWS"}</span>
               </div>
-              <div className="kpi-value">{metrics.interviewCount}</div>
-              <div className="kpi-subtext">{metrics.interviewRate}% reaching interview rounds</div>
+              <div className="kpi-value">{isEvents ? metrics.eventsFinishedCount : metrics.interviewCount}</div>
+              <div className="kpi-subtext">
+                {isEvents
+                  ? `${metrics.eventsFinishedRate}% marked finished`
+                  : `${metrics.interviewRate}% reaching interview rounds`}
+              </div>
             </div>
 
+            {/* KPI 5: Offers (Placement) / Rejected (Events) */}
             <div className="kpi-card kpi-offers">
               <div className="kpi-header">
-                <span className="kpi-label">OFFERS / SELECTED</span>
+                <span className="kpi-label">{isEvents ? "REJECTED" : "OFFERS / SELECTED"}</span>
               </div>
-              <div className="kpi-value">{metrics.offerCount}</div>
-              <div className="kpi-subtext">{metrics.rejectedCount} terminal rejections tracked</div>
+              <div className="kpi-value">{isEvents ? metrics.eventsRejectedCount : metrics.offerCount}</div>
+              <div className="kpi-subtext">
+                {isEvents
+                  ? `${metrics.eventsRejectedCount} rejections recorded`
+                  : `${metrics.rejectedCount} terminal rejections tracked`}
+              </div>
             </div>
 
+            {/* KPI 6: Awaiting Response */}
             <div className="kpi-card kpi-no-response">
               <div className="kpi-header">
                 <span className="kpi-label">AWAITING RESPONSE</span>
               </div>
-              <div className="kpi-value">{metrics.noResponseCount}</div>
+              <div className="kpi-value">{isEvents ? metrics.eventsNoResponseCount : metrics.noResponseCount}</div>
               <div className="kpi-subtext">
                 {metrics.upcomingDeadlinesCount > 0
                   ? `${metrics.upcomingDeadlinesCount} upcoming deadlines within 7 days`
+                  : isEvents
+                  ? "Applied with no update >20 days"
                   : "No response since >20 days"}
               </div>
             </div>
           </div>
 
-          {/* Charts Row: Distribution & Donut */}
+          {/* Charts Row: Horizontal Bar Chart & Donut */}
           <div className="analytics-charts-row">
-            {/* Recruitment Distribution */}
+            {/* Horizontal Bar Chart (Recruitment Distribution / Event Stages) */}
             <div className="analytics-chart-card funnel-card">
               <div className="chart-card-header">
-                <h3>Recruitment Distribution</h3>
-                <span className="chart-subtitle">Progression across placement hiring stages</span>
+                <h3>{isEvents ? "Event Progression" : "Recruitment Distribution"}</h3>
+                <span className="chart-subtitle">
+                  {isEvents
+                    ? "Progression across hackathons & event stages"
+                    : "Progression across placement hiring stages"}
+                </span>
               </div>
 
               <div className="funnel-container">
-                {/* 1. Applied */}
-                {(() => {
-                  const currentCategoryTotal = categoryFilter === "events" ? metrics.nonPlacementCount : metrics.placementCount;
-                  const currentApplyRate = currentCategoryTotal > 0 ? Math.round((metrics.appliedCount / currentCategoryTotal) * 100) : 0;
-                  return (
-                    <div className="funnel-step">
-                      <div className="funnel-step-meta">
-                        <span className="funnel-step-name">Applied</span>
-                        <span className="funnel-step-count">{metrics.appliedCount}</span>
-                      </div>
-                      <div className="funnel-bar-track">
-                        <div
-                          className="funnel-bar-fill step-applied"
-                          style={{ width: `${Math.max(metrics.appliedCount > 0 ? 12 : 0, currentApplyRate)}%` }}
-                        >
-                          {currentApplyRate > 0 && (
-                            <span className="funnel-bar-percent">{currentApplyRate}%</span>
-                          )}
+                {isEvents ? (
+                  /* ── Hackathons & Others Horizontal Bar Chart: 5 Stages Only ── */
+                  <>
+                    {/* 1. Applied */}
+                    {(() => {
+                      const total = metrics.nonPlacementCount;
+                      const rate = total > 0 ? Math.round((metrics.eventsAppliedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Applied</span>
+                            <span className="funnel-step-count">{metrics.eventsAppliedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-applied"
+                              style={{ width: `${Math.max(metrics.eventsAppliedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-applied-zero">0%</span>}
+                          </div>
                         </div>
-                        {currentApplyRate === 0 && (
-                          <span className="funnel-zero-pill step-applied-zero">0%</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                      );
+                    })()}
 
-                {/* 2. Not Applied */}
-                {(() => {
-                  const currentCategoryTotal = categoryFilter === "events" ? metrics.nonPlacementCount : metrics.placementCount;
-                  const notAppliedRate = currentCategoryTotal > 0 ? Math.round((metrics.notAppliedCount / currentCategoryTotal) * 100) : 0;
-                  return (
-                    <div className="funnel-step">
-                      <div className="funnel-step-meta">
-                        <span className="funnel-step-name">Not Applied</span>
-                        <span className="funnel-step-count">{metrics.notAppliedCount}</span>
-                      </div>
-                      <div className="funnel-bar-track">
-                        <div
-                          className="funnel-bar-fill step-not-applied"
-                          style={{ width: `${Math.max(metrics.notAppliedCount > 0 ? 12 : 0, notAppliedRate)}%` }}
-                        >
-                          {notAppliedRate > 0 && (
-                            <span className="funnel-bar-percent">{notAppliedRate}%</span>
-                          )}
+                    {/* 2. Not applied */}
+                    {(() => {
+                      const total = metrics.nonPlacementCount;
+                      const rate = total > 0 ? Math.round((metrics.eventsNotAppliedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Not applied</span>
+                            <span className="funnel-step-count">{metrics.eventsNotAppliedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-not-applied"
+                              style={{ width: `${Math.max(metrics.eventsNotAppliedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-not-applied-zero">0%</span>}
+                          </div>
                         </div>
-                        {notAppliedRate === 0 && (
-                          <span className="funnel-zero-pill step-not-applied-zero">0%</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                      );
+                    })()}
 
-                {/* 3. Shortlisted for OA */}
-                {(() => {
-                  const oaRateOfTotal = metrics.placementCount > 0 ? Math.round((metrics.oaCount / metrics.placementCount) * 100) : 0;
-                  return (
-                    <div className="funnel-step">
-                      <div className="funnel-step-meta">
-                        <span className="funnel-step-name">Shortlisted for OA</span>
-                        <span className="funnel-step-count">{metrics.oaCount}</span>
-                      </div>
-                      <div className="funnel-bar-track">
-                        <div
-                          className="funnel-bar-fill step-oa"
-                          style={{ width: `${Math.max(metrics.oaCount > 0 ? 12 : 0, oaRateOfTotal)}%` }}
-                        >
-                          {oaRateOfTotal > 0 && (
-                            <span className="funnel-bar-percent">{oaRateOfTotal}%</span>
-                          )}
+                    {/* 3. Shortlisted */}
+                    {(() => {
+                      const total = metrics.nonPlacementCount;
+                      const rate = total > 0 ? Math.round((metrics.eventsShortlistedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Shortlisted</span>
+                            <span className="funnel-step-count">{metrics.eventsShortlistedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-shortlisted"
+                              style={{ width: `${Math.max(metrics.eventsShortlistedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-shortlisted-zero">0%</span>}
+                          </div>
                         </div>
-                        {oaRateOfTotal === 0 && (
-                          <span className="funnel-zero-pill step-oa-zero">0%</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                      );
+                    })()}
 
-                {/* 4. Shortlisted for Interview */}
-                {(() => {
-                  const interviewRateOfTotal = metrics.placementCount > 0 ? Math.round((metrics.interviewCount / metrics.placementCount) * 100) : 0;
-                  return (
-                    <div className="funnel-step">
-                      <div className="funnel-step-meta">
-                        <span className="funnel-step-name">Shortlisted for Interview</span>
-                        <span className="funnel-step-count">{metrics.interviewCount}</span>
-                      </div>
-                      <div className="funnel-bar-track">
-                        <div
-                          className="funnel-bar-fill step-interview"
-                          style={{ width: `${Math.max(metrics.interviewCount > 0 ? 12 : 0, interviewRateOfTotal)}%` }}
-                        >
-                          {interviewRateOfTotal > 0 && (
-                            <span className="funnel-bar-percent">{interviewRateOfTotal}%</span>
-                          )}
+                    {/* 4. Rejected */}
+                    {(() => {
+                      const total = metrics.nonPlacementCount;
+                      const rate = total > 0 ? Math.round((metrics.eventsRejectedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Rejected</span>
+                            <span className="funnel-step-count">{metrics.eventsRejectedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-rejected"
+                              style={{ width: `${Math.max(metrics.eventsRejectedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-rejected-zero">0%</span>}
+                          </div>
                         </div>
-                        {interviewRateOfTotal === 0 && (
-                          <span className="funnel-zero-pill step-interview-zero">0%</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                      );
+                    })()}
 
-                {/* 5. Rejected */}
-                {(() => {
-                  const rejectedRateOfTotal = metrics.placementCount > 0 ? Math.round((metrics.rejectedCount / metrics.placementCount) * 100) : 0;
-                  return (
-                    <div className="funnel-step">
-                      <div className="funnel-step-meta">
-                        <span className="funnel-step-name">Rejected</span>
-                        <span className="funnel-step-count">{metrics.rejectedCount}</span>
-                      </div>
-                      <div className="funnel-bar-track">
-                        <div
-                          className="funnel-bar-fill step-rejected"
-                          style={{ width: `${Math.max(metrics.rejectedCount > 0 ? 12 : 0, rejectedRateOfTotal)}%` }}
-                        >
-                          {rejectedRateOfTotal > 0 && (
-                            <span className="funnel-bar-percent">{rejectedRateOfTotal}%</span>
-                          )}
+                    {/* 5. Finished */}
+                    {(() => {
+                      const total = metrics.nonPlacementCount;
+                      const rate = total > 0 ? Math.round((metrics.eventsFinishedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Finished</span>
+                            <span className="funnel-step-count">{metrics.eventsFinishedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-finished"
+                              style={{ width: `${Math.max(metrics.eventsFinishedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-finished-zero">0%</span>}
+                          </div>
                         </div>
-                        {rejectedRateOfTotal === 0 && (
-                          <span className="funnel-zero-pill step-rejected-zero">0%</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                      );
+                    })()}
+                  </>
+                ) : (
+                  /* ── Placement Horizontal Bar Chart ── */
+                  <>
+                    {/* 1. Applied */}
+                    {(() => {
+                      const total = metrics.placementCount;
+                      const rate = total > 0 ? Math.round((metrics.placementAppliedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Applied</span>
+                            <span className="funnel-step-count">{metrics.placementAppliedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-applied"
+                              style={{ width: `${Math.max(metrics.placementAppliedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-applied-zero">0%</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 2. Not Applied */}
+                    {(() => {
+                      const total = metrics.placementCount;
+                      const rate = total > 0 ? Math.round((metrics.placementNotAppliedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Not Applied</span>
+                            <span className="funnel-step-count">{metrics.placementNotAppliedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-not-applied"
+                              style={{ width: `${Math.max(metrics.placementNotAppliedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-not-applied-zero">0%</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 3. Shortlisted for OA */}
+                    {(() => {
+                      const total = metrics.placementCount;
+                      const rate = total > 0 ? Math.round((metrics.oaCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Shortlisted for OA</span>
+                            <span className="funnel-step-count">{metrics.oaCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-oa"
+                              style={{ width: `${Math.max(metrics.oaCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-oa-zero">0%</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 4. Shortlisted for Interview */}
+                    {(() => {
+                      const total = metrics.placementCount;
+                      const rate = total > 0 ? Math.round((metrics.interviewCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Shortlisted for Interview</span>
+                            <span className="funnel-step-count">{metrics.interviewCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-interview"
+                              style={{ width: `${Math.max(metrics.interviewCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-interview-zero">0%</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 5. Offers / Selected */}
+                    {(() => {
+                      const total = metrics.placementCount;
+                      const rate = total > 0 ? Math.round((metrics.offerCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Offers / Selected</span>
+                            <span className="funnel-step-count">{metrics.offerCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-offers"
+                              style={{ width: `${Math.max(metrics.offerCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-offers-zero">0%</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 6. Rejected */}
+                    {(() => {
+                      const total = metrics.placementCount;
+                      const rate = total > 0 ? Math.round((metrics.rejectedCount / total) * 100) : 0;
+                      return (
+                        <div className="funnel-step">
+                          <div className="funnel-step-meta">
+                            <span className="funnel-step-name">Rejected</span>
+                            <span className="funnel-step-count">{metrics.rejectedCount}</span>
+                          </div>
+                          <div className="funnel-bar-track">
+                            <div
+                              className="funnel-bar-fill step-rejected"
+                              style={{ width: `${Math.max(metrics.rejectedCount > 0 ? 12 : 0, rate)}%` }}
+                            >
+                              {rate > 0 && <span className="funnel-bar-percent">{rate}%</span>}
+                            </div>
+                            {rate === 0 && <span className="funnel-zero-pill step-rejected-zero">0%</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
               </div>
 
               {/* Footnote */}
@@ -550,7 +732,11 @@ export default function AnalyticsView({ applications = [] }) {
                 <svg className="footnote-icon" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
-                <span>Percentages indicate the proportion of total campus opportunities.</span>
+                <span>
+                  {isEvents
+                    ? "Percentages indicate the proportion of total hackathons and events."
+                    : "Percentages indicate the proportion of total campus opportunities."}
+                </span>
               </div>
             </div>
 
@@ -565,7 +751,7 @@ export default function AnalyticsView({ applications = [] }) {
                 <div className="donut-svg-container">
                   <svg viewBox="0 0 42 42" className="donut-svg">
                     <circle className="donut-hole" cx="21" cy="21" r="15.91549430918954" fill="transparent"></circle>
-                    <circle className="donut-ring" cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#172338" strokeWidth="5.5"></circle>
+                    <circle className="donut-ring" cx="21" cy="21" r="15.91549430918954" fill="transparent" strokeWidth="5.5"></circle>
 
                     {donutData.segments.map((seg, idx) => (
                       <circle
@@ -630,14 +816,15 @@ export default function AnalyticsView({ applications = [] }) {
         </>
       )}
 
-      {/* Embedded Component Styling scoped to analytics */}
+      {/* Scoped CSS with complete Light Mode and Dark Mode support */}
       <style jsx>{`
+        /* ── Base (Light Mode) Styling ── */
         .analytics-container {
           padding: 0 0 32px 0;
           display: flex;
           flex-direction: column;
           gap: 32px;
-          color: #f8fafc;
+          color: var(--text-primary, #334155);
         }
 
         .analytics-header {
@@ -650,10 +837,10 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .analytics-title {
-          font-family: 'Manrope', sans-serif;
-          font-size: 30px;
+          font-family: 'Manrope', 'IBM Plex Sans', -apple-system, sans-serif;
+          font-size: 28px;
           font-weight: 700;
-          color: #f8fafc;
+          color: var(--text-heading, #0f172a);
           margin: 0;
           line-height: 1.2;
         }
@@ -667,8 +854,8 @@ export default function AnalyticsView({ applications = [] }) {
 
         .analytics-filter-group {
           display: flex;
-          background: #0b1329;
-          border: 1px solid #1e293b;
+          background: #f1f5f9;
+          border: 1px solid #cbd5e1;
           border-radius: 9px;
           padding: 3px;
           gap: 2px;
@@ -681,19 +868,20 @@ export default function AnalyticsView({ applications = [] }) {
           border-radius: 7px;
           border: none;
           background: transparent;
-          color: #94a3b8;
+          color: #64748b;
           cursor: pointer;
           transition: all 0.15s ease;
         }
 
         .analytics-pill:hover {
-          color: #f1f5f9;
+          color: #0f172a;
+          background: rgba(0, 0, 0, 0.04);
         }
 
         .analytics-pill.active {
           background: #2563eb;
           color: #ffffff;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+          box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
         }
 
         .analytics-time-select-wrapper {
@@ -707,73 +895,68 @@ export default function AnalyticsView({ applications = [] }) {
           font-size: 13px;
           font-weight: 600;
           border-radius: 9px;
-          border: 1px solid #1e293b;
-          background: #0b1329;
-          color: #f8fafc;
+          border: 1px solid #cbd5e1;
+          background: #ffffff;
+          color: #0f172a;
           cursor: pointer;
           outline: none;
           appearance: none;
           -webkit-appearance: none;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .analytics-time-select:focus {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
         }
 
         .analytics-select-chevron {
           position: absolute;
           right: 12px;
-          color: #94a3b8;
+          color: #64748b;
           pointer-events: none;
         }
 
-        /* KPI Cards Grid */
+        /* ── KPI Cards Grid ── */
         .analytics-kpi-grid {
           display: grid;
           grid-template-columns: repeat(6, 1fr);
           gap: 14px;
         }
 
-        @media (max-width: 1200px) {
-          .analytics-kpi-grid {
-            grid-template-columns: repeat(3, 1fr);
-          }
-        }
-
-        @media (max-width: 680px) {
-          .analytics-kpi-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-
         .kpi-card {
-          background: #070e1e;
+          background: #ffffff;
           border-radius: 12px;
-          padding: 16px 16px;
+          padding: 16px;
           min-height: 108px;
           display: flex;
           flex-direction: column;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
           transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         .kpi-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
         }
 
         .kpi-card.kpi-drives {
-          border: 1.5px solid rgba(37, 99, 235, 0.45);
+          border: 1.5px solid rgba(37, 99, 235, 0.35);
         }
         .kpi-card.kpi-applied {
-          border: 1.5px solid rgba(8, 145, 178, 0.45);
+          border: 1.5px solid rgba(8, 145, 178, 0.35);
         }
         .kpi-card.kpi-oa {
-          border: 1.5px solid rgba(99, 102, 241, 0.45);
+          border: 1.5px solid rgba(99, 102, 241, 0.35);
         }
         .kpi-card.kpi-interviews {
-          border: 1.5px solid rgba(217, 119, 6, 0.45);
+          border: 1.5px solid rgba(217, 119, 6, 0.35);
         }
         .kpi-card.kpi-offers {
-          border: 1.5px solid rgba(5, 150, 105, 0.45);
+          border: 1.5px solid rgba(5, 150, 105, 0.35);
         }
         .kpi-card.kpi-no-response {
-          border: 1.5px solid rgba(190, 18, 60, 0.45);
+          border: 1.5px solid rgba(190, 18, 60, 0.35);
         }
 
         .kpi-header {
@@ -786,7 +969,7 @@ export default function AnalyticsView({ applications = [] }) {
         .kpi-label {
           font-size: 10.5px;
           font-weight: 700;
-          color: #94a3b8;
+          color: #64748b;
           text-transform: uppercase;
           letter-spacing: 0.05em;
           white-space: nowrap;
@@ -795,16 +978,16 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .kpi-value {
-          font-size: 30px;
+          font-size: 28px;
           font-weight: 800;
-          color: #f8fafc;
+          color: #0f172a;
           line-height: 1.1;
           margin-bottom: 6px;
         }
 
         .kpi-subtext {
           font-size: 11px;
-          color: #94a3b8;
+          color: #64748b;
           margin-top: auto;
           line-height: 1.25;
           white-space: nowrap;
@@ -812,53 +995,46 @@ export default function AnalyticsView({ applications = [] }) {
           text-overflow: ellipsis;
         }
 
-        /* Charts Row */
+        /* ── Charts Row ── */
         .analytics-charts-row {
           display: grid;
           grid-template-columns: 1.1fr 1fr;
           gap: 24px;
         }
 
-        @media (max-width: 960px) {
-          .analytics-charts-row {
-            grid-template-columns: 1fr;
-            gap: 20px;
-          }
-        }
-
         .analytics-chart-card {
-          background: #070e1e;
-          border: 1px solid #172338;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
           border-radius: 14px;
-          padding: 26px;
+          padding: 24px;
           display: flex;
           flex-direction: column;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
         }
 
         .chart-card-header {
-          margin-bottom: 26px;
+          margin-bottom: 24px;
         }
 
         .chart-card-header h3 {
           font-size: 18px;
           font-weight: 700;
-          color: #f8fafc;
+          color: #0f172a;
           margin: 0;
         }
 
         .chart-subtitle {
           font-size: 12.5px;
-          color: #94a3b8;
+          color: #64748b;
           display: block;
           margin-top: 4px;
         }
 
-        /* Funnel / Distribution */
+        /* ── Funnel / Horizontal Bar Chart ── */
         .funnel-container {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 18px;
           flex: 1;
         }
 
@@ -872,35 +1048,24 @@ export default function AnalyticsView({ applications = [] }) {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 13.5px;
+          font-size: 13px;
           font-weight: 600;
-          color: #f1f5f9;
+          color: #1e293b;
         }
 
         .funnel-step-name {
-          color: #f8fafc;
-        }
-
-        .funnel-step-count-group {
-          display: flex;
-          align-items: center;
-          gap: 8px;
+          color: #1e293b;
         }
 
         .funnel-step-count {
           font-weight: 700;
-          color: #f8fafc;
-        }
-
-        .funnel-dropoff {
-          font-size: 12px;
-          color: #ef4444;
-          font-weight: 600;
+          color: #0f172a;
         }
 
         .funnel-bar-track {
           height: 24px;
-          background: #0c1830;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
           border-radius: 6px;
           overflow: hidden;
           position: relative;
@@ -914,7 +1079,7 @@ export default function AnalyticsView({ applications = [] }) {
           align-items: center;
           justify-content: flex-end;
           padding-right: 10px;
-          border-radius: 6px;
+          border-radius: 5px;
           transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
@@ -925,10 +1090,13 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .funnel-bar-fill.step-applied { background: #0891b2; }
-        .funnel-bar-fill.step-not-applied { background: #3b4861; }
+        .funnel-bar-fill.step-not-applied { background: #64748b; }
         .funnel-bar-fill.step-oa { background: #6366f1; }
         .funnel-bar-fill.step-interview { background: #d97706; }
-        .funnel-bar-fill.step-rejected { background: #be123c; }
+        .funnel-bar-fill.step-offers { background: #059669; }
+        .funnel-bar-fill.step-rejected { background: #ef4444; }
+        .funnel-bar-fill.step-shortlisted { background: #8b5cf6; }
+        .funnel-bar-fill.step-finished { background: #10b981; }
 
         .funnel-zero-pill {
           margin-left: 6px;
@@ -940,33 +1108,36 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .step-applied-zero { background: #0891b2; }
-        .step-not-applied-zero { background: #3b4861; }
+        .step-not-applied-zero { background: #64748b; }
         .step-oa-zero { background: #6366f1; }
         .step-interview-zero { background: #d97706; }
-        .step-rejected-zero { background: #be123c; }
+        .step-offers-zero { background: #059669; }
+        .step-rejected-zero { background: #ef4444; }
+        .step-shortlisted-zero { background: #8b5cf6; }
+        .step-finished-zero { background: #10b981; }
 
-        /* Footnote */
+        /* ── Footnote ── */
         .chart-footnote {
-          margin-top: 30px;
-          background: rgba(11, 21, 40, 0.6);
-          border: 1px solid #172338;
+          margin-top: 24px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
           border-radius: 8px;
           padding: 10px 14px;
           display: flex;
           align-items: center;
           gap: 10px;
           font-size: 12px;
-          color: #94a3b8;
+          color: #64748b;
         }
 
         .footnote-icon {
           width: 16px;
           height: 16px;
-          color: #3b82f6;
+          color: #2563eb;
           flex-shrink: 0;
         }
 
-        /* Donut Chart */
+        /* ── Donut Chart ── */
         .donut-chart-wrapper {
           display: flex;
           align-items: center;
@@ -989,6 +1160,10 @@ export default function AnalyticsView({ applications = [] }) {
           height: 100%;
         }
 
+        .donut-ring {
+          stroke: #e2e8f0;
+        }
+
         .donut-center-text {
           position: absolute;
           inset: 0;
@@ -1002,16 +1177,16 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         .donut-center-value {
-          font-size: 34px;
+          font-size: 32px;
           font-weight: 800;
-          color: #ffffff;
+          color: #0f172a;
           line-height: 1;
         }
 
         .donut-center-label {
           font-size: 9px;
           font-weight: 700;
-          color: #94a3b8;
+          color: #64748b;
           margin-top: 4px;
           text-transform: uppercase;
           letter-spacing: 0.08em;
@@ -1029,20 +1204,21 @@ export default function AnalyticsView({ applications = [] }) {
           display: flex;
           align-items: center;
           font-size: 11.5px;
-          color: #cbd5e1;
-          padding: 2px 4px;
+          color: #334155;
+          padding: 3px 6px;
           border-radius: 6px;
           transition: background 0.15s ease;
           cursor: pointer;
         }
 
+        .legend-item:hover,
         .legend-item.hovered {
-          background: rgba(255, 255, 255, 0.05);
+          background: rgba(0, 0, 0, 0.05);
         }
 
         .legend-dot {
-          width: 7.5px;
-          height: 7.5px;
+          width: 8px;
+          height: 8px;
           border-radius: 50%;
           margin-right: 8px;
           flex-shrink: 0;
@@ -1051,31 +1227,31 @@ export default function AnalyticsView({ applications = [] }) {
         .legend-label {
           flex: 1;
           font-weight: 500;
-          color: #cbd5e1;
+          color: #334155;
         }
 
         .legend-count {
           font-weight: 700;
-          color: #ffffff;
+          color: #0f172a;
           margin-right: 8px;
           font-size: 12px;
         }
 
         .legend-percent {
           font-size: 11px;
-          color: #94a3b8;
+          color: #64748b;
           width: 28px;
           text-align: right;
         }
 
-        /* Empty State */
+        /* ── Empty State ── */
         .analytics-empty-card {
-          background: #070e1e;
-          border: 1px solid #172338;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
           border-radius: 12px;
           padding: 48px 24px;
           text-align: center;
-          color: #f8fafc;
+          color: #0f172a;
         }
 
         .analytics-empty-icon {
@@ -1086,17 +1262,200 @@ export default function AnalyticsView({ applications = [] }) {
         .analytics-empty-card h3 {
           font-size: 18px;
           font-weight: 700;
-          color: #f8fafc;
+          color: #0f172a;
           margin: 0 0 6px 0;
         }
 
         .analytics-empty-card p {
           font-size: 14px;
-          color: #94a3b8;
+          color: #64748b;
           margin: 0;
         }
 
-        /* Responsive Styles */
+        /* ── Dark Mode Overrides ── */
+        :global(.dark) .analytics-container {
+          color: #f8fafc;
+        }
+
+        :global(.dark) .analytics-title {
+          color: #f8fafc;
+        }
+
+        :global(.dark) .analytics-filter-group {
+          background: #0b1329;
+          border-color: #1e293b;
+        }
+
+        :global(.dark) .analytics-pill {
+          color: #94a3b8;
+        }
+
+        :global(.dark) .analytics-pill:hover {
+          color: #f1f5f9;
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        :global(.dark) .analytics-pill.active {
+          background: #2563eb;
+          color: #ffffff;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        :global(.dark) .analytics-time-select {
+          background: #0b1329;
+          border-color: #1e293b;
+          color: #f8fafc;
+        }
+
+        :global(.dark) .analytics-select-chevron {
+          color: #94a3b8;
+        }
+
+        :global(.dark) .kpi-card {
+          background: #070e1e;
+          box-shadow: none;
+        }
+
+        :global(.dark) .kpi-card:hover {
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        :global(.dark) .kpi-card.kpi-drives {
+          border-color: rgba(37, 99, 235, 0.45);
+        }
+        :global(.dark) .kpi-card.kpi-applied {
+          border-color: rgba(8, 145, 178, 0.45);
+        }
+        :global(.dark) .kpi-card.kpi-oa {
+          border-color: rgba(99, 102, 241, 0.45);
+        }
+        :global(.dark) .kpi-card.kpi-interviews {
+          border-color: rgba(217, 119, 6, 0.45);
+        }
+        :global(.dark) .kpi-card.kpi-offers {
+          border-color: rgba(5, 150, 105, 0.45);
+        }
+        :global(.dark) .kpi-card.kpi-no-response {
+          border-color: rgba(190, 18, 60, 0.45);
+        }
+
+        :global(.dark) .kpi-label {
+          color: #94a3b8;
+        }
+
+        :global(.dark) .kpi-value {
+          color: #f8fafc;
+        }
+
+        :global(.dark) .kpi-subtext {
+          color: #94a3b8;
+        }
+
+        :global(.dark) .analytics-chart-card {
+          background: #070e1e;
+          border-color: #172338;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        :global(.dark) .chart-card-header h3 {
+          color: #f8fafc;
+        }
+
+        :global(.dark) .chart-subtitle {
+          color: #94a3b8;
+        }
+
+        :global(.dark) .funnel-step-meta {
+          color: #f1f5f9;
+        }
+
+        :global(.dark) .funnel-step-name {
+          color: #f8fafc;
+        }
+
+        :global(.dark) .funnel-step-count {
+          color: #f8fafc;
+        }
+
+        :global(.dark) .funnel-bar-track {
+          background: #0c1830;
+          border-color: transparent;
+        }
+
+        :global(.dark) .funnel-bar-fill.step-not-applied {
+          background: #3b4861;
+        }
+
+        :global(.dark) .step-not-applied-zero {
+          background: #3b4861;
+        }
+
+        :global(.dark) .funnel-bar-fill.step-rejected {
+          background: #be123c;
+        }
+
+        :global(.dark) .step-rejected-zero {
+          background: #be123c;
+        }
+
+        :global(.dark) .chart-footnote {
+          background: rgba(11, 21, 40, 0.6);
+          border-color: #172338;
+          color: #94a3b8;
+        }
+
+        :global(.dark) .footnote-icon {
+          color: #3b82f6;
+        }
+
+        :global(.dark) .donut-ring {
+          stroke: #172338;
+        }
+
+        :global(.dark) .donut-center-value {
+          color: #ffffff;
+        }
+
+        :global(.dark) .donut-center-label {
+          color: #94a3b8;
+        }
+
+        :global(.dark) .legend-item {
+          color: #cbd5e1;
+        }
+
+        :global(.dark) .legend-item:hover,
+        :global(.dark) .legend-item.hovered {
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        :global(.dark) .legend-label {
+          color: #cbd5e1;
+        }
+
+        :global(.dark) .legend-count {
+          color: #ffffff;
+        }
+
+        :global(.dark) .legend-percent {
+          color: #94a3b8;
+        }
+
+        :global(.dark) .analytics-empty-card {
+          background: #070e1e;
+          border-color: #172338;
+          color: #f8fafc;
+        }
+
+        :global(.dark) .analytics-empty-card h3 {
+          color: #f8fafc;
+        }
+
+        :global(.dark) .analytics-empty-card p {
+          color: #94a3b8;
+        }
+
+        /* ── Responsive Layout Breakpoints ── */
         @media (max-width: 1200px) {
           .analytics-kpi-grid {
             grid-template-columns: repeat(3, 1fr);
@@ -1106,7 +1465,7 @@ export default function AnalyticsView({ applications = [] }) {
         @media (max-width: 960px) {
           .analytics-charts-row {
             grid-template-columns: 1fr;
-            gap: 16px;
+            gap: 20px;
           }
         }
 
@@ -1236,10 +1595,6 @@ export default function AnalyticsView({ applications = [] }) {
 
           .funnel-step-count {
             font-size: 12px;
-          }
-
-          .funnel-dropoff {
-            font-size: 11px;
           }
 
           .funnel-bar-track {
