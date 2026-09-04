@@ -22,7 +22,7 @@ export default function EditModal({
       <div className="modal-content edit-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="edit-modal-header modal-header">
           <h3 className="modal-title">Edit Details</h3>
-          <button className="modal-close" onClick={() => setShowEditModal(false)}>&times;</button>
+          <button className="modal-close" onClick={() => setShowEditModal(false)} aria-label="Close edit dialog">&times;</button>
         </div>
 
         <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
@@ -148,6 +148,7 @@ export default function EditModal({
                   <button
                     type="button"
                     className="btn-remove-custom"
+                    aria-label={`Remove field ${df.label || index + 1}`}
                     style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '18px', cursor: 'pointer', padding: '0 4px' }}
                     onClick={() => {
                       const updated = editFormData.dynamicFields.filter((_, i) => i !== index);

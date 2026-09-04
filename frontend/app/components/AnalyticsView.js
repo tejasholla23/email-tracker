@@ -340,13 +340,14 @@ export default function AnalyticsView({ applications = [] }) {
               className="analytics-time-select"
               value={timeFilter}
               onChange={(e) => handleTimeFilterChange(e.target.value)}
+              aria-label="Select analytics time range"
             >
               <option value="all">All</option>
               <option value="7d">Last 1 week</option>
               <option value="30d">Last 1 month</option>
               <option value="60d">Last 2 months</option>
             </select>
-            <svg className="analytics-select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="analytics-select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
           </div>

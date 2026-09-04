@@ -423,6 +423,8 @@ export default function JobTrackerDashboard() {
     setCurrentPage(1);
   }, [searchQuery, activeFilter]);
   const [settingsSubView, setSettingsSubView] = useState("main");
+  const [appToDelete, setAppToDelete] = useState(null);
+  const [deletingSingleApp, setDeletingSingleApp] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -1323,6 +1325,29 @@ export default function JobTrackerDashboard() {
       console.error("Delete failed:", error);
       alert("Could not remove application. Please try again.");
       setApplications(previousApps);
+    }
+  };
+
+  const confirmDeleteOne = async () => {
+    if (!appToDelete) return;
+    const id = appToDelete._id;
+    const previousApps = [...applications];
+    setDeletingSingleApp(true);
+
+    setApplications((prev) => prev.filter((app) => app._id !== id));
+    setAppToDelete(null);
+
+    try {
+      const response = await apiFetch(`${BASE_URL}/applications/${id}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) throw new Error("Failed to delete");
+    } catch (error) {
+      console.error("Delete failed:", error);
+      alert("Could not remove application. Please try again.");
+      setApplications(previousApps);
+    } finally {
+      setDeletingSingleApp(false);
     }
   };
 
@@ -2777,8 +2802,23 @@ export default function JobTrackerDashboard() {
         .pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: rgba(148, 163, 184, 0.18) !important; color: rgba(148, 163, 184, 0.45) !important; }
         .pagination-info { font-size: 14px; font-weight: 500; color: #4b5563; }
         
-        /* App Grid */
-        .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+        /* App Grid with smooth filter transition */
+        @keyframes cardGridFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .app-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+          gap: 24px;
+          animation: cardGridFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
         .app-card {
           background: var(--surface-color);
           border: 1px solid var(--border-color);
@@ -2789,11 +2829,11 @@ export default function JobTrackerDashboard() {
           display: flex;
           flex-direction: column;
           gap: 12px;
-          box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02);
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
         }
         .app-card:hover {
           border-color: #94a3b8;
-          box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 8px -1px rgba(15, 23, 42, 0.04);
+          box-shadow: 0 8px 24px -2px rgba(15, 23, 42, 0.08), 0 2px 8px -1px rgba(15, 23, 42, 0.04);
         }
         .app-header {
           display: flex;
@@ -2915,10 +2955,13 @@ export default function JobTrackerDashboard() {
           position: absolute;
           top: calc(100% + 6px);
           right: 0;
-          z-index: 50;
-          min-width: 190px;
+          z-index: 60;
+          min-width: 195px;
+          max-width: min(250px, calc(100vw - 32px));
+          max-height: min(340px, 75vh);
+          overflow-y: auto;
           background: #ffffff;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #cbd5e1;
           border-radius: 12px;
           box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
           padding: 6px;
@@ -4618,13 +4661,14 @@ export default function JobTrackerDashboard() {
         <div className="main-wrapper">
           <header className="topbar">
             <div className="topbar-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-              <button className="hamburger" onClick={() => setIsSidebarOpen(true)}>
+              <button className="hamburger" onClick={() => setIsSidebarOpen(true)} aria-label="Toggle navigation menu">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
               <div className="search-container">
                 <input
                   type="text"
-                  placeholder="Search applications..."
+                  placeholder="Search applications, roles, notes, attachments..."
+                  aria-label="Search applications, roles, notes, attachments"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   style={{ paddingRight: searchQuery ? '36px' : '16px' }}
@@ -4633,6 +4677,7 @@ export default function JobTrackerDashboard() {
                   <button
                     type="button"
                     onClick={() => setSearchQuery("")}
+                    aria-label="Clear search input"
                     style={{
                       position: 'absolute',
                       right: '12px',
@@ -4660,6 +4705,7 @@ export default function JobTrackerDashboard() {
                 <button
                   className="user-avatar-btn"
                   style={{ position: 'relative' }}
+                  aria-label="User account menu"
                   onClick={() => { setShowUserDropdown(!showUserDropdown); setShowThemeSubmenu(false); }}
                 >
                   U
@@ -4997,13 +5043,26 @@ export default function JobTrackerDashboard() {
                       return { ...app, derivedStatus, latestEmailTime };
                     })
                     .filter((app) => {
-                      const query = searchQuery.toLowerCase();
+                      const query = searchQuery.toLowerCase().trim();
                       const matchesSearch =
+                        !query ||
                         (app.company || "").toLowerCase().includes(query) ||
                         (app.role || "").toLowerCase().includes(query) ||
-                        (app.displayFields || []).some(f =>
+                        (app.subtitle || "").toLowerCase().includes(query) ||
+                        (app.note || "").toLowerCase().includes(query) ||
+                        (app.venue || "").toLowerCase().includes(query) ||
+                        (app.opportunityType || "").toLowerCase().includes(query) ||
+                        (app.opportunityType === "HACKATHON" && "hackathon".includes(query)) ||
+                        (app.opportunityType === "WEBINAR" && "webinar".includes(query)) ||
+                        (app.opportunityType === "OTHER_PLACEMENT_EVENT" && "event".includes(query)) ||
+                        (app.derivedStatus || "").toLowerCase().includes(query) ||
+                        (app.stage || "").toLowerCase().includes(query) ||
+                        (Array.isArray(app.displayFields) && app.displayFields.some(f =>
+                          (f.label || "").toLowerCase().includes(query) ||
                           (f.value || "").toLowerCase().includes(query)
-                        );
+                        )) ||
+                        (Array.isArray(app.skills) && app.skills.some(s => s.toLowerCase().includes(query))) ||
+                        (Array.isArray(app.attachments) && app.attachments.some(att => (att.filename || "").toLowerCase().includes(query)));
 
                       const isDeadlineToday = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString();
                       const matchesFilter =
@@ -5040,6 +5099,7 @@ export default function JobTrackerDashboard() {
                       handleMarkDone={handleMarkDone}
                       handleUnmarkDone={handleUnmarkDone}
                       handleDeleteOne={handleDeleteOne}
+                      setAppToDelete={setAppToDelete}
                       setSelectedApp={setSelectedApp}
                       setShowInfoModal={setShowInfoModal}
                       setCompanyProfile={setCompanyProfile}
@@ -5085,8 +5145,9 @@ export default function JobTrackerDashboard() {
                                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                                 disabled={activePage === 1}
                                 title="Previous Page"
+                                aria-label="Go to previous page"
                               >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
                               </button>
                               <span className="pagination-info">Page {activePage} of {totalPages}</span>
                               <button
@@ -5094,8 +5155,9 @@ export default function JobTrackerDashboard() {
                                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                                 disabled={activePage === totalPages}
                                 title="Next Page"
+                                aria-label="Go to next page"
                               >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
                               </button>
                             </div>
                           )}
@@ -5561,6 +5623,58 @@ export default function JobTrackerDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Single Application Delete Confirmation Modal */}
+      {appToDelete && (
+        <div className="modal-overlay" onClick={() => setAppToDelete(null)}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                Remove Application
+              </h3>
+              <button className="modal-close" onClick={() => setAppToDelete(null)} aria-label="Close dialog">&times;</button>
+            </div>
+
+            <div style={{ marginTop: '16px', color: 'var(--text-primary)', fontSize: '14px', lineHeight: '1.5' }}>
+              <p style={{ marginBottom: '8px' }}>
+                Are you sure you want to remove <strong>{appToDelete.company || "this opportunity"}</strong> from your dashboard?
+              </p>
+              {appToDelete.role && appToDelete.role.toLowerCase() !== "unknown role" && (
+                <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                  Role: {appToDelete.role}
+                </p>
+              )}
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
+                This will remove the application card from your dashboard. Future emails about this company will still sync normally.
+              </p>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '24px' }}>
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setAppToDelete(null)}
+                disabled={deletingSingleApp}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-submit"
+                style={{ backgroundColor: '#ef4444' }}
+                onClick={confirmDeleteOne}
+                disabled={deletingSingleApp}
+              >
+                {deletingSingleApp ? "Removing..." : "Remove Application"}
+              </button>
+            </div>
           </div>
         </div>
       )}

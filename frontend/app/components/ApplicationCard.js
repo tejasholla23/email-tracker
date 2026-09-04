@@ -14,6 +14,7 @@ export default function ApplicationCard({
   handleMarkDone,
   handleUnmarkDone,
   handleDeleteOne,
+  setAppToDelete,
   setSelectedApp,
   setShowInfoModal,
   setCompanyProfile,
@@ -103,7 +104,8 @@ export default function ApplicationCard({
           <button
             className={`pin-btn${app.isPinned ? " is-pinned" : ""}`}
             onClick={(e) => { e.stopPropagation(); handleTogglePin(app._id); }}
-            title={app.isPinned ? "Unpin" : "Pin to top"}
+            title={app.isPinned ? "Unpin application" : "Pin application to top"}
+            aria-label={app.isPinned ? "Unpin application" : "Pin application to top"}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 17v5"/><path d="M9 2h6l-1.5 5.5L16 11h-3.5l-.5 6-.5-6H8l2.5-3.5L9 2z"/>
@@ -120,6 +122,18 @@ export default function ApplicationCard({
                 setActiveStatusMenuId(activeStatusMenuId === `${app._id}-status` ? null : `${app._id}-status`);
               }}
               title="Click to change status or stage"
+              role="button"
+              tabIndex={0}
+              aria-haspopup="true"
+              aria-expanded={activeStatusMenuId === `${app._id}-status`}
+              aria-label={`Change status for ${app.company || 'application'}. Current status: ${app.derivedStatus === "no_response" ? "No response" : app.derivedStatus}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setActiveStatusMenuId(activeStatusMenuId === `${app._id}-status` ? null : `${app._id}-status`);
+                }
+              }}
             >
               {app.derivedStatus === "no_response" ? "No response" : app.derivedStatus}
               <span className="status-badge-chevron">▼</span>
@@ -481,6 +495,7 @@ export default function ApplicationCard({
           className="note-input"
           placeholder="Add a personal note..."
           value={app.note || ""}
+          aria-label={`Personal note for ${app.company || 'application'}`}
           onChange={(e) => handleUpdateNote(app._id, e.target.value)}
           onBlur={(e) => handleSaveNote(app._id, e.target.value)}
         />
@@ -490,6 +505,7 @@ export default function ApplicationCard({
       <div className="card-actions">
         <button
           className="card-btn card-btn-edit"
+          aria-label={`Edit ${app.company || 'application'}`}
           onClick={() => {
             setEditingApp(app);
 
@@ -539,6 +555,7 @@ export default function ApplicationCard({
             href={app.link}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`${((app.derivedStatus === "new" || app.derivedStatus === "unmarked") && app.isFormLink) ? "Apply for" : "Open link for"} ${app.company || 'opportunity'}`}
             onClick={(e) => {
               if (app.derivedStatus === "new" || app.derivedStatus === "unmarked") {
                 handleApply(app._id);
@@ -550,13 +567,22 @@ export default function ApplicationCard({
         )}
         <button
           className={`card-btn card-btn-done ${isDone ? "active" : ""}`}
+          aria-label={`${isDone ? "Unmark" : "Mark"} ${app.company || 'application'} as done`}
           onClick={() => isDone ? handleUnmarkDone(app._id) : handleMarkDone(app._id)}
         >
           {isDone ? "Unmark Done" : "Mark Done"}
         </button>
         <button
           className="card-btn card-btn-remove"
-          onClick={() => handleDeleteOne(app._id)}
+          title="Remove application"
+          aria-label={`Remove ${app.company || 'application'} from dashboard`}
+          onClick={() => {
+            if (typeof setAppToDelete === 'function') {
+              setAppToDelete(app);
+            } else if (typeof handleDeleteOne === 'function') {
+              handleDeleteOne(app._id);
+            }
+          }}
         >
           Remove
         </button>

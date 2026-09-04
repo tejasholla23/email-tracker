@@ -185,6 +185,7 @@ export default function InfoModal({
                   <button
                     className="btn-reparse"
                     title="Reparse application source email with AI"
+                    aria-label={`Reparse email for ${app.company || 'application'}`}
                     disabled={reparsingId === app._id || (typeof reparsingId === 'string' && reparsingId.startsWith(app._id))}
                     onClick={() => handleReparseEmail(app._id)}
                     style={{
@@ -218,7 +219,7 @@ export default function InfoModal({
                 {app.subtitle && <p className="info-modal-subtitle">{app.subtitle}</p>}
               </div>
             </div>
-            <button className="modal-close" onClick={closeInfoModal}>&times;</button>
+            <button className="modal-close" onClick={closeInfoModal} aria-label="Close details dialog">&times;</button>
           </div>
           <div className="info-modal-meta-chips">
             {app.stage && app.stage !== 'none' && (
@@ -484,6 +485,7 @@ export default function InfoModal({
                                 handleAttachmentAction(app._id, att.attachmentId, att.filename, att.mimeType, 'view');
                               }}
                               title="Preview attachment in browser"
+                              aria-label={`Preview attachment ${att.filename || ''}`}
                             >
                               {isViewing ? (
                                 <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '11px' }}>↻</span> View</>
@@ -505,6 +507,7 @@ export default function InfoModal({
                                 handleAttachmentAction(app._id, att.attachmentId, att.filename, att.mimeType, 'download');
                               }}
                               title="Download attachment to device"
+                              aria-label={`Download attachment ${att.filename || ''}`}
                             >
                               {isDownloading ? (
                                 <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '11px' }}>↻</span> Saving…</>
