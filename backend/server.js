@@ -5,6 +5,8 @@ const cron = require("node-cron");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
 const he = require("he");
 const { google } = require("googleapis");
 
@@ -29,6 +31,7 @@ const {
 const authenticate = require("./middleware/authenticate");
 const { generateAuthCode, consumeAuthCode } = require("./utils/authCodeStore");
 const { createLinkState, consumeLinkState } = require("./utils/linkStateStore");
+const { createSessionBoundAuthState, validateAndConsumeAuthState } = require("./utils/authStateStore");
 const { processCalendarSyncQueue, migrateAccountCalendar, getCalendarListForAccount } = require("./utils/calendarService");
 const {
   getFullTopicName,
@@ -152,7 +155,7 @@ function getFullBodyText(payload) {
 }
 
 const app = express();
-app.set("trust proxy", 1);
+app.set("trust proxy", process.env.TRUST_PROXY_HOPS ? parseInt(process.env.TRUST_PROXY_HOPS, 10) : 1);
 const PORT = process.env.PORT || 5000;
 
 const MONGO_URI =
@@ -200,7 +203,12 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+app.use(cookieParser());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use("/applications", applicationRoutes);
 
 // ==========================
@@ -263,7 +271,8 @@ app.get("/clear-applications", writeLimiter, authenticate, async (req, res) => {
     await Application.deleteMany({ userId: req.userId });
     res.send("All applications deleted");
   } catch (err) {
-    res.status(500).send(err.message);
+    console.error("[CLEAR_APPLICATIONS_ERR]", err.message);
+    res.status(500).send("Failed to clear applications. Please try again.");
   }
 });
 
@@ -299,8 +308,9 @@ app.delete("/clear-all-applications", writeLimiter, authenticate, async (req, re
     activeSyncs.delete(userIdStr); // Reset lock in case sync was stuck
     res.json({ message: "All applications permanently cleared", deletedCount: result.deletedCount });
   } catch (err) {
+    console.error("[CLEAR_ALL_ERR]", err.message);
     activeClearRequests.delete(userIdStr);
-    res.status(500).json({ message: "Failed to clear applications: " + err.message });
+    res.status(500).json({ message: "Failed to clear applications. Please try again." });
   }
 });
 
@@ -308,6 +318,7 @@ app.delete("/clear-all-applications", writeLimiter, authenticate, async (req, re
 // 🔐 GOOGLE AUTH
 // ==========================
 app.get("/auth/google", authLimiter, (req, res) => {
+  const state = createSessionBoundAuthState(res, "login");
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: [
@@ -316,6 +327,7 @@ app.get("/auth/google", authLimiter, (req, res) => {
     ],
     include_granted_scopes: true,
     prompt: "consent",
+    state,
   });
 
   res.redirect(url);
@@ -323,6 +335,7 @@ app.get("/auth/google", authLimiter, (req, res) => {
 
 // Incremental OAuth flow for calendar scopes specifically
 app.get("/auth/google/calendar", authLimiter, (req, res) => {
+  const state = createSessionBoundAuthState(res, "calendar");
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: [
@@ -333,6 +346,7 @@ app.get("/auth/google/calendar", authLimiter, (req, res) => {
     ],
     include_granted_scopes: true,
     prompt: "consent",
+    state,
   });
 
   res.redirect(url);
@@ -432,6 +446,13 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
     }
   }
 
+  // Validate session-bound OAuth state for primary login & calendar authorization
+  const authStateResult = validateAndConsumeAuthState(req, res, state);
+  if (!authStateResult.valid) {
+    console.warn(`[AUTH_CALLBACK_CSRF_BLOCKED] State validation failed: ${authStateResult.reason}`);
+    return res.redirect(`${frontendUrl}?auth=error&reason=invalid_state`);
+  }
+
   try {
     // Standard Login Callback Flow
     const localCallbackClient = new google.auth.OAuth2(
@@ -524,7 +545,7 @@ app.get("/auth/google/callback", authLimiter, async (req, res) => {
     res.redirect(`${frontendUrl}?auth_code=${authCode}`);
   } catch (err) {
     console.error("Google Auth Callback Error:", err.message);
-    res.status(500).send(`Auth failed: ${err.message}`);
+    res.redirect(`${frontendUrl}?auth=error&reason=auth_failed`);
   }
 });
 
@@ -580,7 +601,8 @@ app.post("/auth/linked-accounts/:id/sync", writeLimiter, authenticate, async (re
 
     res.json({ success: true, message: `Sync initiated for ${linkedDoc.email}` });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[LINKED_SYNC_ERR]", err.message);
+    res.status(500).json({ message: "Failed to initiate sync for linked account. Please try again." });
   }
 });
 
@@ -593,7 +615,8 @@ app.get("/auth/linked-accounts", readLimiter, authenticate, async (req, res) => 
 
     res.json({ linkedAccounts });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[GET_LINKED_ACCOUNTS_ERR]", err.message);
+    res.status(500).json({ message: "Failed to fetch linked accounts." });
   }
 });
 
@@ -637,7 +660,8 @@ app.delete("/auth/linked-accounts/:id", writeLimiter, authenticate, async (req, 
 
     res.json({ success: true, message: "Account disconnected successfully" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[DISCONNECT_LINKED_ERR]", err.message);
+    res.status(500).json({ message: "Failed to disconnect linked account. Please try again." });
   }
 });
 
@@ -727,7 +751,8 @@ app.get("/auth/me", readLimiter, authenticate, async (req, res) => {
       pushSubscriptionsCount: account ? (account.pushSubscriptions?.length || 0) : 0
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[GET_ME_ERR]", err.message);
+    res.status(500).json({ message: "Failed to fetch user info." });
   }
 });
 
@@ -754,7 +779,7 @@ app.get("/auth/student-profile", readLimiter, authenticate, async (req, res) => 
     });
   } catch (err) {
     console.error("[GET_STUDENT_PROFILE_ERR]", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to fetch student profile." });
   }
 });
 
@@ -871,7 +896,7 @@ app.put("/auth/student-profile", writeLimiter, authenticate, async (req, res) =>
     });
   } catch (err) {
     console.error("[PUT_STUDENT_PROFILE_ERR]", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to update student profile." });
   }
 });
 
@@ -890,7 +915,8 @@ app.get("/auth/calendar/status", readLimiter, authenticate, async (req, res) => 
       hasCalendarScope: !!hasCalendarScope
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[CALENDAR_STATUS_ERR]", err.message);
+    res.status(500).json({ message: "Failed to fetch calendar status." });
   }
 });
 
@@ -934,7 +960,8 @@ app.post("/auth/calendar/target", writeLimiter, authenticate, async (req, res) =
       );
     }
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[CALENDAR_TARGET_ERR]", err.message);
+    res.status(500).json({ message: "Failed to update target calendar." });
   }
 });
 
@@ -967,7 +994,8 @@ app.post("/auth/calendar/toggle", writeLimiter, authenticate, async (req, res) =
       processCalendarSyncQueue(account).catch(err => console.error("Async calendar sync error:", err.message));
     }
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[CALENDAR_TOGGLE_ERR]", err.message);
+    res.status(500).json({ message: "Failed to toggle calendar integration." });
   }
 });
 
@@ -991,7 +1019,8 @@ app.post("/auth/calendar/sync", calendarSyncLimiter, authenticate, async (req, r
 
     processCalendarSyncQueue(account).catch(err => console.error("Async calendar sync error:", err.message));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[CALENDAR_SYNC_ERR]", err.message);
+    res.status(500).json({ message: "Failed to queue calendar sync." });
   }
 });
 
@@ -1053,7 +1082,8 @@ app.post("/push/subscribe", writeLimiter, authenticate, async (req, res) => {
     await account.save();
     res.json({ success: true, message: "Subscribed successfully." });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[PUSH_SUBSCRIBE_ERR]", err.message);
+    res.status(500).json({ message: "Failed to update push subscription." });
   }
 });
 
@@ -1077,7 +1107,8 @@ app.post("/push/unsubscribe", writeLimiter, authenticate, async (req, res) => {
 
     res.json({ success: true, message: "Unsubscribed successfully." });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[PUSH_UNSUBSCRIBE_ERR]", err.message);
+    res.status(500).json({ message: "Failed to remove push subscription." });
   }
 });
 
@@ -1133,7 +1164,11 @@ app.delete("/auth/account", writeLimiter, authenticate, async (req, res) => {
       }
     }
 
-    // 3. Delete the account document
+    // 3. Delete all linked account documents for this user (SEC-17)
+    const linkedDeleteResult = await LinkedGmailAccount.deleteMany({ parentAccountId: userId });
+    console.log(`[ACCOUNT_DELETION] Deleted ${linkedDeleteResult.deletedCount} linked account(s) for userId: ${userId}`);
+
+    // 4. Delete the account document
     const accountDeleteResult = await Account.findByIdAndDelete(userId);
     if (!accountDeleteResult) {
       console.warn(`[ACCOUNT_DELETION] Account not found for userId: ${userId}`);
@@ -1718,8 +1753,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
           isFormLink: cachedApp.isFormLink,
           parseMeta: {
             ...cachedApp.parseMeta,
-            cacheHit: true,
-            originalUserId: cachedApp.userId
+            cacheHit: true
           }
         };
       }
@@ -2700,7 +2734,11 @@ async function fetchAndProcessEmails(targetUserId = null) {
 // ==========================
 // Middleware to validate static CRON_API_KEY
 const requireCronKey = (req, res, next) => {
-  const cronKey = req.headers["x-cron-key"] || req.query.cron_key;
+  const queryKey = req.query.cron_key;
+  if (queryKey) {
+    console.warn("[SECURITY_WARN] CRON_API_KEY passed via query parameter. Migrate to 'x-cron-key' header to prevent logging in access logs.");
+  }
+  const cronKey = req.headers["x-cron-key"] || queryKey;
   if (!cronKey || cronKey !== process.env.CRON_API_KEY) {
     return res.status(401).json({ message: "Unauthorized. Invalid cron key." });
   }

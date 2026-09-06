@@ -84,16 +84,22 @@ self.addEventListener("pushsubscriptionchange", (event) => {
       applicationServerKey: applicationServerKey
     }).then((newSubscription) => {
       // Send the refreshed subscription details to the backend.
-      // Note: Because we cannot guarantee valid local credentials in SW context without Cookies/localStorage,
-      // the endpoint /push/subscribe should accept valid requests, or the page will naturally refresh
-      // subscription metadata on next manual dashboard load.
+      // Note: Because service workers lack access to localStorage/client state for Bearer auth,
+      // requests to /push/subscribe may return 401. We handle non-OK responses gracefully,
+      // and the foreground pushManager will synchronize metadata on next dashboard visit.
       return fetch("/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscription: newSubscription.toJSON() })
+      }).then((res) => {
+        if (!res.ok) {
+          console.warn(`[SW] Push subscription sync returned HTTP ${res.status}. Foreground client will re-sync on next visit.`);
+        } else {
+          console.log("[SW] Push subscription refreshed and synced with server.");
+        }
       });
     }).catch(err => {
-      console.error("[SW] Failed to auto-renew push subscription:", err.message);
+      console.warn("[SW] Auto-renew push subscription completed with notice:", err.message);
     })
   );
 });

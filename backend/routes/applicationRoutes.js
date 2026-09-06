@@ -19,8 +19,7 @@ router.use(authenticate);
 // GET /applications/sync-status - return Google sync status
 router.get("/sync-status", readLimiter, async (req, res) => {
   try {
-    const email = req.userEmail;
-    const account = await Account.findOne({ email });
+    const account = await Account.findById(req.userId);
     if (!account) {
       return res.status(404).json({ message: "Account not found" });
     }
@@ -115,9 +114,31 @@ router.get("/", readLimiter, async (req, res) => {
 // POST /applications - add a new application
 router.post("/", writeLimiter, async (req, res) => {
   try {
-    const { companyInfo, userId, ...appData } = req.body;
+    // Explicit field allowlist to prevent mass assignment (SEC-02)
+    const ALLOWED_CREATE_FIELDS = [
+      "company", "subtitle", "role", "programStipend", "salaryText",
+      "programDuration", "venue", "deadlineText", "date", "link",
+      "displayFields", "source", "status", "opportunityType", "skills",
+      "timelineTitle", "timelineSummary"
+    ];
+
+    const sanitizedData = {};
+    for (const field of ALLOWED_CREATE_FIELDS) {
+      if (req.body[field] !== undefined) {
+        sanitizedData[field] = req.body[field];
+      }
+    }
+
+    if (!sanitizedData.source) sanitizedData.source = "Manual Addition";
+    if (!sanitizedData.status) sanitizedData.status = "new";
+
+    if (sanitizedData.company) {
+      const { normalizeCompany } = require("../utils/normalizeCompany");
+      sanitizedData.companyKey = normalizeCompany(sanitizedData.company);
+    }
+
     const newApplication = await Application.create({
-      ...appData,
+      ...sanitizedData,
       userId: req.userId,
       needsCalendarSync: true,
       calendarRetryCount: 0,
@@ -171,8 +192,19 @@ router.patch("/:id", writeLimiter, async (req, res) => {
       update.pinnedAt = null;
     }
 
-    if (manualEdits && typeof manualEdits === 'object') {
+    if (manualEdits && typeof manualEdits === 'object' && !Array.isArray(manualEdits)) {
+      // Strict allowlist for manual edits to prevent arbitrary MongoDB field injection (SEC-06)
+      const ALLOWED_MANUAL_EDIT_KEYS = new Set([
+        "company", "role", "subtitle", "status", "stage", "opportunityType",
+        "programStipend", "salaryText", "programDuration", "venue", "deadlineText",
+        "link", "date", "displayFields", "skills", "timelineTitle", "timelineSummary", "note"
+      ]);
+
       for (const [key, value] of Object.entries(manualEdits)) {
+        if (!ALLOWED_MANUAL_EDIT_KEYS.has(key)) {
+          continue; // Block disallowed fields or prototype manipulation
+        }
+
         update[key] = value;
         if (!update.$addToSet) update.$addToSet = {};
         if (!update.$addToSet.manualOverrides) update.$addToSet.manualOverrides = { $each: [] };
@@ -489,7 +521,7 @@ router.post("/:id/reparse", writeLimiter, async (req, res) => {
     }).catch(err => console.error("Async calendar sync error on reparse:", err.message));
   } catch (error) {
     console.error("[REPARSE_ERROR]", error.message);
-    res.status(500).json({ message: "Failed to reparse email: " + error.message });
+    res.status(500).json({ message: "Failed to reparse email. Please try again." });
   }
 });
 
@@ -607,14 +639,30 @@ router.get("/:id/attachments/:attachmentId", readLimiter, async (req, res) => {
     const mimeType = attachmentMeta.mimeType || "application/octet-stream";
     const requestedDisposition = (req.query.disposition || "").toLowerCase().trim();
 
+    // Block active / scriptable content from ever rendering inline (SEC-14)
+    const DANGEROUS_INLINE_MIMES = [
+      "text/html",
+      "application/xhtml+xml",
+      "image/svg+xml",
+      "application/javascript",
+      "text/javascript",
+      "text/xml",
+      "application/xml",
+    ];
+
+    const isDangerousMime = DANGEROUS_INLINE_MIMES.includes(mimeType.toLowerCase());
+
     let disposition = "attachment";
-    if (requestedDisposition === "inline" || requestedDisposition === "attachment") {
-      disposition = requestedDisposition;
+    if (requestedDisposition === "inline" && !isDangerousMime) {
+      disposition = "inline";
+    } else if (requestedDisposition === "attachment" || isDangerousMime) {
+      disposition = "attachment";
     } else {
       const viewableInline =
-        mimeType === "application/pdf" ||
-        mimeType.startsWith("image/") ||
-        mimeType.startsWith("text/");
+        (mimeType === "application/pdf" ||
+         mimeType.startsWith("image/") ||
+         mimeType.startsWith("text/")) &&
+        !isDangerousMime;
       disposition = viewableInline ? "inline" : "attachment";
     }
 
@@ -628,6 +676,8 @@ router.get("/:id/attachments/:attachmentId", readLimiter, async (req, res) => {
       `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`
     );
     res.setHeader("Content-Length", fileBuffer.length);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("Cache-Control", "private, max-age=300");
     res.send(fileBuffer);
 

@@ -14,6 +14,31 @@ function rateLimitHandler(req, res, next, options) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Composite client key resolver: prefers authenticated user ID over IP
+// This prevents campus Wi-Fi / NAT IP collisions where multiple students
+// share the same IP and exhaust each other's rate limit allocations.
+// ─────────────────────────────────────────────────────────────────
+function resolveRateLimitKey(req) {
+  if (req.userId) {
+    return `usr:${req.userId}`;
+  }
+  const authHeader = req.headers?.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const jwt = require("jsonwebtoken");
+      const token = authHeader.substring(7).trim();
+      const decoded = jwt.decode(token);
+      if (decoded && (decoded.sub || decoded.email)) {
+        return `usr:${decoded.sub || decoded.email}`;
+      }
+    } catch {
+      // Fallback to IP on decoding error
+    }
+  }
+  return req.ip;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // GROUP 1: Auth endpoints (unauthenticated, IP-based)
 //   Covers: /auth/google, /auth/google/calendar,
 //           /auth/google/callback, /auth/token, /auth/refresh
@@ -34,7 +59,7 @@ const authLimiter = rateLimit({
 // ─────────────────────────────────────────────────────────────────
 // GROUP 2: Manual Gmail sync (GET /sync)
 //   Very expensive: Gmail API + LLM parsing + DB writes.
-//   3 requests per 5 minutes per IP.
+//   3 requests per 5 minutes per user/IP.
 //   Complements the per-user cooldown in server.js.
 // ─────────────────────────────────────────────────────────────────
 const syncLimiter = rateLimit({
@@ -42,6 +67,7 @@ const syncLimiter = rateLimit({
   max: 3,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: resolveRateLimitKey,
   message: "Too many sync requests. Please wait a few minutes before syncing again.",
   handler: rateLimitHandler
 });
@@ -49,13 +75,14 @@ const syncLimiter = rateLimit({
 // ─────────────────────────────────────────────────────────────────
 // GROUP 3: Calendar re-sync trigger (POST /auth/calendar/sync)
 //   Expensive: flags all DB records + triggers Google Calendar API sweep.
-//   3 requests per 10 minutes per IP.
+//   3 requests per 10 minutes per user/IP.
 // ─────────────────────────────────────────────────────────────────
 const calendarSyncLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,  // 10 minutes
   max: 3,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: resolveRateLimitKey,
   message: "Too many calendar sync requests. Please wait before triggering another re-sync.",
   handler: rateLimitHandler
 });
@@ -66,14 +93,15 @@ const calendarSyncLimiter = rateLimit({
 //           POST /auth/calendar/toggle, DELETE /auth/account,
 //           DELETE /clear-all-applications
 //
-//   Tightened to 60/15min (not 200) because every write silently
-//   triggers processCalendarSyncQueue() in the background.
+//   Tightened to 60/15min per user/IP (not 200) because every write
+//   silently triggers processCalendarSyncQueue() in the background.
 // ─────────────────────────────────────────────────────────────────
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,  // 15 minutes
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: resolveRateLimitKey,
   message: "Too many requests. Please slow down and try again in a few minutes.",
   handler: rateLimitHandler
 });
@@ -83,7 +111,7 @@ const writeLimiter = rateLimit({
 //   Covers: GET /applications, GET /applications/sync-status,
 //           GET /auth/me, GET /auth/calendar/status, GET /logout
 //
-//   200 requests per 15 minutes per IP — generous for polling
+//   200 requests per 15 minutes per user/IP — generous for polling
 //   and normal dashboard usage.
 // ─────────────────────────────────────────────────────────────────
 const readLimiter = rateLimit({
@@ -91,6 +119,7 @@ const readLimiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: resolveRateLimitKey,
   message: "Too many requests. Please slow down.",
   handler: rateLimitHandler
 });
@@ -100,5 +129,6 @@ module.exports = {
   syncLimiter,
   calendarSyncLimiter,
   writeLimiter,
-  readLimiter
+  readLimiter,
+  resolveRateLimitKey,
 };

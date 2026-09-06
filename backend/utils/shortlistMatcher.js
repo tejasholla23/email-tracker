@@ -174,9 +174,16 @@ function matchCellAgainstIdentity(cellValue, identity) {
   return null;
 }
 
+// Resource limits for spreadsheet processing to prevent zip bombs/DoS (SEC-05)
+const MAX_XLSX_SIZE = 10 * 1024 * 1024; // 10MB limit
+const MAX_SHEETS_TO_SCAN = 10;
+const MAX_ROWS_PER_SHEET = 5000;
+
 /**
- * Deterministically inspects an in-memory XLSX workbook Buffer and checks for student shortlist match.
- *
+ * Inspect an XLSX fileBuffer and determine:
+ * 1. Is this a student shortlist / assessment list?
+ * 2. Does this student appear in it?
+ * 
  * @param {Buffer} fileBuffer - Binary XLSX buffer from Gmail API
  * @param {Object} identity - Student identity vector from buildStudentIdentity
  * @param {string} filename - Attachment filename for context
@@ -192,6 +199,19 @@ function inspectAndMatchWorkbook(fileBuffer, identity = {}, filename = "") {
       };
     }
 
+    // Guard against zip bombs / oversized spreadsheet buffers (SEC-05)
+    if (fileBuffer.length > MAX_XLSX_SIZE) {
+      console.warn(`[SHORTLIST_MATCHER] File "${filename}" exceeds 10MB limit (${fileBuffer.length} bytes > ${MAX_XLSX_SIZE} bytes)`);
+      return {
+        isShortlist: false,
+        status: "skipped",
+        matchDetails: {
+          error: `File size exceeds 10MB limit (${Math.round(fileBuffer.length / (1024 * 1024))}MB)`,
+          processedAt: new Date(),
+        },
+      };
+    }
+
     const workbook = XLSX.read(fileBuffer, { type: "buffer", cellDates: true, dense: true });
     if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
       return {
@@ -204,13 +224,15 @@ function inspectAndMatchWorkbook(fileBuffer, identity = {}, filename = "") {
     let hasAnyStudentTable = false;
     let firstSheetName = workbook.SheetNames[0] || "Sheet1";
 
-    for (const sheetName of workbook.SheetNames) {
+    const sheetNamesToScan = workbook.SheetNames.slice(0, MAX_SHEETS_TO_SCAN);
+    for (const sheetName of sheetNamesToScan) {
       const sheet = workbook.Sheets[sheetName];
       if (!sheet) continue;
 
-      // Convert sheet to 2D array of values
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-      if (!rows || rows.length < 2) continue; // Needs at least a header and 1 row
+      // Convert sheet to 2D array of values, bounded to MAX_ROWS_PER_SHEET to prevent memory exhaustion
+      const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+      if (!allRows || allRows.length < 2) continue; // Needs at least a header and 1 row
+      const rows = allRows.slice(0, MAX_ROWS_PER_SHEET);
 
       // ── Find Header Row (scan first 5 rows) ──
       let headerRowIndex = -1;
