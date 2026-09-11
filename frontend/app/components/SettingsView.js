@@ -241,7 +241,7 @@ export default function SettingsView({
             <h2>3. How do we process and use your data?</h2>
             <p>All data processed serves one direct purpose: simplifying your placement tracking:</p>
             <ul>
-              <li><strong>Dual-LLM AI Parsing</strong> — unstructured emails are parsed using OpenAI GPT-OSS 20B and NVIDIA Nemotron 3.5 Lightning (via NVIDIA NIM API) into clean application cards.</li>
+              <li><strong>Three-Provider LLM AI Parsing</strong> — unstructured emails are parsed using OpenAI GPT-OSS 20B, OpenAI GPT-OSS 120B, and Mistral Small (via NVIDIA NIM, Groq, and Mistral AI) into clean application cards.</li>
               <li><strong>Spreadsheet Shortlist Detection</strong> — attached candidate rosters are parsed in-memory during sync to determine if your name or USN is shortlisted.</li>
               <li><strong>Multi-Inbox Sync</strong> — coordinating primary and secondary linked accounts seamlessly.</li>
               <li><strong>Calendar Integration</strong> — synchronizing deadlines, PPTs, assessments, and interviews to your Google Calendar.</li>
@@ -292,7 +292,7 @@ export default function SettingsView({
 
             <h2>3. AI Parsing & Shortlist Verification Notice</h2>
             <p>
-              Email Tracker uses advanced Dual-LLM extraction (OpenAI GPT-OSS & Nemotron 3.5) and automated spreadsheet parsing to organize recruitment communications and detect candidate shortlist status.
+              Email Tracker uses advanced multi-provider LLM extraction (OpenAI GPT-OSS & Mistral Small) and automated spreadsheet parsing to organize recruitment communications and detect candidate shortlist status.
               <br />
               <strong>Important:</strong> AI and automated extractors can occasionally misinterpret ambiguous notices. <strong>You are solely responsible for independently verifying all critical deadlines, eligibility criteria, assessment links, and interview schedules with the official communications from your institution or employer.</strong>
             </p>

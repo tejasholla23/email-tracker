@@ -73,7 +73,7 @@ export default function TermsPage() {
           <section>
             <h2 style={{ fontSize: "18px", fontWeight: "600", color: "#ffffff", marginBottom: "12px" }}>4. AI Parsing & Shortlist Matching Disclaimer</h2>
             <p style={{ marginBottom: "12px" }}>
-              Email Tracker utilizes state-of-the-art AI models (Gemma 4 31B and Nemotron 3.5 Lightning) and spreadsheet parsing algorithms to extract recruitment details and detect candidate shortlist status.
+              Email Tracker utilizes state-of-the-art AI models (OpenAI GPT-OSS 20B, OpenAI GPT-OSS 120B, and Mistral Small) and spreadsheet parsing algorithms to extract recruitment details and detect candidate shortlist status.
             </p>
             <p style={{ marginBottom: "12px" }}>
               <strong>Important Verification Notice:</strong> While we strive for high precision, AI models and automated spreadsheet extractors may occasionally misinterpret ambiguous notices or formatting. <strong>You are solely responsible for independently verifying all critical deadlines, eligibility requirements, assessment links, and interview schedules with the official communications sent by your institution or employer.</strong>
