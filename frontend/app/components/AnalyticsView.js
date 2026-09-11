@@ -131,10 +131,19 @@ export default function AnalyticsView({ applications = [] }) {
       const latestTime = getLatestAppTime(app);
       const ageInDays = (now - latestTime) / DAY_MS;
 
+      const isExplicitNotApplied = status === "not_applied";
       const isFinished = status === "done" || status === "finished" || stage === "finished" || !!app.isFinished;
       const isRejected = stage === "rejected" || stage.startsWith("rejected") || status === "rejected" || !!app.isRejected || (app.classification && /rejection|rejected/i.test(app.classification));
       const isShortlisted = !isRejected && (!!app.isShortlisted || stage === "shortlisted" || stage === "oa_scheduled" || stage === "interview_scheduled" || stage === "offered" || (app.classification && /shortlist/i.test(app.classification)));
-      const hasApplied = !!app.hasApplied || status === "applied" || isShortlisted || isRejected || isFinished || (stage && stage !== "none");
+      // Emails directly marked done or marked as not_applied without having applied must come under Not applied
+      const hasApplied = !isExplicitNotApplied && (
+        status === "applied" ||
+        isShortlisted ||
+        isRejected ||
+        (stage && stage !== "none") ||
+        (!!app.hasApplied && isFinished) ||
+        (!!app.hasApplied && !isFinished)
+      );
       const isNoResponse = (status === "applied" || hasApplied) && !isFinished && !isRejected && !isShortlisted && ageInDays >= 20;
 
       if (isPlacement) {
@@ -172,6 +181,8 @@ export default function AnalyticsView({ applications = [] }) {
           donutPlacementRejected++;
         } else if (status === "done") {
           donutPlacementDone++;
+        } else if (status === "not_applied") {
+          donutPlacementDone++;
         } else if (isNoResponse) {
           donutPlacementAwaitingResponse++;
         } else if (hasApplied || status === "applied") {
@@ -204,7 +215,7 @@ export default function AnalyticsView({ applications = [] }) {
       }
 
       // Upcoming Deadlines (within 7 days)
-      if (app.deadlineISO && status !== "done" && status !== "applied") {
+      if (app.deadlineISO && status !== "done" && status !== "applied" && status !== "not_applied") {
         const deadlineDate = new Date(app.deadlineISO).getTime();
         const diffDays = (deadlineDate - now) / DAY_MS;
         if (diffDays >= 0 && diffDays <= 7) {

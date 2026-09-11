@@ -96,6 +96,7 @@ export default function EditModal({
                 >
                   <option value="new">New</option>
                   <option value="applied">Applied</option>
+                  <option value="not_applied">Didn't Apply</option>
                   <option value="done">Marked Done</option>
                 </select>
               </div>

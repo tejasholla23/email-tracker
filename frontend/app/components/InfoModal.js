@@ -233,7 +233,7 @@ export default function InfoModal({
               </span>
             )}
             <span className={`meta-chip status-${app.derivedStatus || statusKey}`} style={{ textTransform: 'capitalize' }}>
-              {app.derivedStatus === 'no_response' ? 'No response' : (app.status || 'New')}
+              {app.derivedStatus === 'no_response' ? 'No response' : (app.derivedStatus === 'not_applied' || app.status === 'not_applied') ? "Didn't Apply" : (app.status || 'New')}
             </span>
             {app.type && app.type !== 'unknown' && app.type !== app.emailType && (
               <span className="meta-chip" style={{ textTransform: 'capitalize' }}>{app.type}</span>

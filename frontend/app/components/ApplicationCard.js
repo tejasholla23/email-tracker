@@ -30,8 +30,8 @@ export default function ApplicationCard({
     : "N/A";
   const companyInitials = (app.company || "U").substring(0, 1).toUpperCase();
   const statusKey = app.derivedStatus;
-  const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied";
-  const isDone = statusKey === "done";
+  const isUrgent = app.deadlineISO && new Date(app.deadlineISO).toDateString() === new Date().toDateString() && statusKey !== "done" && statusKey !== "applied" && statusKey !== "not_applied";
+  const isDone = statusKey === "done" || statusKey === "not_applied";
 
   const getDeterministicColor = (str) => {
     let hash = 0;
@@ -135,7 +135,7 @@ export default function ApplicationCard({
                 }
               }}
             >
-              {app.derivedStatus === "no_response" ? "No response" : app.derivedStatus}
+              {app.derivedStatus === "no_response" ? "No response" : app.derivedStatus === "not_applied" ? "Didn't Apply" : app.derivedStatus}
               <span className="status-badge-chevron">▼</span>
             </span>
 
@@ -157,6 +157,14 @@ export default function ApplicationCard({
                 >
                   <span><span className="status-quick-dot" style={{ background: '#0f766e' }}></span>Applied</span>
                   {app.status === "applied" && <span>✓</span>}
+                </button>
+                <button
+                  type="button"
+                  className={`status-quick-item ${app.status === "not_applied" ? "active" : ""}`}
+                  onClick={() => handleQuickUpdate(app._id, { status: "not_applied" })}
+                >
+                  <span><span className="status-quick-dot" style={{ background: '#64748b' }}></span>Didn't Apply</span>
+                  {app.status === "not_applied" && <span>✓</span>}
                 </button>
                 <button
                   type="button"

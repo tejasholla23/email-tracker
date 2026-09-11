@@ -186,8 +186,8 @@ router.patch("/:id", writeLimiter, async (req, res) => {
 
     if (note !== undefined) update.note = note;
 
-    // Auto-unpin when marking as done
-    if (status === "done") {
+    // Auto-unpin when marking as done or didn't apply
+    if (status === "done" || status === "not_applied") {
       update.isPinned = false;
       update.pinnedAt = null;
     }
@@ -215,11 +215,15 @@ router.patch("/:id", writeLimiter, async (req, res) => {
           update.companyKey = normalizeCompany(value);
         }
       }
+
+      if (update.status === "not_applied") {
+        update.hasApplied = false;
+      }
     }
 
-    // Historical applied persistence: once applied, always count as applied in analytics
+    // Historical applied persistence: once applied, always count as applied in analytics (unless explicitly not_applied)
     const isAppliedUpdate = update.status === "applied" || (update.stage && update.stage !== "none");
-    if (isAppliedUpdate) {
+    if (isAppliedUpdate && update.status !== "not_applied") {
       update.hasApplied = true;
       if (!update.appliedAt) update.appliedAt = new Date();
     }
@@ -295,7 +299,7 @@ router.patch("/:id/pin", writeLimiter, async (req, res) => {
   try {
     const app = await Application.findOne({ _id: req.params.id, userId: req.userId });
     if (!app) return res.status(404).json({ message: "Application not found" });
-    if (app.status === "done") return res.status(400).json({ message: "Cannot pin done applications" });
+    if (app.status === "done" || app.status === "not_applied") return res.status(400).json({ message: "Cannot pin done or not applied applications" });
 
     const newPinned = !app.isPinned;
     app.isPinned = newPinned;

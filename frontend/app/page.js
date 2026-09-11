@@ -1653,7 +1653,7 @@ export default function JobTrackerDashboard() {
     if (!a.deadlineISO) return false;
     const d = new Date(a.deadlineISO);
     const statusLower = (a.status || "").toLowerCase();
-    return d.toDateString() === now.toDateString() && statusLower !== "done" && statusLower !== "applied";
+    return d.toDateString() === now.toDateString() && statusLower !== "done" && statusLower !== "applied" && statusLower !== "not_applied";
   }).length;
 
   const unmarkedCount = applications.filter(a => {
@@ -2908,6 +2908,7 @@ export default function JobTrackerDashboard() {
         .status-unmarked { background: #fffbeb; border-color: rgba(245, 158, 11, 0.25); color: #b45309; }
         .status-applied { background: #f0fdfa; border-color: rgba(20, 184, 166, 0.25); color: #0f766e; }
         .status-no_response, .status-no-response { background: #fff7ed; border-color: rgba(249, 115, 22, 0.35); color: #ea580c; }
+        .status-not_applied, .status-not-applied { background: #f1f5f9; border-color: rgba(100, 116, 139, 0.25); color: #475569; }
         .status-done { background: #f0fdf4; border-color: rgba(34, 197, 94, 0.25); color: #15803d; }
         .stage-oa { background: #f3e8ff; border-color: rgba(168, 85, 247, 0.3); color: #7e22ce; }
         .stage-interview { background: #fef3c7; border-color: rgba(245, 158, 11, 0.3); color: #b45309; }
@@ -3913,6 +3914,7 @@ export default function JobTrackerDashboard() {
         .dark .status-unmarked { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: #d97706; }
         .dark .status-applied { background: rgba(20, 184, 166, 0.08); color: #14b8a6; border-color: #0d9488; }
         .dark .status-no_response, .dark .status-no-response { background: rgba(249, 115, 22, 0.12); color: #f97316; border-color: #ea580c; }
+        .dark .status-not_applied, .dark .status-not-applied { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border-color: #64748b; }
         .dark .status-done { background: rgba(34, 197, 94, 0.08); color: #22c55e; border-color: #16a34a; }
         .dark .stage-oa { background: rgba(168, 85, 247, 0.15); border-color: #a855f7; color: #d8b4fe; }
         .dark .stage-interview { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fcd34d; }
@@ -4149,6 +4151,7 @@ export default function JobTrackerDashboard() {
         .meta-chip.status-new { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
         .meta-chip.status-applied { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
         .meta-chip.status-no_response, .meta-chip.status-no-response { background: #fff7ed; border-color: #ffedd5; color: #ea580c; }
+        .meta-chip.status-not_applied, .meta-chip.status-not-applied { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
         .meta-chip.status-interview { background: #fefce8; border-color: #fde68a; color: #92400e; }
         .meta-chip.status-offer { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
         .meta-chip.status-rejected { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
@@ -5077,9 +5080,9 @@ export default function JobTrackerDashboard() {
 
                   // Split into pinned (sorted by pinnedAt) and unpinned
                   const pinnedApps = filteredApps
-                    .filter(a => a.isPinned && a.derivedStatus !== "done")
+                    .filter(a => a.isPinned && a.derivedStatus !== "done" && a.derivedStatus !== "not_applied")
                     .sort((a, b) => new Date(a.pinnedAt || 0) - new Date(b.pinnedAt || 0));
-                  const unpinnedApps = filteredApps.filter(a => !a.isPinned || a.derivedStatus === "done");
+                  const unpinnedApps = filteredApps.filter(a => !a.isPinned || a.derivedStatus === "done" || a.derivedStatus === "not_applied");
 
                   const totalPages = Math.max(1, Math.ceil(unpinnedApps.length / 15));
                   const activePage = Math.min(currentPage, totalPages);
