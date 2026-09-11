@@ -21,7 +21,7 @@ Powered by a **3-Provider LLM Fallback Ingestion Pipeline** (OpenAI GPT-OSS 20B 
 
 ## Screenshots
 
-![Email Tracker Dashboard](./docs/dashboard-preview.png)
+![Email Tracker Dashboard](./frontend/public/dashboard-preview.png)
 
 ---
 
