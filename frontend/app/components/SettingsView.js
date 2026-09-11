@@ -7,6 +7,7 @@ export default function SettingsView({
   settingsSubView,
   setSettingsSubView,
   setActiveFilter,
+  apiFetch,
   pushSupported,
   pushPermission,
   isSubscribed,
@@ -677,6 +678,7 @@ export default function SettingsView({
       <ReportIssueModal
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
+        apiFetch={apiFetch}
       />
     </div>
   );

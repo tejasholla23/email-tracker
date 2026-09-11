@@ -13,7 +13,7 @@ const CATEGORIES = [
   "Other",
 ];
 
-export default function ReportIssueModal({ isOpen, onClose }) {
+export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
   const [category, setCategory] = useState("Parsing / AI Extraction");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
@@ -55,19 +55,33 @@ export default function ReportIssueModal({ isOpen, onClose }) {
           }
         : {};
 
-      const response = await fetch(`${BASE_URL}/applications/report-issue`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          category,
-          subject: subject.trim(),
-          description: description.trim(),
-          metadata,
-        }),
-      });
+      const payload = {
+        category,
+        subject: subject.trim(),
+        description: description.trim(),
+        metadata,
+      };
+
+      let response;
+      if (apiFetch) {
+        response = await apiFetch(`${BASE_URL}/applications/report-issue`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        const headers = { "Content-Type": "application/json" };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        response = await fetch(`${BASE_URL}/applications/report-issue`, {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+      }
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {

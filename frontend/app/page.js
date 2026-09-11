@@ -5084,6 +5084,7 @@ export default function JobTrackerDashboard() {
                 settingsSubView={settingsSubView}
                 setSettingsSubView={setSettingsSubView}
                 setActiveFilter={setActiveFilter}
+                apiFetch={apiFetch}
                 pushSupported={pushSupported}
                 pushPermission={pushPermission}
                 isSubscribed={isSubscribed}
