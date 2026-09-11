@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Application = require("../models/Application");
 const CompanyInfo = require("../models/CompanyInfo");
 const Account = require("../models/Account");
+const IssueReport = require("../models/IssueReport");
 const { processCalendarSyncQueue } = require("../utils/calendarService");
 const { enrichCompanyProfile } = require("../utils/enrichCompanyProfile");
 
@@ -694,4 +695,45 @@ router.get("/:id/attachments/:attachmentId", readLimiter, async (req, res) => {
   }
 });
 
+// POST /applications/report-issue - Submit a bug report or feedback ticket
+router.post("/report-issue", writeLimiter, async (req, res) => {
+  try {
+    const { category, subject, description, metadata } = req.body;
+
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ message: "Subject is required." });
+    }
+    if (!description || !description.trim()) {
+      return res.status(400).json({ message: "Description is required." });
+    }
+
+    const account = await Account.findById(req.userId).select("email");
+    const userEmail = account ? account.email : "unknown";
+
+    const report = await IssueReport.create({
+      userId: req.userId,
+      userEmail,
+      category: category || "Other",
+      subject: subject.trim().substring(0, 200),
+      description: description.trim().substring(0, 3000),
+      metadata: metadata || {},
+      status: "open",
+    });
+
+    console.log(
+      `[ISSUE_REPORTED] ID: ${report._id} | User: ${userEmail} | Category: ${report.category} | Subject: ${report.subject}`
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Your report has been submitted successfully. Thank you for your feedback!",
+      reportId: report._id,
+    });
+  } catch (error) {
+    console.error("[REPORT_ISSUE_ERROR]", error);
+    res.status(500).json({ message: "Failed to submit issue report." });
+  }
+});
+
 module.exports = router;
+
