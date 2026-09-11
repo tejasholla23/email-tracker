@@ -3223,7 +3223,28 @@ export default function JobTrackerDashboard() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleUp { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
         
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease-out; }
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.45) !important;
+          backdrop-filter: blur(5px) !important;
+          -webkit-backdrop-filter: blur(5px) !important;
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.2s ease-out;
+        }
+        .modal-overlay.dark,
+        .dark.modal-overlay,
+        .dark .modal-overlay {
+          background: rgba(0, 0, 0, 0.65) !important;
+          backdrop-filter: blur(6px) !important;
+          -webkit-backdrop-filter: blur(6px) !important;
+        }
         .modal-content { background: #fff; width: 100%; max-width: 480px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); padding: 32px; position: relative; animation: scaleUp 0.25s ease-out; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
         .modal-title { font-family: 'Manrope', sans-serif; font-size: 24px; font-weight: 700; color: #171d1c; }
@@ -3994,6 +4015,10 @@ export default function JobTrackerDashboard() {
         }
 
         /* Dark Mode */
+        :root.dark,
+        html.dark,
+        body.dark,
+        .layout.dark,
         .dark { 
           --bg-color: #030712;
           --surface-color: #1f2937;
@@ -4003,7 +4028,10 @@ export default function JobTrackerDashboard() {
           --border-color: #374151;
           --brand-primary: #3b82f6;
           --brand-primary-hover: #60a5fa;
+        }
 
+        body.dark,
+        .layout.dark {
           background-color: var(--bg-color); 
           color: var(--text-primary); 
           min-height: 100vh; 
