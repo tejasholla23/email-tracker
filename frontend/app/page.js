@@ -4906,7 +4906,7 @@ export default function JobTrackerDashboard() {
                   onClick={() => setShowUserDropdown(!showUserDropdown)}
                 >
                   <div className="user-avatar-circle" style={{ position: 'relative' }}>
-                    {((userEmail || "U")[0] || "U").toUpperCase()}
+                    U
                     {linkedAccounts.some(a => a.syncStatus === "failed") && (
                       <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', border: '1.5px solid var(--bg-primary)' }} title="Linked account sync issue" />
                     )}
