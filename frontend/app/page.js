@@ -949,6 +949,20 @@ export default function JobTrackerDashboard() {
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (isDarkMode) {
+        document.documentElement.classList.add("dark");
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.body.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.setAttribute("data-theme", "light");
+        document.body.classList.remove("dark");
+      }
+    }
+  }, [isDarkMode]);
+
   const fetchCalendarStatus = async () => {
     try {
       setLoadingCalendarStatus(true);
@@ -5513,7 +5527,7 @@ export default function JobTrackerDashboard() {
       )}
 
       {showAddModal && (
-        <div className="modal-overlay">
+        <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`}>
           <div className="modal-content">
             <div className="modal-header">
               <h3 className="modal-title">Add Application</h3>
@@ -5752,6 +5766,7 @@ export default function JobTrackerDashboard() {
         editCustomValue={editCustomValue}
         setEditCustomValue={setEditCustomValue}
         editSubmitting={editSubmitting}
+        isDarkMode={isDarkMode}
       />
 
       <InfoModal
@@ -5769,11 +5784,12 @@ export default function JobTrackerDashboard() {
         handleAttachmentAction={handleAttachmentAction}
         companyProfileLoading={companyProfileLoading}
         companyProfile={companyProfile}
+        isDarkMode={isDarkMode}
       />
 
       {/* ── Connect Gmail Confirmation Explanation Modal ── */}
       {showLinkConfirmModal && (
-        <div className="modal-overlay" onClick={() => setShowLinkConfirmModal(false)}>
+        <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`} onClick={() => setShowLinkConfirmModal(false)}>
           <div className="modal-content" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ marginBottom: '12px' }}>
               <h3 className="modal-title" style={{ margin: 0 }}>
@@ -5816,7 +5832,7 @@ export default function JobTrackerDashboard() {
 
 
       {showDeleteModal && (
-        <div className="modal-overlay" onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}>
+        <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`} onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setDeleteError(""); }}>
           <div className="modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title" style={{ color: '#dc2626' }}>Delete Account</h3>
@@ -5888,7 +5904,7 @@ export default function JobTrackerDashboard() {
       )}
 
       {showClearModal && (
-        <div className="modal-overlay" onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>
+        <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`} onClick={() => { setShowClearModal(false); setClearConfirmText(""); setClearError(""); }}>
           <div className="modal-content" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title" style={{ color: '#ef4444' }}>Clear Dashboard</h3>
@@ -5952,7 +5968,7 @@ export default function JobTrackerDashboard() {
 
       {/* Single Application Delete Confirmation Modal */}
       {appToDelete && (
-        <div className="modal-overlay" onClick={() => setAppToDelete(null)}>
+        <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`} onClick={() => setAppToDelete(null)}>
           <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title" style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px' }}>

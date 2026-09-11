@@ -14,11 +14,12 @@ export default function EditModal({
   editCustomValue,
   setEditCustomValue,
   editSubmitting,
+  isDarkMode = true,
 }) {
   if (!showEditModal) return null;
 
   return (
-    <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+    <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`} onClick={() => setShowEditModal(false)}>
       <div className="modal-content edit-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="edit-modal-header modal-header">
           <h3 className="modal-title">Edit Details</h3>

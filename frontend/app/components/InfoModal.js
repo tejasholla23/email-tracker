@@ -17,6 +17,7 @@ export default function InfoModal({
   handleAttachmentAction,
   companyProfileLoading,
   companyProfile,
+  isDarkMode = true,
 }) {
   if (!showInfoModal || !selectedApp) return null;
 
@@ -168,7 +169,7 @@ export default function InfoModal({
     : [{ messageId: null, event: null, items: realAttachments }];
 
   return (
-    <div className="modal-overlay" onClick={closeInfoModal}>
+    <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`} onClick={closeInfoModal}>
       <div className="modal-content info-modal-content" onClick={e => e.stopPropagation()}>
 
         {/* ── Header ── */}
@@ -327,31 +328,31 @@ export default function InfoModal({
                     gap: '8px 12px',
                     margin: '8px 0 10px',
                     padding: '10px 12px',
-                    background: 'var(--bg-color, #f8fafc)',
+                    background: isDarkMode ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc',
                     borderRadius: '8px',
-                    border: '1px solid var(--border-color, #e2e8f0)'
+                    border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'}`
                   }}>
                     {profile.industry && (
                       <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Industry</div>
-                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.industry}</div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: isDarkMode ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Industry</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: isDarkMode ? '#f8fafc' : '#0f172a', marginTop: '2px' }}>{profile.industry}</div>
                       </div>
                     )}
                     {profile.companyType && (
                       <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Type</div>
-                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.companyType}</div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: isDarkMode ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Type</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: isDarkMode ? '#f8fafc' : '#0f172a', marginTop: '2px' }}>{profile.companyType}</div>
                       </div>
                     )}
                     {profile.headquarters && (
                       <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Headquarters</div>
-                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-primary, #0f172a)', marginTop: '2px' }}>{profile.headquarters}</div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: isDarkMode ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Headquarters</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: '600', color: isDarkMode ? '#f8fafc' : '#0f172a', marginTop: '2px' }}>{profile.headquarters}</div>
                       </div>
                     )}
                     {profile.website && (
                       <div>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Website</div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: isDarkMode ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Website</div>
                         <a href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12.5px', fontWeight: '600', color: '#3b82f6', textDecoration: 'underline', marginTop: '2px', display: 'inline-block' }}>
                           {profile.website.replace(/^https?:\/\//, '')} ↗
                         </a>
@@ -543,16 +544,16 @@ export default function InfoModal({
                     const formattedD = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
                     return (
                       <div key={i} className="timeline-event" style={{ display: 'flex', position: 'relative', marginBottom: i === app.events.length - 1 ? '0' : '12px' }}>
-                        <div className="timeline-date" style={{ width: '48px', fontSize: '12.5px', color: '#64748b', textAlign: 'right', marginRight: '14px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
+                        <div className="timeline-date" style={{ width: '48px', fontSize: '12.5px', color: isDarkMode ? '#94a3b8' : '#64748b', textAlign: 'right', marginRight: '14px', flexShrink: 0, paddingTop: '1px', fontWeight: '500' }}>
                           {formattedD}
                         </div>
-                        <div className="timeline-dot" style={{ position: 'absolute', left: '57px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: '1px solid #fff' }}></div>
+                        <div className="timeline-dot" style={{ position: 'absolute', left: '57px', top: '7px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6', zIndex: 1, border: isDarkMode ? '1px solid #181920' : '1px solid #fff' }}></div>
                         {i !== app.events.length - 1 && (
-                          <div className="timeline-line" style={{ position: 'absolute', left: '60px', top: '15px', bottom: '-12px', width: '2px', backgroundColor: '#e2e8f0' }}></div>
+                          <div className="timeline-line" style={{ position: 'absolute', left: '60px', top: '15px', bottom: '-12px', width: '2px', backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0' }}></div>
                         )}
                         <div className="timeline-content" style={{ marginLeft: '22px', flex: 1, paddingBottom: '2px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-                            <div className="timeline-title" style={{ fontSize: '13.5px', fontWeight: '600', color: '#0f172a' }}>
+                            <div className="timeline-title" style={{ fontSize: '13.5px', fontWeight: '600', color: isDarkMode ? '#f8fafc' : '#0f172a' }}>
                               {ev.title || ev.classification || 'Email Notification'}
                             </div>
                             {ev.messageId && (
@@ -591,7 +592,7 @@ export default function InfoModal({
                               </button>
                             )}
                           </div>
-                          <div className="timeline-subtitle" style={{ fontSize: '12px', color: '#475569', marginTop: '2px', lineHeight: '1.45' }}>
+                          <div className="timeline-subtitle" style={{ fontSize: '12px', color: isDarkMode ? '#94a3b8' : '#475569', marginTop: '2px', lineHeight: '1.45' }}>
                             {ev.summary ? ev.summary : (ev.subject ? (ev.subject.length > 80 ? ev.subject.substring(0, 80) + '...' : ev.subject) : '')}
                           </div>
                           {ev.link && (
