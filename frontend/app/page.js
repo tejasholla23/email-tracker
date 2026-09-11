@@ -2344,7 +2344,36 @@ export default function JobTrackerDashboard() {
         .search-container input { padding: 9px 16px 9px 40px; border-radius: 999px; border: 1px solid var(--border-color); background: #f1f5f9 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center; width: 100%; outline: none; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out; }
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: #ffffff; }
         .search-container input::placeholder { color: var(--text-secondary); }
-        .topbar-actions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+        .topbar-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        
+        /* Topbar Theme Toggle Button */
+        .theme-toggle-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: transparent;
+          border: 1px solid transparent;
+          color: var(--text-secondary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease-out;
+        }
+        .theme-toggle-btn:hover {
+          background: var(--bg-color);
+          color: var(--text-primary);
+          border-color: var(--border-color);
+        }
+        .dark .theme-toggle-btn {
+          color: #94a3b8;
+        }
+        .dark .theme-toggle-btn:hover {
+          background: rgba(255, 255, 255, 0.06);
+          color: #f8fafc;
+          border-color: rgba(255, 255, 255, 0.1);
+        }
+        
         @keyframes dropdownPopup {
           0% {
             opacity: 0;
@@ -2356,14 +2385,153 @@ export default function JobTrackerDashboard() {
           }
         }
         .user-dropdown-container { position: relative; }
-        .user-avatar-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-primary); color: white; border: none; font-weight: 600; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease-out; }
-        .user-avatar-btn:hover { filter: brightness(1.1); transform: scale(1.05); }
-        .user-dropdown-menu { position: absolute; top: 100%; right: 0; margin-top: 8px; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.25), 0 6px 12px -2px rgba(0, 0, 0, 0.12); width: 220px; overflow: hidden; z-index: 100; transform-origin: top right; animation: dropdownPopup 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
-        .user-dropdown-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); font-size: 13px; color: var(--text-secondary); word-break: break-all; }
-        .user-dropdown-item { width: 100%; text-align: left; padding: 10px 16px; background: transparent; border: none; font-size: 13px; color: var(--text-primary); cursor: pointer; transition: background-color 0.15s ease-out; }
+        
+        /* Expandable User Badge / Avatar Button */
+        .user-avatar-btn {
+          display: inline-flex;
+          align-items: center;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 999px;
+          padding: 2px 2px;
+          cursor: pointer;
+          color: var(--text-primary);
+          transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+          max-width: 38px;
+          overflow: hidden;
+          white-space: nowrap;
+          box-sizing: border-box;
+          user-select: none;
+        }
+        .user-avatar-btn:hover {
+          background: rgba(0, 0, 0, 0.04);
+        }
+        .dark .user-avatar-btn:hover {
+          background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .layout:not(.sidebar-expanded) .user-avatar-btn.expanded-badge {
+          max-width: 340px;
+          padding: 3px 12px 3px 3px;
+          gap: 10px;
+          background: rgba(0, 0, 0, 0.03);
+          border-color: var(--border-color);
+        }
+        .dark .layout:not(.sidebar-expanded) .user-avatar-btn.expanded-badge {
+          background: rgba(255, 255, 255, 0.03);
+          border-color: rgba(255, 255, 255, 0.08);
+        }
+        .layout:not(.sidebar-expanded) .user-avatar-btn.expanded-badge:hover {
+          background: rgba(0, 0, 0, 0.06);
+          border-color: #cbd5e1;
+        }
+        .dark .layout:not(.sidebar-expanded) .user-avatar-btn.expanded-badge:hover {
+          background: rgba(255, 255, 255, 0.07);
+          border-color: rgba(255, 255, 255, 0.15);
+        }
+        
+        .user-avatar-circle {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #3b82f6;
+          color: #ffffff;
+          font-weight: 600;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        }
+        
+        .user-avatar-email-label {
+          font-size: 13.5px;
+          font-weight: 500;
+          color: var(--text-primary);
+          opacity: 0;
+          max-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          transition: opacity 0.25s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+          letter-spacing: -0.01em;
+        }
+        .dark .user-avatar-email-label {
+          color: #e2e8f0;
+        }
+        
+        .layout:not(.sidebar-expanded) .user-avatar-btn.expanded-badge .user-avatar-email-label {
+          opacity: 1;
+          max-width: 220px;
+        }
+        
+        .user-avatar-chevron {
+          display: flex;
+          align-items: center;
+          color: var(--text-secondary);
+          opacity: 0;
+          width: 0;
+          transform: scale(0.6);
+          transition: opacity 0.25s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.3s ease;
+          flex-shrink: 0;
+        }
+        .dark .user-avatar-chevron {
+          color: #94a3b8;
+        }
+        .layout:not(.sidebar-expanded) .user-avatar-btn.expanded-badge .user-avatar-chevron {
+          opacity: 1;
+          width: 14px;
+          transform: scale(1);
+        }
+        
+        .user-dropdown-menu {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          margin-top: 8px;
+          background: var(--surface-color);
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          box-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.25), 0 6px 12px -2px rgba(0, 0, 0, 0.12);
+          width: 230px;
+          overflow: hidden;
+          z-index: 100;
+          transform-origin: top right;
+          animation: dropdownPopup 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+          padding: 6px 0;
+        }
+        .user-dropdown-item {
+          width: 100%;
+          text-align: left;
+          padding: 10px 16px;
+          background: transparent;
+          border: none;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: var(--text-primary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          transition: background-color 0.15s ease-out, color 0.15s ease-out;
+        }
         .user-dropdown-item:hover { background: var(--bg-color); }
         .user-dropdown-item.text-danger { color: #dc2626; }
         .dark .user-dropdown-item.text-danger { color: #ef4444; }
+        .user-dropdown-item.text-danger:hover { background: rgba(239, 68, 68, 0.08); }
+        
+        .dropdown-chevron-icon {
+          color: var(--text-secondary);
+          opacity: 0.7;
+          display: flex;
+          align-items: center;
+        }
+        .dark .dropdown-chevron-icon { color: #94a3b8; }
+        .user-dropdown-divider {
+          border-bottom: 1px solid var(--border-color);
+          margin: 6px 0;
+        }
         .floating-add-btn { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(37,99,235,0.5), 0 0 40px rgba(37,99,235,0.25); z-index: 50; padding: 0; background: #2563eb; color: white; border: none; cursor: pointer; transition: all 0.2s ease-out; }
         .floating-add-btn:hover { background: #1d4ed8; transform: scale(1.05); box-shadow: 0 0 25px rgba(37,99,235,0.6), 0 0 50px rgba(37,99,235,0.3); filter: none; }
         .dark .floating-add-btn { box-shadow: 0 0 20px rgba(255, 255, 255, 0.25), 0 0 40px rgba(255, 255, 255, 0.1); }
@@ -4704,56 +4872,123 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
             <div className="topbar-actions">
+              {/* Dark / Light Mode Toggle Button */}
+              <button
+                className="theme-toggle-btn"
+                onClick={toggleDarkMode}
+                aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+                title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDarkMode ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                  </svg>
+                ) : (
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                  </svg>
+                )}
+              </button>
+
+              {/* User Avatar / Account Badge */}
               <div className="user-dropdown-container" ref={userDropdownRef}>
                 <button
-                  className="user-avatar-btn"
-                  style={{ position: 'relative' }}
+                  className={`user-avatar-btn ${isSidebarCollapsed ? "expanded-badge" : ""}`}
                   aria-label="User account menu"
-                  onClick={() => { setShowUserDropdown(!showUserDropdown); setShowThemeSubmenu(false); }}
+                  onClick={() => setShowUserDropdown(!showUserDropdown)}
                 >
-                  U
-                  {linkedAccounts.some(a => a.syncStatus === "failed") && (
-                    <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '9px', height: '9px', borderRadius: '50%', background: '#ef4444', border: '1.5px solid var(--bg-primary)' }} title="Linked account sync issue" />
-                  )}
+                  <div className="user-avatar-circle" style={{ position: 'relative' }}>
+                    {((userEmail || "U")[0] || "U").toUpperCase()}
+                    {linkedAccounts.some(a => a.syncStatus === "failed") && (
+                      <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', border: '1.5px solid var(--bg-primary)' }} title="Linked account sync issue" />
+                    )}
+                  </div>
+                  <span className="user-avatar-email-label">{userEmail}</span>
+                  <span className="user-avatar-chevron" aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </span>
                 </button>
+
                 {showUserDropdown && (
                   <div className="user-dropdown-menu">
-                    <div className="user-dropdown-header">
-                      <span className="user-dropdown-email">{userEmail}</span>
-                    </div>
+                    <button
+                      className="user-dropdown-item"
+                      onClick={() => {
+                        setActiveFilter('settings');
+                        setSettingsSubView('linked-accounts');
+                        setShowUserDropdown(false);
+                        fetchLinkedAccounts();
+                      }}
+                    >
+                      <span>Linked Gmail Accounts</span>
+                      <span className="dropdown-chevron-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                      </span>
+                    </button>
 
-                    {!showThemeSubmenu ? (
-                      <>
-                        <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('linked-accounts'); setShowUserDropdown(false); fetchLinkedAccounts(); }}>
-                          Linked Gmail Accounts {linkedAccounts.some(a => a.syncStatus === "failed") ? "⚠️" : ""} ❯
-                        </button>
-                        <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('student-profile'); setShowUserDropdown(false); fetchStudentProfile(); }}>
-                          Student Details ❯
-                        </button>
-                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(true); }}>
-                          Theme
-                        </button>
-                        <button className="user-dropdown-item" onClick={() => { setActiveFilter('settings'); setSettingsSubView('main'); setShowUserDropdown(false); }}>
-                          Settings
-                        </button>
-                        <div style={{ borderBottom: '1px solid var(--border-color)', margin: '4px 0' }} />
-                        <button className="user-dropdown-item text-danger" onClick={() => { handleLogout(); setShowUserDropdown(false); }}>
-                          Logout
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowThemeSubmenu(false); }}>
-                          ❮ Back
-                        </button>
-                        <button className="user-dropdown-item" onClick={() => { setIsDarkMode(false); setShowUserDropdown(false); localStorage.setItem('darkMode', 'false'); }}>
-                          ☀️ Light Mode
-                        </button>
-                        <button className="user-dropdown-item" onClick={() => { setIsDarkMode(true); setShowUserDropdown(false); localStorage.setItem('darkMode', 'true'); }}>
-                          🌙 Dark Mode
-                        </button>
-                      </>
-                    )}
+                    <button
+                      className="user-dropdown-item"
+                      onClick={() => {
+                        setActiveFilter('settings');
+                        setSettingsSubView('student-profile');
+                        setShowUserDropdown(false);
+                        fetchStudentProfile();
+                      }}
+                    >
+                      <span>Student Details</span>
+                      <span className="dropdown-chevron-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                      </span>
+                    </button>
+
+                    <button
+                      className="user-dropdown-item"
+                      onClick={() => {
+                        setActiveFilter('settings');
+                        setSettingsSubView('main');
+                        setShowUserDropdown(false);
+                      }}
+                    >
+                      <span>Settings</span>
+                      <span className="dropdown-chevron-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                      </span>
+                    </button>
+
+                    <div className="user-dropdown-divider" />
+
+                    <button
+                      className="user-dropdown-item text-danger"
+                      onClick={() => {
+                        handleLogout();
+                        setShowUserDropdown(false);
+                      }}
+                    >
+                      <span>Logout</span>
+                      <span className="dropdown-chevron-icon" style={{ color: 'inherit' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                          <polyline points="16 17 21 12 16 7"></polyline>
+                          <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                      </span>
+                    </button>
                   </div>
                 )}
               </div>
