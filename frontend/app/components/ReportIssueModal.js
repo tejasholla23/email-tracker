@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import api from "../utils/api";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 const CATEGORIES = [
   "Parsing / AI Extraction",
@@ -54,12 +55,24 @@ export default function ReportIssueModal({ isOpen, onClose }) {
           }
         : {};
 
-      await api.post("/applications/report-issue", {
-        category,
-        subject: subject.trim(),
-        description: description.trim(),
-        metadata,
+      const response = await fetch(`${BASE_URL}/applications/report-issue`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          category,
+          subject: subject.trim(),
+          description: description.trim(),
+          metadata,
+        }),
       });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to submit issue report.");
+      }
 
       setSuccess(true);
       setTimeout(() => {
@@ -72,7 +85,7 @@ export default function ReportIssueModal({ isOpen, onClose }) {
     } catch (err) {
       console.error("Failed to submit issue:", err);
       setError(
-        err.response?.data?.message || "Failed to submit your report. Please try again."
+        err.message || "Failed to submit your report. Please try again."
       );
     } finally {
       setLoading(false);
