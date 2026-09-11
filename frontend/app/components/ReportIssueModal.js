@@ -115,33 +115,19 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        backdropFilter: "blur(6px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 9999,
-        padding: "16px",
-        animation: "fadeIn 0.2s ease-out",
-      }}
+      className="modal-overlay"
+      style={{ zIndex: 9999 }}
       onClick={handleModalClose}
     >
       <div
+        className="modal-content"
         style={{
-          background: "var(--card-bg, #181920)",
-          border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-          borderRadius: "16px",
-          width: "100%",
           maxWidth: "520px",
-          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4)",
+          width: "100%",
+          padding: "0",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          color: "var(--text-primary, #ffffff)",
-          animation: "scaleUp 0.2s ease-out",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -347,24 +333,14 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
+                className="form-select"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.15))",
-                  background: "var(--input-bg, rgba(255, 255, 255, 0.04))",
-                  color: "var(--text-primary, #ffffff)",
-                  fontSize: "14px",
-                  outline: "none",
                   cursor: "pointer",
                 }}
               >
                 {CATEGORIES.map((cat) => (
-                  <option
-                    key={cat}
-                    value={cat}
-                    style={{ background: "#1f2937", color: "#ffffff" }}
-                  >
+                  <option key={cat} value={cat}>
                     {cat}
                   </option>
                 ))}
@@ -379,7 +355,7 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
                   fontSize: "12px",
                   fontWeight: "600",
                   marginBottom: "6px",
-                  color: "var(--text-secondary, #9ca3af)",
+                  color: "var(--text-secondary)",
                   textTransform: "uppercase",
                   letterSpacing: "0.5px",
                 }}
@@ -392,15 +368,9 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="e.g., Application for Google is missing deadline"
                 maxLength={200}
+                className="form-input"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.15))",
-                  background: "var(--input-bg, rgba(255, 255, 255, 0.04))",
-                  color: "var(--text-primary, #ffffff)",
-                  fontSize: "14px",
-                  outline: "none",
                   boxSizing: "border-box",
                 }}
               />
@@ -419,7 +389,7 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
                   style={{
                     fontSize: "12px",
                     fontWeight: "600",
-                    color: "var(--text-secondary, #9ca3af)",
+                    color: "var(--text-secondary)",
                     textTransform: "uppercase",
                     letterSpacing: "0.5px",
                   }}
@@ -429,7 +399,7 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
                 <span
                   style={{
                     fontSize: "11px",
-                    color: "var(--text-secondary, #9ca3af)",
+                    color: "var(--text-secondary)",
                   }}
                 >
                   {description.length}/3000
@@ -441,15 +411,9 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
                 placeholder="Please describe what happened, what you expected, or the steps to reproduce..."
                 rows={4}
                 maxLength={3000}
+                className="form-input"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.15))",
-                  background: "var(--input-bg, rgba(255, 255, 255, 0.04))",
-                  color: "var(--text-primary, #ffffff)",
-                  fontSize: "14px",
-                  outline: "none",
                   resize: "vertical",
                   fontFamily: "inherit",
                   boxSizing: "border-box",
@@ -464,7 +428,7 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
                 alignItems: "center",
                 gap: "8px",
                 fontSize: "12px",
-                color: "var(--text-secondary, #9ca3af)",
+                color: "var(--text-secondary)",
                 cursor: "pointer",
                 marginBottom: "20px",
                 userSelect: "none",
@@ -491,31 +455,15 @@ export default function ReportIssueModal({ isOpen, onClose, apiFetch }) {
                 type="button"
                 onClick={handleModalClose}
                 disabled={loading}
-                style={{
-                  padding: "9px 18px",
-                  borderRadius: "8px",
-                  background: "transparent",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.15))",
-                  color: "var(--text-primary, #ffffff)",
-                  fontSize: "13px",
-                  fontWeight: "500",
-                  cursor: "pointer",
-                }}
+                className="btn-cancel"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
+                className="btn-submit"
                 style={{
-                  padding: "9px 20px",
-                  borderRadius: "8px",
-                  background: "#3b82f6",
-                  border: "none",
-                  color: "#ffffff",
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  cursor: loading ? "not-allowed" : "pointer",
                   opacity: loading ? 0.7 : 1,
                   display: "flex",
                   alignItems: "center",

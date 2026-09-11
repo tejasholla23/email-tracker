@@ -4384,13 +4384,97 @@ export default function JobTrackerDashboard() {
 
         .info-modal-footer { padding: 12px 20px; border-top: 1px solid var(--border-color, #e2e8f0); display: flex; justify-content: flex-end; flex-shrink: 0; background: var(--surface-color, #fff); }
 
-        .dark .info-modal-section { background: var(--surface-color); border-color: var(--border-color); }
-        .dark .info-modal-section-header { background: rgba(255,255,255,0.04); }
-        .dark .info-modal-section-body { background: var(--surface-color); }
-        .dark .info-detail-row { border-color: var(--border-color); }
-        .dark .meta-chip { background: rgba(255,255,255,0.06); border-color: var(--border-color); }
-        .dark .skill-chip { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); }
-        .dark .skeleton-line { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; }
+        .dark .modal-content {
+          background: #181920;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #ffffff;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+        .dark .modal-header,
+        .dark .edit-modal-header,
+        .dark .info-modal-header {
+          border-bottom-color: rgba(255, 255, 255, 0.08);
+          background: #181920;
+        }
+        .dark .edit-modal-footer,
+        .dark .info-modal-footer {
+          background: #181920;
+          border-top-color: rgba(255, 255, 255, 0.08);
+        }
+        .dark .info-modal-section { 
+          background: rgba(255, 255, 255, 0.02); 
+          border-color: rgba(255, 255, 255, 0.08); 
+        }
+        .dark .info-modal-section-header { 
+          background: rgba(255, 255, 255, 0.04); 
+          border-bottom-color: rgba(255, 255, 255, 0.08); 
+          color: #9ca3af; 
+        }
+        .dark .info-modal-section-body { 
+          background: transparent; 
+        }
+        .dark .info-detail-row { 
+          border-color: rgba(255, 255, 255, 0.06); 
+        }
+        .dark .company-description { 
+          color: #e2e8f0; 
+        }
+        .dark .company-info-grid { 
+          background: rgba(255, 255, 255, 0.03) !important; 
+          border-color: rgba(255, 255, 255, 0.08) !important; 
+        }
+        .dark .meta-chip { 
+          background: rgba(255, 255, 255, 0.05); 
+          border-color: rgba(255, 255, 255, 0.1); 
+          color: #cbd5e1; 
+        }
+        .dark .skill-chip { 
+          background: rgba(59, 130, 246, 0.15); 
+          border-color: rgba(59, 130, 246, 0.3); 
+          color: #93c5fd; 
+        }
+        .dark .skeleton-line { 
+          background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 75%); 
+          background-size: 200% 100%; 
+        }
+        .dark .form-input,
+        .dark .form-select,
+        .dark .edit-modal-body input,
+        .dark .edit-modal-body select {
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          color: #ffffff;
+        }
+        .dark .form-input:focus,
+        .dark .form-select:focus,
+        .dark .edit-modal-body input:focus,
+        .dark .edit-modal-body select:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+          background: rgba(255, 255, 255, 0.06);
+        }
+        .dark .btn-cancel {
+          background: transparent;
+          border-color: rgba(255, 255, 255, 0.15);
+          color: #ffffff;
+        }
+        .dark .btn-cancel:hover {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.25);
+          color: #ffffff;
+        }
+        .dark .timeline-line {
+          background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        .dark .timeline-title {
+          color: #f1f5f9 !important;
+        }
+        .dark .timeline-subtitle {
+          color: #94a3b8 !important;
+        }
+        .dark .info-modal-logo {
+          background: rgba(255, 255, 255, 0.06);
+        }
 
         /* ── Attachment Row Styles ── */
         .attachment-row {

@@ -4,7 +4,6 @@ const Application = require("../models/Application");
 const CompanyInfo = require("../models/CompanyInfo");
 const Account = require("../models/Account");
 const IssueReport = require("../models/IssueReport");
-const { notifyDeveloperOfIssue } = require("../utils/notificationService");
 const { processCalendarSyncQueue } = require("../utils/calendarService");
 const { enrichCompanyProfile } = require("../utils/enrichCompanyProfile");
 
@@ -725,11 +724,6 @@ router.post("/report-issue", writeLimiter, async (req, res) => {
       `[ISSUE_REPORTED] ID: ${report._id} | User: ${userEmail} | Category: ${report.category} | Subject: ${report.subject}`
     );
 
-    // Send immediate email notification to developer (non-blocking)
-    notifyDeveloperOfIssue(report).catch((err) =>
-      console.error("[ISSUE_NOTIFICATION_ERR]", err.message)
-    );
-
     res.status(201).json({
       success: true,
       message: "Your report has been submitted successfully. Thank you for your feedback!",
@@ -742,5 +736,4 @@ router.post("/report-issue", writeLimiter, async (req, res) => {
 });
 
 module.exports = router;
-
 
