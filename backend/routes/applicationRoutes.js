@@ -735,5 +735,91 @@ router.post("/report-issue", writeLimiter, async (req, res) => {
   }
 });
 
+// POST /applications/:id/split-event - Split a specific timeline event into a separate Application card
+router.post("/:id/split-event", writeLimiter, async (req, res) => {
+  try {
+    const { messageId } = req.body;
+    if (!messageId) {
+      return res.status(400).json({ message: "messageId is required to split event" });
+    }
+
+    const app = await Application.findOne({ _id: req.params.id, userId: req.userId, isDeleted: { $ne: true } });
+    if (!app) {
+      return res.status(404).json({ message: "Source application not found" });
+    }
+
+    if (!Array.isArray(app.events) || app.events.length <= 1) {
+      return res.status(400).json({ message: "Cannot split an application with only one event" });
+    }
+
+    const eventIndex = app.events.findIndex(e => e.messageId === messageId);
+    if (eventIndex === -1) {
+      return res.status(404).json({ message: "Event not found in application timeline" });
+    }
+
+    const targetEvent = app.events[eventIndex];
+
+    // Remove event from source app
+    app.events.splice(eventIndex, 1);
+
+    // Extract attachments belonging to this messageId
+    const splitAttachments = (app.attachments || []).filter(a => a.messageId === messageId);
+    if (splitAttachments.length > 0) {
+      app.attachments = (app.attachments || []).filter(a => a.messageId !== messageId);
+    }
+
+    // If source app's root messageId was this event's messageId, re-point root messageId to the earliest remaining event
+    if (app.messageId === messageId && app.events.length > 0) {
+      app.messageId = app.events[0].messageId;
+      if (app.events[0].date) app.date = app.events[0].date;
+    }
+
+    await app.save();
+
+    // Now create the new standalone Application for this split event
+    const { normalizeCompany } = require("../utils/normalizeCompany");
+    const { normalizeRole } = require("../utils/roleMatcher");
+
+    // Extract role from event title if available
+    const eventRole = targetEvent.title || app.role || "Unknown Role";
+    const newCompanyKey = app.companyKey || normalizeCompany(app.company);
+    const newRoleKey = normalizeRole(eventRole);
+
+    const newApp = new Application({
+      userId: req.userId,
+      company: app.company,
+      companyKey: newCompanyKey,
+      roleKey: newRoleKey,
+      threadId: targetEvent.threadId || "",
+      emailType: app.emailType || "job",
+      opportunityType: app.opportunityType || "JOB_APPLICATION",
+      role: eventRole,
+      title: `${app.company} - ${eventRole}`,
+      subtitle: targetEvent.title || "",
+      status: "new",
+      link: targetEvent.link || "",
+      links: targetEvent.link ? [targetEvent.link] : [],
+      date: targetEvent.date || new Date(),
+      messageId: messageId,
+      accountEmail: targetEvent.accountEmail || app.accountEmail || "",
+      attachments: splitAttachments,
+      events: [targetEvent],
+      rawText: targetEvent.summary || targetEvent.subject || "",
+      isDeleted: false
+    });
+
+    await newApp.save();
+
+    res.json({
+      message: "Event successfully split into a new application card",
+      updatedSourceApp: app,
+      newApp
+    });
+  } catch (error) {
+    console.error("Split event error:", error.message);
+    res.status(500).json({ message: "Failed to split event into new application" });
+  }
+});
+
 module.exports = router;
 

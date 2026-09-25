@@ -26,6 +26,8 @@ const applicationSchema = new mongoose.Schema(
     // Skills extracted from email body by LLM (e.g. ["Python", "Machine Learning"])
     skills: { type: [String], default: [] },
     companyKey: { type: String, default: "" }, // normalized key for company-level dedup
+    roleKey: { type: String, default: "" }, // normalized key for role-level process disambiguation
+    threadId: { type: String, default: "" }, // root email thread ID
     role: { type: String, default: "Unknown Role" }, // Derived from displayFields — kept for search indexing and backward compatibility
     type: { type: String },
     deadline: { type: String }, // Derived from displayFields
@@ -122,6 +124,7 @@ const applicationSchema = new mongoose.Schema(
       type: [
         {
           messageId: String,
+          threadId: String,
           accountEmail: String,
           date: Date,
           classification: String,
@@ -145,8 +148,11 @@ const applicationSchema = new mongoose.Schema(
 // Unique messageId per user index to prevent duplicate imports for the same user
 applicationSchema.index({ userId: 1, messageId: 1 }, { unique: true, sparse: true });
 
-// Company-level identity index: one Application per normalized company (one hiring process)
+// Company-level identity index: fast lookup of candidates per company
 applicationSchema.index({ userId: 1, companyKey: 1, isDeleted: 1 });
+
+// Role-level process identity index: fast lookup by company + role
+applicationSchema.index({ userId: 1, companyKey: 1, roleKey: 1, isDeleted: 1 });
 
 // Compound index for primary dashboard query: Application.find({ isDeleted: false }).sort({ date: -1 })
 applicationSchema.index({ userId: 1, isDeleted: 1, date: -1 });

@@ -315,6 +315,45 @@ export default function JobTrackerDashboard() {
     }
   };
 
+  const handleSplitEvent = async (appId, messageId) => {
+    if (!appId || !messageId || reparsingId) return;
+    const confirmed = window.confirm("Split this email into its own separate application card?");
+    if (!confirmed) return;
+
+    setReparsingId(`${appId}_split_${messageId}`);
+    try {
+      const res = await apiFetch(`${BASE_URL}/applications/${appId}/split-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.updatedSourceApp) {
+          setSelectedApp(data.updatedSourceApp);
+          setApplications(prev => {
+            const updated = prev.map(a => a._id === appId ? data.updatedSourceApp : a);
+            if (data.newApp) {
+              return [data.newApp, ...updated];
+            }
+            return updated;
+          });
+        }
+        setReparseToast({ type: "success", message: "✓ Event split into a new application card" });
+        setTimeout(() => setReparseToast(null), 3500);
+      } else {
+        const errData = await res.json();
+        setReparseToast({ type: "error", message: errData.message || "Failed to split event." });
+      }
+    } catch (err) {
+      console.error("Split event error:", err);
+      setReparseToast({ type: "error", message: "Failed to split event." });
+    } finally {
+      setReparsingId(null);
+    }
+  };
+
   const userDropdownRef = useRef(null);
 
   useEffect(() => {
@@ -5892,6 +5931,7 @@ export default function JobTrackerDashboard() {
         selectedApp={selectedApp}
         reparsingId={reparsingId}
         handleReparseEmail={handleReparseEmail}
+        handleSplitEvent={handleSplitEvent}
         reparseToast={reparseToast}
         setReparseToast={setReparseToast}
         attachmentError={attachmentError}

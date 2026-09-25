@@ -49,6 +49,8 @@ const {
   writeLimiter,
   readLimiter
 } = require("./middleware/rateLimiters");
+const { findMatchingApplication } = require("./utils/processMatcher");
+const { normalizeRole } = require("./utils/roleMatcher");
 
 const ALLOWED_SENDERS = config.ALLOWED_SENDERS;
 const CURRENT_PARSER_VERSION = "v4";
@@ -1300,7 +1302,7 @@ const MANUAL_SYNC_COOLDOWN_MS = 45 * 1000;
 let isMigrationV4Processing = false;
 
 function appendApplicationEvent(application, parsed, emailMetadata) {
-  const { messageId, date, subject, accountEmail } = emailMetadata;
+  const { messageId, threadId, date, subject, accountEmail } = emailMetadata;
   if (!application.events) application.events = [];
   
   const eventExists = application.events.some(e => e.messageId === messageId);
@@ -1311,6 +1313,7 @@ function appendApplicationEvent(application, parsed, emailMetadata) {
   
   application.events.push({
     messageId,
+    threadId: threadId || "",
     accountEmail: accountEmail || application.accountEmail || "",
     date,
     classification: parsed.classification || "",
@@ -1965,23 +1968,42 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     }
 
     let contentExists = null;
+    const emailDate = new Date(parseInt(email.data.internalDate) || Date.now());
+    const emailThreadId = email.data.threadId || "";
+
     if (isValid) {
-      contentExists = await Application.findOne({
+      const candidates = await Application.find({
         userId: acc._id,
         companyKey,
         isDeleted: { $ne: true }
+      }).sort({ date: -1 });
+
+      const matchDecision = findMatchingApplication({
+        candidates,
+        parsed,
+        emailMetadata: {
+          messageId: id,
+          threadId: emailThreadId,
+          date: emailDate,
+          subject,
+          accountEmail: receivingEmail
+        }
       });
+
+      contentExists = matchDecision.match;
+      console.log(`[PROCESS_MATCH_DECISION] ${id} | Company: ${parsed.company} | Role: "${finalRole}" | Decision: ${contentExists ? `MERGE into ${contentExists._id} (${contentExists.role})` : 'CREATE NEW APPLICATION'} | Reason: ${matchDecision.reason}`);
     }
 
     if (contentExists) {
-      const emailDate = new Date(parseInt(email.data.internalDate) || Date.now());
       const eventAdded = appendApplicationEvent(contentExists, parsed, {
         messageId: id,
+        threadId: emailThreadId,
         accountEmail: receivingEmail,
         date: emailDate,
         subject: subject
       });
       if (!contentExists.accountEmail) contentExists.accountEmail = receivingEmail;
+      if (!contentExists.threadId && emailThreadId) contentExists.threadId = emailThreadId;
 
       const enrichmentPayload = enrichApplicationRecord(contentExists, parsed, emailDate, {
         subject,
@@ -1994,6 +2016,9 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
 
       if (eventAdded) {
         updatePayload.events = contentExists.events;
+      }
+      if (contentExists.threadId) {
+        updatePayload.threadId = contentExists.threadId;
       }
 
       // Merge attachment metadata into existing company-match application
@@ -2041,11 +2066,14 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
     const normalizedStatus = "new";
     const shouldRetry = parsed.parseMeta?.shouldRetry ?? false;
     const parserVer = shouldRetry ? "v1" : CURRENT_PARSER_VERSION;
+    const roleKey = normalizeRole(finalRole);
 
     const newApp = new Application({
       userId: acc._id,
       company: parsed.company,
       companyKey,
+      roleKey,
+      threadId: emailThreadId,
       emailType: parsed.emailType || "job",
       subtitle: parsed.subtitle || "",
       displayFields: parsed.displayFields || [],
@@ -2078,6 +2106,7 @@ async function processMessage(gmail, acc, messageId, subject_unused, existingFas
       parseMeta: parsed.parseMeta || {},
       events: [{
         messageId: id,
+        threadId: emailThreadId,
         accountEmail: receivingEmail,
         date: new Date(parseInt(email.data.internalDate)),
         classification: parsed.classification || "",

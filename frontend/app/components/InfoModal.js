@@ -8,6 +8,7 @@ export default function InfoModal({
   selectedApp,
   reparsingId,
   handleReparseEmail,
+  handleSplitEvent,
   reparseToast,
   setReparseToast,
   attachmentError,
@@ -556,41 +557,73 @@ export default function InfoModal({
                             <div className="timeline-title" style={{ fontSize: '13.5px', fontWeight: '600', color: isDarkMode ? '#f8fafc' : '#0f172a' }}>
                               {ev.title || ev.classification || 'Email Notification'}
                             </div>
-                            {ev.messageId && (
-                              <button
-                                className="timeline-reparse-btn"
-                                title="Reparse this specific email with AI"
-                                disabled={reparsingId === `${app._id}_${ev.messageId}` || reparsingId === app._id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReparseEmail(app._id, ev.messageId);
-                                }}
-                                style={{
-                                  background: 'rgba(37, 99, 235, 0.06)',
-                                  border: '1px solid rgba(37, 99, 235, 0.2)',
-                                  borderRadius: '5px',
-                                  padding: '2px 7px',
-                                  fontSize: '10.5px',
-                                  fontWeight: '600',
-                                  color: '#2563eb',
-                                  cursor: (reparsingId === `${app._id}_${ev.messageId}` || reparsingId === app._id) ? 'not-allowed' : 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '3px',
-                                  transition: 'all 0.15s ease'
-                                }}
-                              >
-                                <span style={{
-                                  display: 'inline-block',
-                                  fontSize: '11px',
-                                  transform: reparsingId === `${app._id}_${ev.messageId}` ? 'rotate(360deg)' : 'none',
-                                  transition: reparsingId === `${app._id}_${ev.messageId}` ? 'transform 1s linear infinite' : 'none'
-                                }}>
-                                  ↻
-                                </span>
-                                {reparsingId === `${app._id}_${ev.messageId}` ? "Reparsing..." : "Reparse"}
-                              </button>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {ev.messageId && app.events && app.events.length > 1 && (
+                                <button
+                                  className="timeline-split-btn"
+                                  title="Split this email into its own separate application card"
+                                  disabled={reparsingId === `${app._id}_split_${ev.messageId}` || reparsingId === app._id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (handleSplitEvent) {
+                                      handleSplitEvent(app._id, ev.messageId);
+                                    }
+                                  }}
+                                  style={{
+                                    background: isDarkMode ? 'rgba(168, 85, 247, 0.12)' : 'rgba(147, 51, 234, 0.08)',
+                                    border: isDarkMode ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid rgba(147, 51, 234, 0.25)',
+                                    borderRadius: '5px',
+                                    padding: '2px 7px',
+                                    fontSize: '10.5px',
+                                    fontWeight: '600',
+                                    color: isDarkMode ? '#c084fc' : '#7e22ce',
+                                    cursor: (reparsingId === `${app._id}_split_${ev.messageId}` || reparsingId === app._id) ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <span style={{ fontSize: '11px' }}>✂</span>
+                                  {reparsingId === `${app._id}_split_${ev.messageId}` ? "Splitting..." : "Split to Card"}
+                                </button>
+                              )}
+                              {ev.messageId && (
+                                <button
+                                  className="timeline-reparse-btn"
+                                  title="Reparse this specific email with AI"
+                                  disabled={reparsingId === `${app._id}_${ev.messageId}` || reparsingId === app._id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleReparseEmail(app._id, ev.messageId);
+                                  }}
+                                  style={{
+                                    background: 'rgba(37, 99, 235, 0.06)',
+                                    border: '1px solid rgba(37, 99, 235, 0.2)',
+                                    borderRadius: '5px',
+                                    padding: '2px 7px',
+                                    fontSize: '10.5px',
+                                    fontWeight: '600',
+                                    color: '#2563eb',
+                                    cursor: (reparsingId === `${app._id}_${ev.messageId}` || reparsingId === app._id) ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <span style={{
+                                    display: 'inline-block',
+                                    fontSize: '11px',
+                                    transform: reparsingId === `${app._id}_${ev.messageId}` ? 'rotate(360deg)' : 'none',
+                                    transition: reparsingId === `${app._id}_${ev.messageId}` ? 'transform 1s linear infinite' : 'none'
+                                  }}>
+                                    ↻
+                                  </span>
+                                  {reparsingId === `${app._id}_${ev.messageId}` ? "Reparsing..." : "Reparse"}
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div className="timeline-subtitle" style={{ fontSize: '12px', color: isDarkMode ? '#94a3b8' : '#475569', marginTop: '2px', lineHeight: '1.45' }}>
                             {ev.summary ? ev.summary : (ev.subject ? (ev.subject.length > 80 ? ev.subject.substring(0, 80) + '...' : ev.subject) : '')}
