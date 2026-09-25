@@ -41,7 +41,7 @@ function resolveRateLimitKey(req) {
 // ─────────────────────────────────────────────────────────────────
 // GROUP 1: Auth endpoints (unauthenticated, IP-based)
 //   Covers: /auth/google, /auth/google/calendar,
-//           /auth/google/callback, /auth/token, /auth/refresh
+//           /auth/google/callback, /auth/token
 //
 //   10 requests per 15 minutes per IP.
 //   A full login involves 3 sequential requests, so 10/15min
@@ -53,6 +53,21 @@ const authLimiter = rateLimit({
   standardHeaders: true,       // Return rate limit info in RateLimit-* headers
   legacyHeaders: false,
   message: "Too many authentication attempts. Please try again in 15 minutes.",
+  handler: rateLimitHandler
+});
+
+// ─────────────────────────────────────────────────────────────────
+// GROUP 1B: Refresh token endpoint (/auth/refresh)
+//   Separate from initial auth flow to accommodate frequent background
+//   refreshes across multiple tabs, device wakeups, and campus Wi-Fi (shared NAT IP).
+//   Allows up to 60 requests per 15 minutes per IP.
+// ─────────────────────────────────────────────────────────────────
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many refresh attempts. Please slow down and try again shortly.",
   handler: rateLimitHandler
 });
 
@@ -126,6 +141,7 @@ const readLimiter = rateLimit({
 
 module.exports = {
   authLimiter,
+  refreshLimiter,
   syncLimiter,
   calendarSyncLimiter,
   writeLimiter,

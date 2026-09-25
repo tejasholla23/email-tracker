@@ -33,6 +33,14 @@ const accountSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  previousRefreshTokenHash: {
+    type: String,
+    default: null,
+  },
+  previousRefreshTokenExpiresAt: {
+    type: Date,
+    default: null,
+  },
   calendarSyncEnabled: {
     type: Boolean,
     default: false,

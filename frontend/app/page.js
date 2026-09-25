@@ -1,6 +1,14 @@
 "use client";
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 let activeRefreshPromise = null;
+let authChannel = null;
+if (typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
+  try {
+    authChannel = new BroadcastChannel("email_tracker_auth_sync");
+  } catch (e) {
+    // Fallback gracefully if BroadcastChannel is restricted
+  }
+}
 
 import React, { useEffect, useState, useRef } from "react";
 import OfflinePage from "./components/OfflinePage";
@@ -791,6 +799,9 @@ export default function JobTrackerDashboard() {
     localStorage.removeItem("refreshToken");
     setUserEmail(null);
     setApplications([]);
+    try {
+      authChannel?.postMessage({ type: "AUTH_LOGOUT" });
+    } catch {}
   };
 
   const apiFetch = async (url, options = {}) => {
@@ -813,7 +824,7 @@ export default function JobTrackerDashboard() {
     }
 
     if (response.status === 401) {
-      console.warn("Access token expired, attempting refresh...");
+      console.warn("Access token expired or unauthorized, attempting refresh...");
       const refreshToken = localStorage.getItem("refreshToken");
       if (!refreshToken) {
         handleLocalLogout();
@@ -821,37 +832,108 @@ export default function JobTrackerDashboard() {
       }
 
       try {
+        // Fast-path: Check if another tab has already refreshed the token
+        const currentToken = localStorage.getItem("accessToken");
+        if (currentToken && currentToken !== token) {
+          options.headers["Authorization"] = `Bearer ${currentToken}`;
+          return await fetch(url, options);
+        }
+
         if (!activeRefreshPromise) {
-          activeRefreshPromise = fetch(`${BASE_URL}/auth/refresh`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken })
-          }).then(async (refreshRes) => {
-            if (!refreshRes.ok) {
-              throw new Error("Refresh failed");
+          activeRefreshPromise = (async () => {
+            // Re-check after acquiring single-flight promise
+            const freshStoredToken = localStorage.getItem("accessToken");
+            if (freshStoredToken && freshStoredToken !== token) {
+              return freshStoredToken;
             }
+
+            const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ refreshToken })
+            });
+
+            if (!refreshRes.ok) {
+              const errBody = await refreshRes.json().catch(() => ({}));
+              const err = new Error(errBody.message || "Refresh failed");
+              err.status = refreshRes.status;
+              throw err;
+            }
+
             const data = await refreshRes.json();
-            localStorage.setItem("accessToken", data.accessToken);
-            localStorage.setItem("refreshToken", data.refreshToken);
+            if (data.accessToken) {
+              localStorage.setItem("accessToken", data.accessToken);
+            }
+            if (data.refreshToken) {
+              localStorage.setItem("refreshToken", data.refreshToken);
+            }
+
+            // Broadcast refresh success to other open tabs
+            try {
+              authChannel?.postMessage({
+                type: "AUTH_REFRESH_SUCCESS",
+                accessToken: data.accessToken,
+                refreshToken: data.refreshToken
+              });
+            } catch {}
+
             return data.accessToken;
-          }).finally(() => {
+          })().finally(() => {
             activeRefreshPromise = null;
           });
         }
 
         const newAccessToken = await activeRefreshPromise;
 
-        // Retry the original request once
+        // Retry the original request with the fresh token
         options.headers["Authorization"] = `Bearer ${newAccessToken}`;
         response = await fetch(url, options);
       } catch (err) {
-        console.error("Refresh failed, logging out:", err);
-        handleLocalLogout();
+        // ONLY log out if the server explicitly returned HTTP 401 / 403 (invalid or revoked refresh token)
+        if (err.status === 401 || err.status === 403) {
+          console.error("Refresh token rejected by server (401), logging out:", err.message);
+          handleLocalLogout();
+        } else {
+          // Temporary network failure (TypeError), rate limit (429), or backend 5xx (cold start):
+          // DO NOT LOG OUT! Keep session tokens in localStorage.
+          console.warn(`Token refresh encountered non-auth error (status=${err.status || 'network'}). Preserving session:`, err.message);
+        }
       }
     }
 
     return response;
   };
+
+  // Cross-tab auth synchronization listener
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleStorageChange = (e) => {
+      if (e.key === "accessToken" && e.newValue) {
+        // Another tab refreshed the session
+        console.debug("[Auth] Detected accessToken update from another tab");
+      } else if (e.key === "accessToken" && !e.newValue) {
+        // Another tab logged out
+        setUserEmail(null);
+        setApplications([]);
+      }
+    };
+
+    const handleChannelMessage = (e) => {
+      if (e.data?.type === "AUTH_LOGOUT") {
+        setUserEmail(null);
+        setApplications([]);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    authChannel?.addEventListener("message", handleChannelMessage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      authChannel?.removeEventListener("message", handleChannelMessage);
+    };
+  }, []);
 
   useEffect(() => {
     const initializeSession = async () => {
@@ -919,7 +1001,8 @@ export default function JobTrackerDashboard() {
 
       // Check existing session
       const savedAccessToken = localStorage.getItem("accessToken");
-      if (savedAccessToken) {
+      const savedRefreshToken = localStorage.getItem("refreshToken");
+      if (savedAccessToken || savedRefreshToken) {
         try {
           const res = await apiFetch(`${BASE_URL}/auth/me`);
           if (res.ok) {
@@ -928,12 +1011,18 @@ export default function JobTrackerDashboard() {
             if (typeof data.pushSubscriptionsCount === "number") {
               setPushSubscriptionsCount(data.pushSubscriptionsCount);
             }
-          } else {
+          } else if (res.status === 401) {
+            // ONLY log out if backend and refresh explicitly rejected with 401
             handleLocalLogout();
+          } else {
+            console.warn(`Session check returned HTTP ${res.status}. Preserving session.`);
           }
         } catch (err) {
-          console.error("Session verification failed:", err);
-          handleLocalLogout();
+          // Network error, offline, Render cold start - PRESERVE SESSION!
+          console.warn("Session check encountered network error. Preserving session:", err);
+          if (typeof window !== "undefined" && (!navigator.onLine || err.name === "TypeError")) {
+            setIsOffline(true);
+          }
         }
       }
     };
@@ -1196,7 +1285,7 @@ export default function JobTrackerDashboard() {
     try {
       const response = await apiFetch(`${BASE_URL}/applications`);
       if (response.status === 401) {
-        handleLogout();
+        handleLocalLogout();
         return;
       }
       const data = await response.json();
@@ -1219,7 +1308,7 @@ export default function JobTrackerDashboard() {
     try {
       const response = await apiFetch(`${BASE_URL}/applications`);
       if (response.status === 401) {
-        handleLogout();
+        handleLocalLogout();
         return;
       }
       const data = await response.json();

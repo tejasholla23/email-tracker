@@ -43,6 +43,7 @@ const {
 } = require("./utils/gmailWatchService");
 const {
   authLimiter,
+  refreshLimiter,
   syncLimiter,
   calendarSyncLimiter,
   writeLimiter,
@@ -686,10 +687,29 @@ app.post("/auth/token", authLimiter, async (req, res) => {
     const accessToken = generateAccessToken(account);
     const rawRefreshToken = generateRefreshToken();
     const hashedToken = hashRefreshToken(rawRefreshToken);
+    const ninetyDays = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const now = new Date();
 
     // Save hashed refresh token and expiry (90 days)
     account.refreshTokenHash = hashedToken;
-    account.refreshTokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    account.refreshTokenExpiresAt = ninetyDays;
+    account.previousRefreshTokenHash = null;
+    account.previousRefreshTokenExpiresAt = null;
+
+    if (!Array.isArray(account.activeRefreshTokens)) {
+      account.activeRefreshTokens = [];
+    }
+    // Prune expired sessions
+    account.activeRefreshTokens = account.activeRefreshTokens.filter(t => t.expiresAt && t.expiresAt > now);
+    account.activeRefreshTokens.push({
+      tokenHash: hashedToken,
+      expiresAt: ninetyDays,
+      graceUntil: null
+    });
+    // Keep up to 10 active device sessions
+    if (account.activeRefreshTokens.length > 10) {
+      account.activeRefreshTokens = account.activeRefreshTokens.slice(-10);
+    }
     await account.save();
 
     res.json({
@@ -703,32 +723,110 @@ app.post("/auth/token", authLimiter, async (req, res) => {
   }
 });
 
-// POST /auth/refresh - rotate refresh token and issue new access token
-app.post("/auth/refresh", authLimiter, async (req, res) => {
+// POST /auth/refresh - rotate refresh token and issue new access token with 60s rotation grace period
+app.post("/auth/refresh", refreshLimiter, async (req, res) => {
   const { refreshToken } = req.body;
-  if (!refreshToken) {
+  if (!refreshToken || typeof refreshToken !== "string") {
     return res.status(400).json({ message: "Refresh token is required" });
   }
 
   const hashedToken = hashRefreshToken(refreshToken);
+  const now = new Date();
 
   try {
     const account = await Account.findOne({
-      refreshTokenHash: hashedToken,
-      refreshTokenExpiresAt: { $gt: new Date() }
+      $or: [
+        { "activeRefreshTokens.tokenHash": hashedToken },
+        { refreshTokenHash: hashedToken },
+        { previousRefreshTokenHash: hashedToken }
+      ]
     });
 
     if (!account) {
       return res.status(401).json({ message: "Invalid or expired refresh token" });
     }
 
+    // Clean up expired tokens (prune tokens whose expiry or grace window has passed)
+    if (Array.isArray(account.activeRefreshTokens)) {
+      account.activeRefreshTokens = account.activeRefreshTokens.filter(t => {
+        if (t.graceUntil) {
+          return t.graceUntil > now;
+        }
+        return t.expiresAt && t.expiresAt > now;
+      });
+    } else {
+      account.activeRefreshTokens = [];
+    }
+
+    // Case 1: Token is within an active grace window (concurrent request or second tab)
+    const graceTokenEntry = account.activeRefreshTokens.find(
+      t => t.tokenHash === hashedToken && t.graceUntil && t.graceUntil > now
+    );
+
+    const isSingleFieldGrace = (
+      account.previousRefreshTokenHash === hashedToken &&
+      account.previousRefreshTokenExpiresAt &&
+      account.previousRefreshTokenExpiresAt > now
+    );
+
+    if (graceTokenEntry || isSingleFieldGrace) {
+      // Re-issue a fresh access token without failing or breaking the session
+      const newAccessToken = generateAccessToken(account);
+      return res.json({
+        accessToken: newAccessToken,
+        refreshToken: refreshToken
+      });
+    }
+
+    // Case 2: Active valid refresh token ready for standard rotation (must not have an expired or active grace window)
+    const activeTokenEntry = account.activeRefreshTokens.find(
+      t => t.tokenHash === hashedToken && t.expiresAt > now && !t.graceUntil
+    );
+
+    const isPrimaryActive = (
+      account.refreshTokenHash === hashedToken &&
+      account.refreshTokenExpiresAt &&
+      account.refreshTokenExpiresAt > now &&
+      account.refreshTokenHash !== account.previousRefreshTokenHash
+    );
+
+    if (!activeTokenEntry && !isPrimaryActive) {
+      return res.status(401).json({ message: "Invalid or expired refresh token" });
+    }
+
+    // Rotate refresh token with 60-second grace window
     const newAccessToken = generateAccessToken(account);
     const newRawRefreshToken = generateRefreshToken();
     const newHashedToken = hashRefreshToken(newRawRefreshToken);
+    const ninetyDays = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const gracePeriod = new Date(Date.now() + 60 * 1000); // 60s grace window
 
-    // Rotate refresh token
+    if (activeTokenEntry) {
+      activeTokenEntry.graceUntil = gracePeriod;
+    } else {
+      account.activeRefreshTokens.push({
+        tokenHash: hashedToken,
+        expiresAt: gracePeriod,
+        graceUntil: gracePeriod
+      });
+    }
+
+    account.activeRefreshTokens.push({
+      tokenHash: newHashedToken,
+      expiresAt: ninetyDays,
+      graceUntil: null
+    });
+
+    // Update legacy fields for backward compatibility
+    account.previousRefreshTokenHash = hashedToken;
+    account.previousRefreshTokenExpiresAt = gracePeriod;
     account.refreshTokenHash = newHashedToken;
-    account.refreshTokenExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    account.refreshTokenExpiresAt = ninetyDays;
+
+    if (account.activeRefreshTokens.length > 10) {
+      account.activeRefreshTokens = account.activeRefreshTokens.slice(-10);
+    }
+
     await account.save();
 
     res.json({
