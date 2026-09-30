@@ -306,3 +306,73 @@ test("resilientAuth: Completely invalid or unknown token is rejected with 401", 
 
   assert.strictEqual(matches, false, "Unknown token should not match account");
 });
+
+test("resilientAuth: Multi-device concurrent sessions (Laptop and Phone stay logged in)", () => {
+  const now = new Date();
+  const ninetyDays = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+  const account = {
+    _id: "user_multi_device_123",
+    email: "user@example.com",
+    activeRefreshTokens: []
+  };
+
+  // 1. Laptop logs in
+  const laptopRawToken1 = generateRefreshToken();
+  const laptopHash1 = hashRefreshToken(laptopRawToken1);
+  account.activeRefreshTokens.push({
+    tokenHash: laptopHash1,
+    expiresAt: ninetyDays,
+    graceUntil: null
+  });
+
+  // 2. Phone logs in
+  const phoneRawToken1 = generateRefreshToken();
+  const phoneHash1 = hashRefreshToken(phoneRawToken1);
+  account.activeRefreshTokens.push({
+    tokenHash: phoneHash1,
+    expiresAt: ninetyDays,
+    graceUntil: null
+  });
+
+  assert.strictEqual(account.activeRefreshTokens.length, 2, "Both devices must be stored in activeRefreshTokens");
+
+  // Helper matching server.js POST /auth/refresh
+  function refreshDeviceToken(rawToken) {
+    const hashed = hashRefreshToken(rawToken);
+    const entry = account.activeRefreshTokens.find(
+      t => t.tokenHash === hashed && t.expiresAt > new Date() && !t.graceUntil
+    );
+    if (!entry) return null;
+
+    const newRaw = generateRefreshToken();
+    const newHashed = hashRefreshToken(newRaw);
+    entry.graceUntil = new Date(Date.now() + 60000);
+    account.activeRefreshTokens.push({
+      tokenHash: newHashed,
+      expiresAt: ninetyDays,
+      graceUntil: null
+    });
+    return newRaw;
+  }
+
+  // 3. Laptop refreshes its token after 1 hour
+  const laptopRawToken2 = refreshDeviceToken(laptopRawToken1);
+  assert.ok(laptopRawToken2, "Laptop refresh must succeed");
+
+  // Phone's token (phoneRawToken1) must STILL be valid!
+  const phoneRawToken2 = refreshDeviceToken(phoneRawToken1);
+  assert.ok(phoneRawToken2, "Phone refresh must succeed while laptop is active");
+
+  // 4. Laptop logs out: remove only laptop's active token
+  const laptopHashed2 = hashRefreshToken(laptopRawToken2);
+  account.activeRefreshTokens = account.activeRefreshTokens.filter(t => t.tokenHash !== laptopHashed2);
+
+  // Laptop's token is gone
+  const laptopRetry = refreshDeviceToken(laptopRawToken2);
+  assert.strictEqual(laptopRetry, null, "Laptop token should be revoked after logout");
+
+  // Phone's token is STILL valid and functional!
+  const phoneRawToken3 = refreshDeviceToken(phoneRawToken2);
+  assert.ok(phoneRawToken3, "Phone session must remain active after laptop logs out");
+});

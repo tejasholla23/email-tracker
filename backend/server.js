@@ -712,6 +712,7 @@ app.post("/auth/token", authLimiter, async (req, res) => {
     if (account.activeRefreshTokens.length > 10) {
       account.activeRefreshTokens = account.activeRefreshTokens.slice(-10);
     }
+    account.markModified("activeRefreshTokens");
     await account.save();
 
     res.json({
@@ -829,6 +830,7 @@ app.post("/auth/refresh", refreshLimiter, async (req, res) => {
       account.activeRefreshTokens = account.activeRefreshTokens.slice(-10);
     }
 
+    account.markModified("activeRefreshTokens");
     await account.save();
 
     res.json({
@@ -1217,7 +1219,7 @@ app.post("/push/unsubscribe", writeLimiter, authenticate, async (req, res) => {
 // ==========================
 app.post("/logout", writeLimiter, authenticate, async (req, res) => {
   try {
-    const { pushEndpoint } = req.body || {};
+    const { pushEndpoint, refreshToken } = req.body || {};
     const account = await Account.findById(req.userId);
     
     if (account) {
@@ -1228,8 +1230,27 @@ app.post("/logout", writeLimiter, authenticate, async (req, res) => {
         );
       }
       
-      account.refreshTokenHash = null;
-      account.refreshTokenExpiresAt = null;
+      // Remove only this device's refresh token from active sessions
+      if (refreshToken && Array.isArray(account.activeRefreshTokens)) {
+        const hashed = hashRefreshToken(refreshToken);
+        account.activeRefreshTokens = account.activeRefreshTokens.filter(
+          (t) => t.tokenHash !== hashed
+        );
+        account.markModified("activeRefreshTokens");
+        
+        // If the logged out token was the current primary, update legacy field to another active token if available
+        if (account.refreshTokenHash === hashed) {
+          const remaining = account.activeRefreshTokens[account.activeRefreshTokens.length - 1];
+          account.refreshTokenHash = remaining ? remaining.tokenHash : null;
+          account.refreshTokenExpiresAt = remaining ? remaining.expiresAt : null;
+        }
+      } else {
+        // Fallback: if no specific refreshToken was sent, clear legacy fields and active tokens
+        account.refreshTokenHash = null;
+        account.refreshTokenExpiresAt = null;
+        account.activeRefreshTokens = [];
+        account.markModified("activeRefreshTokens");
+      }
       await account.save();
     }
 

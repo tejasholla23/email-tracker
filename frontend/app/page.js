@@ -1552,10 +1552,11 @@ export default function JobTrackerDashboard() {
     }
 
     try {
+      const refreshToken = localStorage.getItem("refreshToken");
       await apiFetch(`${BASE_URL}/logout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pushEndpoint })
+        body: JSON.stringify({ pushEndpoint, refreshToken })
       });
     } catch (error) {
       console.error("Logout failed:", error);

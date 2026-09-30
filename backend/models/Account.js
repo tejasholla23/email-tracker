@@ -41,6 +41,16 @@ const accountSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  activeRefreshTokens: {
+    type: [
+      {
+        tokenHash: { type: String, required: true },
+        expiresAt: { type: Date, required: true },
+        graceUntil: { type: Date, default: null },
+      },
+    ],
+    default: [],
+  },
   calendarSyncEnabled: {
     type: Boolean,
     default: false,
@@ -77,5 +87,7 @@ const accountSchema = new mongoose.Schema({
     lastUpdated: { type: Date, default: null },
   },
 });
+
+accountSchema.index({ "activeRefreshTokens.tokenHash": 1 });
 
 module.exports = mongoose.model("Account", accountSchema);
