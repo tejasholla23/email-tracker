@@ -10,7 +10,7 @@ if (typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
   }
 }
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import OfflinePage from "./components/OfflinePage";
 import AnalyticsView from "./components/AnalyticsView";
 import CalendarView from "./components/CalendarView";
@@ -394,12 +394,16 @@ export default function JobTrackerDashboard() {
   };
 
   const userDropdownRef = useRef(null);
+  const stageDropdownRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
         setShowUserDropdown(false);
         setShowThemeSubmenu(false);
+      }
+      if (stageDropdownRef.current && !stageDropdownRef.current.contains(event.target)) {
+        setShowStageDropdown(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -504,10 +508,12 @@ export default function JobTrackerDashboard() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [selectedStageFilter, setSelectedStageFilter] = useState("all");
+  const [showStageDropdown, setShowStageDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, activeFilter]);
+  }, [searchQuery, activeFilter, selectedStageFilter]);
   const [settingsSubView, setSettingsSubView] = useState("main");
   const [appToDelete, setAppToDelete] = useState(null);
   const [deletingSingleApp, setDeletingSingleApp] = useState(false);
@@ -5536,6 +5542,175 @@ export default function JobTrackerDashboard() {
 
 
 
+                {/* Recruitment Stage Dropdown Filter Bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', margin: '0 0 20px 0', gap: '10px' }}>
+                  <div style={{ position: 'relative' }} ref={stageDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowStageDropdown(prev => !prev)}
+                      aria-haspopup="true"
+                      aria-expanded={showStageDropdown}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '7px',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        border: selectedStageFilter !== 'all'
+                          ? (isDarkMode ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(139, 92, 246, 0.4)')
+                          : (isDarkMode ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid #e2e8f0'),
+                        background: selectedStageFilter !== 'all'
+                          ? (isDarkMode ? 'rgba(139, 92, 246, 0.16)' : 'rgba(139, 92, 246, 0.08)')
+                          : (isDarkMode ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'),
+                        color: selectedStageFilter !== 'all'
+                          ? (isDarkMode ? '#c4b5fd' : '#6d28d9')
+                          : (isDarkMode ? '#94a3b8' : '#64748b'),
+                        fontSize: '12.5px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {selectedStageFilter === 'oa' && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#8b5cf6', display: 'inline-block' }} />}
+                        {selectedStageFilter === 'interview' && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />}
+                        {selectedStageFilter === 'shortlisted' && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />}
+                        {selectedStageFilter === 'offered' && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />}
+                        {selectedStageFilter === 'rejected' && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />}
+                        <span>
+                          {selectedStageFilter === 'all' && 'All Stages'}
+                          {selectedStageFilter === 'oa' && 'OA'}
+                          {selectedStageFilter === 'interview' && 'Interview'}
+                          {selectedStageFilter === 'shortlisted' && 'Shortlisted'}
+                          {selectedStageFilter === 'offered' && 'Offered'}
+                          {selectedStageFilter === 'rejected' && 'Rejected'}
+                        </span>
+                      </span>
+                      {selectedStageFilter !== 'all' && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedStageFilter('all');
+                            setShowStageDropdown(false);
+                          }}
+                          title="Clear stage filter"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '15px',
+                            height: '15px',
+                            borderRadius: '50%',
+                            background: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.1)',
+                            color: 'inherit',
+                            fontSize: '10px',
+                            marginLeft: '2px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✕
+                        </span>
+                      )}
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                          transform: showStageDropdown ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 0.18s ease',
+                          opacity: 0.7
+                        }}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+
+                    {showStageDropdown && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          background: isDarkMode ? '#13151b' : '#ffffff',
+                          border: isDarkMode ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid #e2e8f0',
+                          borderRadius: '10px',
+                          boxShadow: isDarkMode ? '0 16px 36px -4px rgba(0, 0, 0, 0.5)' : '0 12px 28px -4px rgba(0, 0, 0, 0.15)',
+                          width: '210px',
+                          zIndex: 100,
+                          padding: '6px'
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '10px',
+                          fontWeight: '700',
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          color: isDarkMode ? '#64748b' : '#94a3b8',
+                          padding: '4px 8px 6px'
+                        }}>
+                          Filter by Stage
+                        </div>
+
+                        {[
+                          { value: 'all', label: 'All Stages', dotColor: null },
+                          { value: 'oa', label: 'OA', dotColor: '#8b5cf6' },
+                          { value: 'interview', label: 'Interview', dotColor: '#f59e0b' },
+                          { value: 'shortlisted', label: 'Shortlisted', dotColor: '#10b981' },
+                          { value: 'offered', label: 'Offered', dotColor: '#10b981' },
+                          { value: 'rejected', label: 'Rejected', dotColor: '#ef4444' }
+                        ].map((opt) => {
+                          const isSelected = selectedStageFilter === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                setSelectedStageFilter(opt.value);
+                                setShowStageDropdown(false);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                fontSize: '12px',
+                                fontWeight: isSelected ? '600' : '500',
+                                color: isSelected
+                                  ? (isDarkMode ? '#60a5fa' : '#2563eb')
+                                  : (isDarkMode ? '#e2e8f0' : '#334155'),
+                                background: isSelected
+                                  ? (isDarkMode ? 'rgba(37, 99, 235, 0.18)' : '#eff6ff')
+                                  : 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                transition: 'background 0.12s ease'
+                              }}
+                            >
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                {opt.dotColor ? (
+                                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: opt.dotColor }} />
+                                ) : (
+                                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#94a3b8' }} />
+                                )}
+                                <span>{opt.label}</span>
+                              </span>
+                              {isSelected && <span style={{ fontSize: '11px', color: isDarkMode ? '#60a5fa' : '#2563eb', fontWeight: 'bold' }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {loading && applications.length === 0 ? (
                   <p style={{ color: '#6d7a77', marginTop: 24 }}>Loading applications...</p>
                 ) : (() => {
@@ -5604,7 +5779,20 @@ export default function JobTrackerDashboard() {
                         activeFilter === app.derivedStatus ||
                         (activeFilter === "applied" && (app.derivedStatus === "applied" || app.derivedStatus === "no_response"));
 
-                      return matchesSearch && matchesFilter;
+                      let matchesStage = true;
+                      if (selectedStageFilter === "oa") {
+                        matchesStage = app.stage === "oa_scheduled" || (Array.isArray(app.events) && app.events.some(e => e.classification === "Assessment Announcement"));
+                      } else if (selectedStageFilter === "interview") {
+                        matchesStage = app.stage === "interview_scheduled" || (Array.isArray(app.events) && app.events.some(e => e.classification === "Interview Schedule"));
+                      } else if (selectedStageFilter === "offered") {
+                        matchesStage = app.stage === "offered";
+                      } else if (selectedStageFilter === "rejected") {
+                        matchesStage = ["rejected", "rejected_after_oa", "rejected_after_interview"].includes(app.stage);
+                      } else if (selectedStageFilter === "shortlisted") {
+                        matchesStage = Boolean(app.isShortlisted);
+                      }
+
+                      return matchesSearch && matchesFilter && matchesStage;
                     })
                     .sort((a, b) => b.latestEmailTime - a.latestEmailTime);
 
