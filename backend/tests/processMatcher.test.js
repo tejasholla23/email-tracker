@@ -3,6 +3,7 @@ const assert = require("node:assert");
 
 const {
   normalizeRole,
+  isNonRoleTitle,
   getRoleFamily,
   areRolesCompatible,
   isGenesisClassification,
@@ -281,4 +282,74 @@ test("processMatcher: Real-world IBM Case - Software Engineer (17 LPA) vs Associ
 
   assert.strictEqual(decision.match, null, "Must NOT merge Associate System Engineer into Software Engineer");
   assert.ok(decision.reason.includes("disqualified due to conflicting roles"));
+});
+
+test("roleMatcher: correctly identifies non-role stage titles vs genuine job roles", () => {
+  assert.strictEqual(isNonRoleTitle("Online Coding Assessment"), true);
+  assert.strictEqual(isNonRoleTitle("Mock Assessment"), true);
+  assert.strictEqual(isNonRoleTitle("Technical Interview Round 1"), true);
+  assert.strictEqual(isNonRoleTitle("Shortlisted Candidates"), true);
+  assert.strictEqual(isNonRoleTitle("HackerRank Test Link"), true);
+  assert.strictEqual(isNonRoleTitle("Pre-Placement Talk"), true);
+
+  assert.strictEqual(isNonRoleTitle("Digital Catalyst (AI Engineer)"), false);
+  assert.strictEqual(isNonRoleTitle("Software Engineer"), false);
+  assert.strictEqual(isNonRoleTitle("Associate System Engineer"), false);
+  assert.strictEqual(isNonRoleTitle("Data Analyst"), false);
+
+  // When one is a stage title, areRolesCompatible must be compatible and non-conflicting
+  const comp = areRolesCompatible("Digital Catalyst (AI Engineer)", "Online Coding Assessment");
+  assert.strictEqual(comp.compatible, true);
+  assert.strictEqual(comp.isConflicting, false);
+});
+
+test("processMatcher: Real-world Tech Mahindra Case - Personal email follow-up OA attaches to College email Application", () => {
+  // Email 1 on Oct 29 received on college email
+  const oct29 = new Date("2026-10-29T10:00:00Z");
+  const existingTechMApp = {
+    _id: "app_techm_ai",
+    company: "Tech Mahindra",
+    companyKey: "tech mahindra",
+    role: "Digital Catalyst (AI Engineer)",
+    stage: "none",
+    status: "applied",
+    opportunityType: "JOB_APPLICATION",
+    date: oct29,
+    accountEmail: "1ms23ci126@msrit.edu",
+    threadId: "thread_college_techm",
+    events: [{
+      messageId: "msg_techm_jd",
+      threadId: "thread_college_techm",
+      date: oct29,
+      classification: "New Hiring Opportunity",
+      title: "Digital Catalyst (AI Engineer)"
+    }]
+  };
+
+  // Email 2 on Nov 4 (6 days later) received on personal email tejasholla23@gmail.com
+  const nov4 = new Date("2026-11-04T13:30:00Z");
+  const incomingParsed = {
+    company: "Tech Mahindra",
+    role: "Unknown Role",
+    classification: "Assessment Announcement",
+    opportunityType: "JOB_APPLICATION",
+    subtitle: "Online Coding Assessment",
+    timelineTitle: "Online Coding Assessment"
+  };
+
+  const decision = findMatchingApplication({
+    candidates: [existingTechMApp],
+    parsed: incomingParsed,
+    emailMetadata: {
+      messageId: "msg_techm_oa_personal",
+      threadId: "thread_personal_independent", // different thread from testing platform
+      date: nov4,
+      subject: "Tech Mahindra: Online Coding Assessment Details & Login Window",
+      accountEmail: "tejasholla23@gmail.com"
+    }
+  });
+
+  assert.ok(decision.match, "Must find matching application for Tech Mahindra");
+  assert.strictEqual(decision.match._id, existingTechMApp._id);
+  assert.ok(decision.reason.includes("Matched candidate"));
 });

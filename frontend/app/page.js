@@ -354,6 +354,45 @@ export default function JobTrackerDashboard() {
     }
   };
 
+  const handleMergeApplications = async (sourceAppId, targetAppId) => {
+    if (!sourceAppId || !targetAppId || reparsingId) return;
+    const target = applications.find(a => a._id === targetAppId);
+    const targetName = target ? (target.role || target.company || "target card") : "target card";
+    const confirmed = window.confirm(`Merge this application into "${targetName}"? All timeline events and attachments will be combined.`);
+    if (!confirmed) return;
+
+    setReparsingId(`${sourceAppId}_merge_${targetAppId}`);
+    try {
+      const res = await apiFetch(`${BASE_URL}/applications/${sourceAppId}/merge-into`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetAppId })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.mergedTargetApp) {
+          setSelectedApp(data.mergedTargetApp);
+          setApplications(prev => {
+            return prev
+              .filter(a => a._id !== sourceAppId)
+              .map(a => a._id === targetAppId ? data.mergedTargetApp : a);
+          });
+        }
+        setReparseToast({ type: "success", message: `✓ Successfully merged into ${targetName}` });
+        setTimeout(() => setReparseToast(null), 3500);
+      } else {
+        const errData = await res.json();
+        setReparseToast({ type: "error", message: errData.message || "Failed to merge application." });
+      }
+    } catch (err) {
+      console.error("Merge application error:", err);
+      setReparseToast({ type: "error", message: "Failed to merge application." });
+    } finally {
+      setReparsingId(null);
+    }
+  };
+
   const userDropdownRef = useRef(null);
 
   useEffect(() => {
@@ -5530,7 +5569,7 @@ export default function JobTrackerDashboard() {
                         }
                       } else if (derivedStatus === "applied") {
                         const ageInMs = Date.now() - latestEmailTime;
-                        if (ageInMs >= 20 * 24 * 60 * 60 * 1000) {
+                        if (ageInMs >= 28 * 24 * 60 * 60 * 1000) {
                           derivedStatus = "no_response";
                         }
                       }
@@ -5930,9 +5969,11 @@ export default function JobTrackerDashboard() {
         showInfoModal={showInfoModal}
         setShowInfoModal={setShowInfoModal}
         selectedApp={selectedApp}
+        applications={applications}
         reparsingId={reparsingId}
         handleReparseEmail={handleReparseEmail}
         handleSplitEvent={handleSplitEvent}
+        handleMergeApplications={handleMergeApplications}
         reparseToast={reparseToast}
         setReparseToast={setReparseToast}
         attachmentError={attachmentError}

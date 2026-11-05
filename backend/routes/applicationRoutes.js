@@ -821,5 +821,130 @@ router.post("/:id/split-event", writeLimiter, async (req, res) => {
   }
 });
 
+// POST /applications/:id/merge-into - Merge an application into a target application
+router.post("/:id/merge-into", writeLimiter, async (req, res) => {
+  try {
+    const { targetAppId } = req.body;
+    if (!targetAppId) {
+      return res.status(400).json({ message: "targetAppId is required to merge applications" });
+    }
+    if (req.params.id === targetAppId) {
+      return res.status(400).json({ message: "Cannot merge an application into itself" });
+    }
+
+    const sourceApp = await Application.findOne({
+      _id: req.params.id,
+      userId: req.userId,
+      isDeleted: { $ne: true }
+    });
+    if (!sourceApp) {
+      return res.status(404).json({ message: "Source application not found" });
+    }
+
+    const targetApp = await Application.findOne({
+      _id: targetAppId,
+      userId: req.userId,
+      isDeleted: { $ne: true }
+    });
+    if (!targetApp) {
+      return res.status(404).json({ message: "Target application not found" });
+    }
+
+    // 1. Merge Timeline Events
+    targetApp.events = Array.isArray(targetApp.events) ? targetApp.events : [];
+    const sourceEvents = Array.isArray(sourceApp.events) && sourceApp.events.length > 0
+      ? sourceApp.events
+      : [{
+          messageId: sourceApp.messageId,
+          threadId: sourceApp.threadId || "",
+          accountEmail: sourceApp.accountEmail || "",
+          date: sourceApp.date || new Date(),
+          classification: sourceApp.classification || "",
+          title: sourceApp.subtitle || sourceApp.title || "Follow-up Update",
+          subject: (sourceApp.rawText || "").substring(0, 100),
+          status: sourceApp.status || "new",
+          link: sourceApp.link || "",
+          summary: sourceApp.rawText || ""
+        }];
+
+    for (const ev of sourceEvents) {
+      const alreadyHas = targetApp.events.some(
+        e => (e.messageId && e.messageId === ev.messageId)
+      );
+      if (!alreadyHas) {
+        targetApp.events.push(ev);
+      }
+    }
+    targetApp.events.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+
+    // 2. Merge Attachments
+    targetApp.attachments = Array.isArray(targetApp.attachments) ? targetApp.attachments : [];
+    const sourceAttachments = Array.isArray(sourceApp.attachments) ? sourceApp.attachments : [];
+    for (const att of sourceAttachments) {
+      const alreadyHas = targetApp.attachments.some(
+        a => a.messageId === att.messageId && a.attachmentId === att.attachmentId
+      );
+      if (!alreadyHas) {
+        targetApp.attachments.push(att);
+      }
+    }
+
+    // 3. Merge Links
+    const mergedLinks = new Set([
+      ...(targetApp.links || []),
+      ...(sourceApp.links || []),
+      ...(targetApp.link ? [targetApp.link] : []),
+      ...(sourceApp.link ? [sourceApp.link] : [])
+    ]);
+    targetApp.links = Array.from(mergedLinks);
+    if (!targetApp.link && sourceApp.link) {
+      targetApp.link = sourceApp.link;
+    }
+
+    // 4. Update Stage if source is more advanced
+    const STAGE_HIERARCHY = {
+      none: 0,
+      oa_scheduled: 1,
+      interview_scheduled: 2,
+      offered: 3,
+      rejected_after_oa: 4,
+      rejected_after_interview: 4,
+      rejected: 4
+    };
+    const targetStageWeight = STAGE_HIERARCHY[targetApp.stage] || 0;
+    const sourceStageWeight = STAGE_HIERARCHY[sourceApp.stage] || 0;
+    if (sourceStageWeight > targetStageWeight) {
+      targetApp.stage = sourceApp.stage;
+    }
+
+    // 5. Update Status if target was 'new' and source had status
+    if (targetApp.status === "new" && sourceApp.status && sourceApp.status !== "new") {
+      targetApp.status = sourceApp.status;
+    }
+
+    // 6. Merge Shortlist info if present
+    if (sourceApp.isShortlisted && !targetApp.isShortlisted) {
+      targetApp.isShortlisted = true;
+      targetApp.shortlistSummary = sourceApp.shortlistSummary || targetApp.shortlistSummary;
+    }
+
+    // 7. Soft-delete the source application
+    sourceApp.isDeleted = true;
+    await sourceApp.save();
+    await targetApp.save();
+
+    console.log(`[MERGE_APPLICATIONS] Merged ${sourceApp._id} ("${sourceApp.company} - ${sourceApp.role}") into ${targetApp._id} ("${targetApp.company} - ${targetApp.role}")`);
+
+    res.json({
+      message: `Successfully merged "${sourceApp.company}" into "${targetApp.role || targetApp.company}"`,
+      mergedTargetApp: targetApp,
+      deletedSourceId: sourceApp._id
+    });
+  } catch (error) {
+    console.error("Merge applications error:", error.message);
+    res.status(500).json({ message: "Failed to merge applications" });
+  }
+});
+
 module.exports = router;
 

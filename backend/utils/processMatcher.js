@@ -77,8 +77,16 @@ function findMatchingApplication({ candidates = [], parsed = {}, emailMetadata =
       continue;
     }
 
-    const appLatestDate = app.date ? new Date(app.date) : new Date(0);
-    const msDiff = incomingDate.getTime() - appLatestDate.getTime();
+    let latestActivityMs = app.date ? new Date(app.date).getTime() : 0;
+    if (Array.isArray(app.events) && app.events.length > 0) {
+      for (const ev of app.events) {
+        if (ev.date) {
+          const evMs = new Date(ev.date).getTime();
+          if (evMs > latestActivityMs) latestActivityMs = evMs;
+        }
+      }
+    }
+    const msDiff = incomingDate.getTime() - latestActivityMs;
     const daysDiff = Math.max(0, msDiff / (1000 * 60 * 60 * 24));
 
     const isTerminalStage = ["rejected", "rejected_after_oa", "rejected_after_interview", "offered"].includes(app.stage);
@@ -129,9 +137,9 @@ function findMatchingApplication({ candidates = [], parsed = {}, emailMetadata =
       if (!isTerminalStage) {
         score += 30; // Strongly prefer ongoing active processes
       }
-      // Follow-ups within 1 to 45 days after application are normal pipeline steps
-      if (daysDiff <= 45) {
-        score += 20;
+      // Follow-ups within 1 to 60 days after latest activity are normal pipeline steps
+      if (daysDiff <= 60) {
+        score += 25;
       }
     }
 

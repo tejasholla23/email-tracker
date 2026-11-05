@@ -1,6 +1,7 @@
 const { OpenAI } = require("openai");
 const he = require("he");
 const config = require("../config/appConfig");
+const { isNonRoleTitle, isFollowupClassification } = require("./roleMatcher");
 
 const nvidiaClient = new OpenAI({
   apiKey: config.NVIDIA_API_KEY || process.env.NVIDIA_API_KEY || config.NVIDIA_PRIMARY_API_KEY || process.env.NVIDIA_PRIMARY_API_KEY || "dummy_key",
@@ -2345,7 +2346,18 @@ async function parseEmailWithLLM(subject, sender = "", fullBodyText = "", refere
   const displayFieldsRole = (displayFields || []).find(f =>
     /^(role|roles|position|designation|job\s*role|job\s*title)$/i.test(f?.label)
   )?.value || "";
-  const roleField = isJobEmail ? (displayFieldsRole || llmData.subtitle || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
+  let candidateRole = displayFieldsRole;
+  if (!candidateRole) {
+    // Only fall back to subtitle if this is NOT a follow-up classification and NOT a stage/milestone title
+    if (!isFollowupClassification(finalClassification) && !isNonRoleTitle(llmData?.subtitle)) {
+      candidateRole = llmData?.subtitle || "";
+    }
+  }
+  // If candidateRole itself is an assessment/stage title, treat as unknown role
+  if (isNonRoleTitle(candidateRole)) {
+    candidateRole = "";
+  }
+  const roleField = isJobEmail ? (candidateRole || "Unknown Role") : (emailType === "event" ? "Event" : "Unknown Role");
   const subtitle = llmData.subtitle || roleField || "";
   const subtitleSource = "llm";
 

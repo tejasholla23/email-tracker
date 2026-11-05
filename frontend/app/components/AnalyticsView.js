@@ -144,7 +144,7 @@ export default function AnalyticsView({ applications = [] }) {
         (!!app.hasApplied && isFinished) ||
         (!!app.hasApplied && !isFinished)
       );
-      const isNoResponse = (status === "applied" || hasApplied) && !isFinished && !isRejected && !isShortlisted && ageInDays >= 20;
+      const isNoResponse = (status === "applied" || hasApplied) && !isFinished && !isRejected && !isShortlisted && ageInDays >= 28;
 
       if (isPlacement) {
         placementCount++;
@@ -457,8 +457,8 @@ export default function AnalyticsView({ applications = [] }) {
                 {metrics.upcomingDeadlinesCount > 0
                   ? `${metrics.upcomingDeadlinesCount} upcoming deadlines within 7 days`
                   : isEvents
-                  ? "Applied with no update >20 days"
-                  : "No response since >20 days"}
+                  ? "Applied with no update >28 days"
+                  : "No response since >28 days"}
               </div>
             </div>
           </div>

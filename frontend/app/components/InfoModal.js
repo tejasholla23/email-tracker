@@ -6,9 +6,11 @@ export default function InfoModal({
   showInfoModal,
   setShowInfoModal,
   selectedApp,
+  applications = [],
   reparsingId,
   handleReparseEmail,
   handleSplitEvent,
+  handleMergeApplications,
   reparseToast,
   setReparseToast,
   attachmentError,
@@ -44,6 +46,16 @@ export default function InfoModal({
     ? app.displayFields.filter(f => f?.label && f?.value?.trim())
     : [];
   const skills = Array.isArray(app.skills) ? app.skills : [];
+
+  const siblingApps = Array.isArray(applications)
+    ? applications.filter(
+        a =>
+          a._id !== app._id &&
+          !a.isDeleted &&
+          ((a.companyKey && app.companyKey && a.companyKey === app.companyKey) ||
+           (a.company && app.company && a.company.toLowerCase().trim() === app.company.toLowerCase().trim()))
+      )
+    : [];
 
   const getFileIcon = (mimeType, filename) => {
     const mt = (mimeType || '').toLowerCase();
@@ -272,6 +284,54 @@ export default function InfoModal({
 
         {/* ── Scrollable body ── */}
         <div className="info-modal-body">
+
+          {/* ── Sibling Application Merge Banner ── */}
+          {siblingApps.length > 0 && handleMergeApplications && (
+            <div style={{
+              margin: '0 0 16px 0',
+              padding: '11px 14px',
+              borderRadius: '8px',
+              background: isDarkMode ? 'rgba(59, 130, 246, 0.09)' : 'rgba(59, 130, 246, 0.07)',
+              border: isDarkMode ? '1px solid rgba(59, 130, 246, 0.28)' : '1px solid rgba(59, 130, 246, 0.22)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div style={{ fontSize: '12.5px', color: isDarkMode ? '#93c5fd' : '#1d4ed8', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <span style={{ fontSize: '14px' }}>🔗</span>
+                <span>
+                  Another application exists for <strong>{app.company}</strong>: {siblingApps[0].role || siblingApps[0].company}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {siblingApps.map(target => (
+                  <button
+                    key={target._id}
+                    disabled={Boolean(reparsingId?.includes('merge'))}
+                    onClick={() => handleMergeApplications(app._id, target._id)}
+                    style={{
+                      background: isDarkMode ? '#2563eb' : '#3b82f6',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '5px 12px',
+                      fontSize: '11.5px',
+                      fontWeight: '600',
+                      cursor: reparsingId?.includes('merge') ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                    }}
+                  >
+                    <span>{reparsingId?.includes('merge') ? 'Merging...' : `Merge into "${target.role ? (target.role.length > 25 ? target.role.slice(0, 25) + '...' : target.role) : 'Card'}"`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Shortlist Match Banner ── */}
           {app.isShortlisted && (

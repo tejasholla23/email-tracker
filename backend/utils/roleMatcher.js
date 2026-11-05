@@ -178,6 +178,44 @@ const CANONICAL_SYNONYMS = [
   new Set(["qa engineer", "quality assurance", "test engineer", "sdet"])
 ];
 
+// Common non-role / stage / assessment / milestone patterns
+const NON_ROLE_STAGE_PATTERNS = [
+  /\b(online\s+)?coding\s+assessment\b/i,
+  /\b(online\s+)?assessment(\s+details|\s+link|\s+scheduled?|\s+instructions?)?\b/i,
+  /\boa(\s+link|\s+test|\s+details|\s+shortlist)?\b/i,
+  /\bmock\s+(assessment|test)\b/i,
+  /\b(technical|hr|managerial|virtual|face\s+to\s+face|f2f)?\s*interview(\s+schedule|\s+call|\s+link|\s+round|\s+process|\s+shortlist|\s+slot)?\b/i,
+  /\bshortlist(ed|s)?(\s+candidates?|\s+students?)?\b/i,
+  /\bselects?\b/i,
+  /\btest(\s+link|\s+details|\s+invitation|\s+schedule|\s+instructions?)?\b/i,
+  /\baptitude(\s+test|\s+assessment)?\b/i,
+  /\bhacker\s*rank\b/i,
+  /\bhacker\s*earth\b/i,
+  /\bmettl\b/i,
+  /\bcode\s*signal\b/i,
+  /\bpre[\s\-]?placement(\s+talk)?\b/i,
+  /\bppt(\s+session|\s+announcement)?\b/i,
+  /\bround\s+[0-9ivx]+\b/i,
+  /\b(first|second|third|final)\s+round\b/i,
+  /\bhiring\s+update\b/i,
+  /\brecruitment\s+(process|drive|event|update)\b/i,
+  /\bselection\s+process\b/i,
+  /\bregistration\s+(link|form|details|window)\b/i,
+  /\bvenue\s+(update|details)\b/i,
+  /\bcampus\s+(drive|hiring|event|recruitment)\b/i
+];
+
+/**
+ * Checks whether a role or subtitle string actually describes a recruitment stage/event
+ * rather than a genuine job title.
+ */
+function isNonRoleTitle(title = "") {
+  if (!title || typeof title !== "string") return false;
+  const clean = title.trim();
+  if (!clean) return true;
+  return NON_ROLE_STAGE_PATTERNS.some(regex => regex.test(clean));
+}
+
 function areCanonicalSynonyms(normA, normB) {
   for (const group of CANONICAL_SYNONYMS) {
     if (group.has(normA) && group.has(normB)) {
@@ -199,12 +237,12 @@ function areRolesCompatible(roleA = "", roleB = "") {
   const normA = normalizeRole(roleA);
   const normB = normalizeRole(roleB);
 
-  // If either role is unknown/empty, it cannot conflict (neutral)
-  const isNeutralA = !normA || normA === "unknown role" || normA === "event" || normA === "pending analysis";
-  const isNeutralB = !normB || normB === "unknown role" || normB === "event" || normB === "pending analysis";
+  // If either role is unknown/empty or a recruitment stage/event title, it cannot conflict (neutral)
+  const isNeutralA = !normA || normA === "unknown role" || normA === "event" || normA === "pending analysis" || isNonRoleTitle(normA);
+  const isNeutralB = !normB || normB === "unknown role" || normB === "event" || normB === "pending analysis" || isNonRoleTitle(normB);
 
   if (isNeutralA || isNeutralB) {
-    return { compatible: true, isConflicting: false, isExactSynonym: false, reason: "One or both roles are unspecified/neutral" };
+    return { compatible: true, isConflicting: false, isExactSynonym: false, reason: "One or both roles are unspecified/neutral or stage/assessment titles" };
   }
 
   // Exact match
@@ -270,6 +308,7 @@ function isFollowupClassification(classification = "") {
 
 module.exports = {
   normalizeRole,
+  isNonRoleTitle,
   getRoleFamily,
   tokenSimilarity,
   areRolesCompatible,
