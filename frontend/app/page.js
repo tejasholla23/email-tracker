@@ -400,7 +400,6 @@ export default function JobTrackerDashboard() {
     const handleClickOutside = (event) => {
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
         setShowUserDropdown(false);
-        setShowThemeSubmenu(false);
       }
       if (stageDropdownRef.current && !stageDropdownRef.current.contains(event.target)) {
         setShowStageDropdown(false);
@@ -530,9 +529,8 @@ export default function JobTrackerDashboard() {
   const [isClickedToKeepOpen, setIsClickedToKeepOpen] = useState(false);
   const collapseTimeoutRef = React.useRef(null);
   const [timeTick, setTimeTick] = useState(0);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const isDarkMode = true;
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showThemeSubmenu, setShowThemeSubmenu] = useState(false);
 
   const [userEmail, setUserEmail] = useState(null);
 
@@ -1165,28 +1163,24 @@ export default function JobTrackerDashboard() {
 
     initializeSession();
 
-    // Check local storage for dark mode preference
-    const savedMode = localStorage.getItem("darkMode");
-    if (savedMode === "false") {
-      setIsDarkMode(false);
-    } else {
-      setIsDarkMode(true);
+    // Permanently enforce dark mode
+    try {
+      localStorage.setItem("darkMode", "true");
+    } catch (e) {}
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.add("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+      document.body.classList.add("dark");
     }
   }, []);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
-      if (isDarkMode) {
-        document.documentElement.classList.add("dark");
-        document.documentElement.setAttribute("data-theme", "dark");
-        document.body.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-        document.documentElement.setAttribute("data-theme", "light");
-        document.body.classList.remove("dark");
-      }
+      document.documentElement.classList.add("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+      document.body.classList.add("dark");
     }
-  }, [isDarkMode]);
+  }, []);
 
   const fetchCalendarStatus = async () => {
     try {
@@ -1409,11 +1403,6 @@ export default function JobTrackerDashboard() {
       document.documentElement.style.overflow = "";
     };
   }, [showInfoModal, showAddModal, showEditModal, showDeleteModal, showClearModal]);
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    localStorage.setItem("darkMode", !isDarkMode);
-  };
 
   const fetchApplications = async () => {
     if (!userEmail) return;
@@ -2187,16 +2176,16 @@ export default function JobTrackerDashboard() {
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
         
         :root {
-          /* Light Mode Tokens */
-          --bg-color: #f8fafc;
-          --surface-color: #ffffff;
-          --text-primary: #334155;
-          --text-heading: #0f172a;
-          --text-secondary: #64748b;
-          --border-color: #cbd5e1;
-          --brand-primary: #2563eb;
-          --brand-primary-hover: #1d4ed8;
-          --sidebar-bg: #ffffff;
+          /* Default Dark Theme Tokens */
+          --bg-color: #020408;
+          --surface-color: #0d121f;
+          --text-primary: #f1f5f9;
+          --text-heading: #ffffff;
+          --text-secondary: #9ca3af;
+          --border-color: #1e2638;
+          --brand-primary: #3b82f6;
+          --brand-primary-hover: #60a5fa;
+          --sidebar-bg: rgba(6, 9, 18, 0.82);
           --font-geist: 'IBM Plex Sans', -apple-system, sans-serif;
           --radius-card: 16px;
           --radius-btn: 8px;
@@ -2587,34 +2576,6 @@ export default function JobTrackerDashboard() {
         .search-container input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background-color: #ffffff; }
         .search-container input::placeholder { color: var(--text-secondary); }
         .topbar-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-        
-        /* Topbar Theme Toggle Button */
-        .theme-toggle-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: transparent;
-          border: 1px solid transparent;
-          color: var(--text-secondary);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s ease-out;
-        }
-        .theme-toggle-btn:hover {
-          background: var(--bg-color);
-          color: var(--text-primary);
-          border-color: var(--border-color);
-        }
-        .dark .theme-toggle-btn {
-          color: #94a3b8;
-        }
-        .dark .theme-toggle-btn:hover {
-          background: rgba(255, 255, 255, 0.06);
-          color: #f8fafc;
-          border-color: rgba(255, 255, 255, 0.1);
-        }
         
         @keyframes dropdownPopup {
           0% {
@@ -4316,10 +4277,10 @@ export default function JobTrackerDashboard() {
           inset: 0;
           pointer-events: none;
           z-index: 0;
-          background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1.25px, transparent 1.25px);
+          background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1.25px, transparent 1.25px);
           background-size: 24px 24px;
-          mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 28%, transparent 80%);
-          -webkit-mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 28%, transparent 80%);
+          mask-image: radial-gradient(ellipse 95% 75% at 50% 5%, #000 48%, transparent 90%);
+          -webkit-mask-image: radial-gradient(ellipse 95% 75% at 50% 5%, #000 48%, transparent 90%);
         }
 
         /* Fluid Interactive Aurora & Cursor Reactive Light Field */
@@ -5428,7 +5389,7 @@ export default function JobTrackerDashboard() {
           }}
         />
       ) : (
-      <div className={`layout ${isDarkMode ? 'dark' : ''} ${!isSidebarCollapsed ? 'sidebar-expanded' : ''}`}>
+      <div className={`layout dark ${!isSidebarCollapsed ? 'sidebar-expanded' : ''}`}>
         <div className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
 
         <aside
@@ -5439,7 +5400,7 @@ export default function JobTrackerDashboard() {
         >
           <div className="sidebar-header">
             <div className="sidebar-logo-box">
-              <img src={isDarkMode ? "/logo.png" : "/logo-light.png"} alt="Email Tracker Logo" className="logo-img" />
+              <img src="/logo.png" alt="Email Tracker Logo" className="logo-img" />
             </div>
             <div className="logo-text-wrapper">
               <div className="logo-title-text">Email Tracker</div>
@@ -5553,32 +5514,6 @@ export default function JobTrackerDashboard() {
               </div>
             </div>
             <div className="topbar-actions">
-              {/* Dark / Light Mode Toggle Button */}
-              <button
-                className="theme-toggle-btn"
-                onClick={toggleDarkMode}
-                aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-                title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {isDarkMode ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="5"></circle>
-                    <line x1="12" y1="1" x2="12" y2="3"></line>
-                    <line x1="12" y1="21" x2="12" y2="23"></line>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                    <line x1="1" y1="12" x2="3" y2="12"></line>
-                    <line x1="21" y1="12" x2="23" y2="12"></line>
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                  </svg>
-                ) : (
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                  </svg>
-                )}
-              </button>
-
               {/* User Avatar / Account Badge */}
               <div className="user-dropdown-container" ref={userDropdownRef}>
                 <button
