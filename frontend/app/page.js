@@ -2502,6 +2502,8 @@ export default function JobTrackerDashboard() {
           display: flex;
           flex-direction: column;
           min-width: 0;
+          position: relative;
+          z-index: 1;
           transition: margin-left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         }
         
@@ -4263,14 +4265,35 @@ export default function JobTrackerDashboard() {
         body.dark,
         .layout.dark {
           background-color: #030712;
-          background-image:
-            radial-gradient(ellipse 90% 45% at 50% -10%, rgba(20, 184, 166, 0.16), transparent 75%),
-            radial-gradient(circle 600px at 15% 25%, rgba(59, 130, 246, 0.14), transparent 60%),
-            radial-gradient(circle 500px at 85% 45%, rgba(139, 92, 246, 0.12), transparent 60%),
-            radial-gradient(circle 700px at 50% 90%, rgba(20, 184, 166, 0.1), transparent 70%);
-          background-attachment: fixed;
           color: var(--text-primary); 
           min-height: 100vh; 
+          position: relative;
+        }
+
+        /* Aceternity Dot Matrix Canvas & Radial Spotlight */
+        .layout.dark::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+          background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1.25px, transparent 1.25px);
+          background-size: 24px 24px;
+          mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 35%, transparent 85%);
+          -webkit-mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 35%, transparent 85%);
+        }
+
+        .layout.dark::after {
+          content: "";
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+          background: 
+            radial-gradient(circle 800px at 50% -80px, rgba(20, 184, 166, 0.18), transparent 70%),
+            radial-gradient(circle 650px at 10% 260px, rgba(59, 130, 246, 0.14), transparent 60%),
+            radial-gradient(circle 600px at 90% 400px, rgba(139, 92, 246, 0.12), transparent 65%),
+            radial-gradient(circle 700px at 50% 900px, rgba(20, 184, 166, 0.08), transparent 70%);
         }
         .dark .sidebar {
           background-color: rgba(10, 15, 28, 0.72);
