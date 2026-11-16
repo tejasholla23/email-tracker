@@ -4361,21 +4361,82 @@ export default function JobTrackerDashboard() {
           backdrop-filter: blur(16px);
           -webkit-backdrop-filter: blur(16px);
           box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
         }
-        .dark .stat-card:hover {
-          background: linear-gradient(135deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.82) 100%);
-          border-color: rgba(255, 255, 255, 0.16);
-          border-top-color: rgba(255, 255, 255, 0.35);
+        .dark .stat-card.total {
+          background: linear-gradient(135deg, rgba(20, 184, 166, 0.08) 0%, rgba(15, 23, 42, 0.72) 100%);
+          border-top: 1px solid rgba(45, 212, 191, 0.45);
+        }
+        .dark .stat-card.total:hover {
+          background: linear-gradient(135deg, rgba(20, 184, 166, 0.15) 0%, rgba(15, 23, 42, 0.82) 100%);
+          border-top-color: rgba(45, 212, 191, 0.75);
+          box-shadow: inset 0 1px 1px 0 rgba(45, 212, 191, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(45, 212, 191, 0.15);
           transform: translateY(-2px);
-          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15), 0 14px 30px -4px rgba(0, 0, 0, 0.55);
         }
-        .dark .stat-label { color: #94a3b8; }
-        .dark .stat-value { color: #f8fafc; }
-        .dark .stat-card.total .stat-icon { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); color: #34d399; box-shadow: 0 0 14px rgba(16, 185, 129, 0.15); border-radius: 12px; }
-        .dark .stat-card.urgent .stat-icon { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; box-shadow: 0 0 14px rgba(239, 68, 68, 0.15); border-radius: 12px; }
-        .dark .stat-card.unmarked .stat-icon { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); color: #fbbf24; box-shadow: 0 0 14px rgba(245, 158, 11, 0.15); border-radius: 12px; }
-        .dark .stat-trend { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 999px; box-shadow: 0 0 8px rgba(16, 185, 129, 0.15); }
-        .dark .stat-subtext { color: #64748b; }
+        .dark .stat-card.urgent {
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(15, 23, 42, 0.72) 100%);
+          border-top: 1px solid rgba(248, 113, 113, 0.45);
+        }
+        .dark .stat-card.urgent:hover {
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(15, 23, 42, 0.82) 100%);
+          border-top-color: rgba(248, 113, 113, 0.75);
+          box-shadow: inset 0 1px 1px 0 rgba(248, 113, 113, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.15);
+          transform: translateY(-2px);
+        }
+        .dark .stat-card.unmarked {
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.72) 100%);
+          border-top: 1px solid rgba(251, 191, 36, 0.45);
+        }
+        .dark .stat-card.unmarked:hover {
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.82) 100%);
+          border-top-color: rgba(251, 191, 36, 0.75);
+          box-shadow: inset 0 1px 1px 0 rgba(251, 191, 36, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.15);
+          transform: translateY(-2px);
+        }
+        .dark .stat-label {
+          color: #94a3b8;
+          font-size: 11.5px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .dark .stat-value {
+          color: #f8fafc;
+          font-size: 30px;
+          font-weight: 700;
+          letter-spacing: -0.03em;
+          font-variant-numeric: tabular-nums;
+        }
+        .dark .stat-card.total .stat-icon { background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; box-shadow: 0 0 14px rgba(16, 185, 129, 0.2); border-radius: 12px; }
+        .dark .stat-card.urgent .stat-icon { background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; box-shadow: 0 0 14px rgba(239, 68, 68, 0.2); border-radius: 12px; }
+        .dark .stat-card.unmarked .stat-icon { background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; box-shadow: 0 0 14px rgba(245, 158, 11, 0.2); border-radius: 12px; }
+        .dark .stat-trend { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 999px; box-shadow: 0 0 8px rgba(16, 185, 129, 0.15); font-variant-numeric: tabular-nums; }
+        .dark .stat-subtext { color: #64748b; font-size: 12px; font-weight: 500; }
+        
+        .beacon-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          display: inline-block;
+          flex-shrink: 0;
+        }
+        .beacon-dot.ok {
+          background: #34d399;
+          box-shadow: 0 0 8px rgba(52, 211, 153, 0.85);
+        }
+        .beacon-dot.urgent {
+          background: #f87171;
+          box-shadow: 0 0 10px rgba(248, 113, 113, 0.95);
+          animation: beaconPulse 1.6s ease-in-out infinite;
+        }
+        .beacon-dot.warn {
+          background: #fbbf24;
+          box-shadow: 0 0 8px rgba(251, 191, 36, 0.85);
+        }
+        @keyframes beaconPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.45; transform: scale(0.8); }
+        }
         
         .dark .filters { background: var(--surface-color); border-color: var(--border-color); }
         .dark .filter-btn { color: var(--text-secondary); }
@@ -4419,21 +4480,28 @@ export default function JobTrackerDashboard() {
         .dark .company-name {
           color: #94a3b8;
         }
-        .dark .status-new { background: rgba(37, 99, 235, 0.08); color: #3b82f6; border-color: #1d4ed8; }
-        .dark .status-unmarked { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: #d97706; }
-        .dark .status-applied { background: rgba(20, 184, 166, 0.08); color: #14b8a6; border-color: #0d9488; }
-        .dark .status-no_response, .dark .status-no-response { background: rgba(249, 115, 22, 0.12); color: #f97316; border-color: #ea580c; }
-        .dark .status-not_applied, .dark .status-not-applied { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border-color: #64748b; }
-        .dark .status-done { background: rgba(34, 197, 94, 0.08); color: #22c55e; border-color: #16a34a; }
-        .dark .stage-oa { background: rgba(168, 85, 247, 0.15); border-color: #a855f7; color: #d8b4fe; }
-        .dark .stage-interview { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fcd34d; }
-        .dark .stage-offered { background: rgba(34, 197, 94, 0.15); border-color: #22c55e; color: #86efac; }
-        .dark .stage-rejected { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5; }
-        .dark .stage-rejected_after_oa { background: rgba(225, 29, 72, 0.15); border-color: #e11d48; color: #fda4af; }
-        .dark .stage-rejected_after_interview { background: rgba(225, 29, 72, 0.15); border-color: #e11d48; color: #fda4af; }
-        .dark .opp-hackathon { background: rgba(139, 92, 246, 0.15); border-color: #8b5cf6; color: #c4b5fd; }
-        .dark .opp-webinar { background: rgba(14, 165, 233, 0.15); border-color: #0ea5e9; color: #7dd3fc; }
-        .dark .opp-event { background: rgba(100, 116, 139, 0.15); border-color: #64748b; color: #cbd5e1; }
+        .dark .status-badge {
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border-radius: 6px;
+          letter-spacing: 0.04em;
+          transition: all 0.2s ease;
+        }
+        .dark .status-new { background: rgba(37, 99, 235, 0.14); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.45); box-shadow: 0 0 10px rgba(37, 99, 235, 0.2); }
+        .dark .status-unmarked { background: rgba(245, 158, 11, 0.14); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45); box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+        .dark .status-applied { background: rgba(20, 184, 166, 0.14); color: #2dd4bf; border: 1px solid rgba(45, 212, 191, 0.45); box-shadow: 0 0 10px rgba(20, 184, 166, 0.2); }
+        .dark .status-no_response, .dark .status-no-response { background: rgba(249, 115, 22, 0.14); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.45); box-shadow: 0 0 10px rgba(249, 115, 22, 0.18); }
+        .dark .status-not_applied, .dark .status-not-applied { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.28); }
+        .dark .status-done { background: rgba(34, 197, 94, 0.14); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.45); box-shadow: 0 0 10px rgba(34, 197, 94, 0.2); }
+        .dark .stage-oa { background: rgba(168, 85, 247, 0.16); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc; box-shadow: 0 0 12px rgba(168, 85, 247, 0.25); }
+        .dark .stage-interview { background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; box-shadow: 0 0 12px rgba(245, 158, 11, 0.25); }
+        .dark .stage-offered { background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; box-shadow: 0 0 12px rgba(16, 185, 129, 0.25); }
+        .dark .stage-rejected { background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.45); color: #f87171; box-shadow: 0 0 12px rgba(239, 68, 68, 0.25); }
+        .dark .stage-rejected_after_oa { background: rgba(225, 29, 72, 0.16); border: 1px solid rgba(225, 29, 72, 0.45); color: #fb7185; box-shadow: 0 0 12px rgba(225, 29, 72, 0.25); }
+        .dark .stage-rejected_after_interview { background: rgba(225, 29, 72, 0.16); border: 1px solid rgba(225, 29, 72, 0.45); color: #fb7185; box-shadow: 0 0 12px rgba(225, 29, 72, 0.25); }
+        .dark .opp-hackathon { background: rgba(139, 92, 246, 0.16); border: 1px solid rgba(139, 92, 246, 0.45); color: #c4b5fd; box-shadow: 0 0 10px rgba(139, 92, 246, 0.2); }
+        .dark .opp-webinar { background: rgba(14, 165, 233, 0.16); border: 1px solid rgba(14, 165, 233, 0.45); color: #7dd3fc; box-shadow: 0 0 10px rgba(14, 165, 233, 0.2); }
+        .dark .opp-event { background: rgba(100, 116, 139, 0.16); border: 1px solid rgba(100, 116, 139, 0.35); color: #cbd5e1; }
         .dark .app-footer { border-color: #334155; color: #94a3b8; }
         
         .dark .modal-content { background: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); }
@@ -4605,31 +4673,42 @@ export default function JobTrackerDashboard() {
 
         .dark .program-details {
           border-left: none;
-          background: rgba(15, 23, 42, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(10, 15, 28, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 10px;
-          padding: 10px 12px 6px 12px;
+          padding: 10px 12px;
           margin-top: 12px;
           margin-bottom: 12px;
-          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
         }
         .dark .program-detail {
           margin-bottom: 6px;
+          padding-bottom: 6px;
           display: flex;
           align-items: baseline;
           justify-content: space-between;
           gap: 12px;
+          border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+        }
+        .dark .program-detail:last-child {
+          margin-bottom: 0;
+          padding-bottom: 0;
+          border-bottom: none;
         }
         .dark .program-detail-label {
           color: #64748b;
-          font-size: 12px;
-          font-weight: 500;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-weight: 600;
           flex-shrink: 0;
-          letter-spacing: 0.01em;
         }
         .dark .program-detail-value {
           color: #f1f5f9;
-          font-weight: 500;
+          font-weight: 600;
+          font-size: 12.5px;
+          font-variant-numeric: tabular-nums;
           text-align: right;
           word-break: break-word;
         }
@@ -5703,7 +5782,10 @@ export default function JobTrackerDashboard() {
                       <span className="stat-label">Deadlines Today</span>
                       <div className="stat-main">
                         <span className="stat-value">{urgentDeadlines}</span>
-                        <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <span className={`beacon-dot ${urgentDeadlines > 0 ? "urgent" : "ok"}`} />
+                          <span className="stat-subtext">{urgentDeadlines === 0 ? "No immediate action" : "Requires attention"}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -5719,7 +5801,10 @@ export default function JobTrackerDashboard() {
                       <span className="stat-label">Unmarked</span>
                       <div className="stat-main">
                         <span className="stat-value">{unmarkedCount}</span>
-                        <span className="stat-subtext">Needs review</span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <span className={`beacon-dot ${unmarkedCount > 0 ? "warn" : "ok"}`} />
+                          <span className="stat-subtext">{unmarkedCount === 0 ? "All clear" : "Needs review"}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
