@@ -3594,57 +3594,38 @@ export default function JobTrackerDashboard() {
 
         /* Pin Button */
         .pin-btn {
-          position: relative;
+          position: absolute;
+          top: 0px;
+          left: 50%;
+          right: auto;
+          transform: translateX(-50%) translateY(-6px) scale(0.95);
           width: 28px;
           height: 28px;
-          border-radius: 8px;
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          background: rgba(15, 23, 42, 0.5);
+          border-radius: 50%;
+          border: 1px solid rgba(148, 163, 184, 0.25);
+          background: rgba(15, 23, 42, 0.85);
           backdrop-filter: blur(8px);
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          opacity: 0.5;
-          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          opacity: 0;
+          transition: opacity 180ms ease-out, transform 180ms ease-out, background 150ms ease, border-color 150ms ease;
+          z-index: 10;
           padding: 0;
           outline: none;
-          flex-shrink: 0;
         }
-        .app-card:hover .pin-btn {
-          opacity: 0.9;
-        }
-        .pin-btn:hover {
-          opacity: 1 !important;
-          background: rgba(13, 148, 136, 0.18);
-          border-color: rgba(20, 184, 166, 0.5);
-          transform: translateY(-1px);
-        }
-        .pin-btn:active {
-          transform: scale(0.92);
-        }
-        .pin-btn svg {
-          width: 13px;
-          height: 13px;
-          color: #94a3b8;
-          transition: color 150ms ease, transform 200ms ease;
-        }
-        .pin-btn:hover svg {
-          color: #14b8a6;
-        }
-        .pin-btn.is-pinned {
-          opacity: 1 !important;
-          background: rgba(13, 148, 136, 0.22);
-          border-color: rgba(20, 184, 166, 0.5);
-          box-shadow: 0 0 10px rgba(20, 184, 166, 0.25);
-        }
-        .pin-btn.is-pinned svg {
-          color: #14b8a6;
-          transform: rotate(45deg);
-        }
-        .app-card.is-done .pin-btn {
-          display: none;
-        }
+        .app-header { position: relative; }
+        .app-card:hover .pin-btn { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        .app-card:not(:hover) .pin-btn { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.95); pointer-events: none; }
+        .app-card .pin-btn.is-pinned { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); pointer-events: auto; }
+        .pin-btn:hover { background: rgba(13, 148, 136, 0.2); border-color: rgba(20, 184, 166, 0.5); }
+        .pin-btn:active { transform: translateX(-50%) scale(0.9); }
+        .pin-btn svg { width: 14px; height: 14px; color: #94a3b8; transition: color 150ms ease, transform 200ms ease; }
+        .pin-btn:hover svg { color: #14b8a6; }
+        .pin-btn.is-pinned svg { color: #14b8a6; transform: rotate(45deg); }
+        .pin-btn.is-pinned { background: rgba(13, 148, 136, 0.2); border-color: rgba(20, 184, 166, 0.45); }
+        .app-card.is-done .pin-btn { display: none; }
 
         /* Pinned Section */
         .pinned-section {
@@ -3774,7 +3755,7 @@ export default function JobTrackerDashboard() {
           .pin-btn {
             opacity: 0.8 !important;
             pointer-events: auto !important;
-            transform: none !important;
+            transform: translateX(-50%) translateY(0) scale(1) !important;
             width: 32px !important;
             height: 32px !important;
             background: var(--surface-color) !important;
@@ -4304,19 +4285,19 @@ export default function JobTrackerDashboard() {
         body.dark,
         .layout.dark,
         .dark { 
-          --bg-color: #030712;
-          --surface-color: #1f2937;
-          --text-primary: #f9fafb;
+          --bg-color: #020408;
+          --surface-color: #0d121f;
+          --text-primary: #f1f5f9;
           --text-heading: #ffffff;
           --text-secondary: #9ca3af;
-          --border-color: #374151;
+          --border-color: #1e2638;
           --brand-primary: #3b82f6;
           --brand-primary-hover: #60a5fa;
         }
 
         body.dark,
         .layout.dark {
-          background-color: #030712;
+          background-color: #020408;
           color: var(--text-primary); 
           min-height: 100vh; 
           position: relative;
@@ -4335,7 +4316,7 @@ export default function JobTrackerDashboard() {
           inset: 0;
           pointer-events: none;
           z-index: 0;
-          background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1.25px, transparent 1.25px);
+          background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1.25px, transparent 1.25px);
           background-size: 24px 24px;
           mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 28%, transparent 80%);
           -webkit-mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 28%, transparent 80%);
@@ -4351,15 +4332,15 @@ export default function JobTrackerDashboard() {
           will-change: background;
           background: 
             /* Interactive fluid cursor spotlight - softly tracks the mouse */
-            radial-gradient(circle 500px at var(--cursor-x, 50vw) var(--cursor-y, 280px), rgba(20, 184, 166, 0.075) 0%, rgba(59, 130, 246, 0.035) 45%, transparent 72%),
+            radial-gradient(circle 500px at var(--cursor-x, 50vw) var(--cursor-y, 280px), rgba(20, 184, 166, 0.06) 0%, rgba(59, 130, 246, 0.025) 45%, transparent 72%),
             /* Top ambient placement aura - shifts fluidly with scroll & subtle cursor parallax */
-            radial-gradient(circle 750px at calc(50% + (var(--cursor-x, 50vw) - 50vw) * 0.12) calc(-70px - var(--scroll-offset, 0px) * 0.25), rgba(20, 184, 166, 0.08) 0%, transparent 68%),
+            radial-gradient(circle 750px at calc(50% + (var(--cursor-x, 50vw) - 50vw) * 0.12) calc(-70px - var(--scroll-offset, 0px) * 0.25), rgba(20, 184, 166, 0.065) 0%, transparent 68%),
             /* Left azure ambient mesh - responds to scroll and cursor */
-            radial-gradient(circle 620px at calc(15% + (var(--cursor-x, 50vw) - 50vw) * 0.06) calc(240px - var(--scroll-offset, 0px) * 0.45), rgba(59, 130, 246, 0.06) 0%, transparent 65%),
+            radial-gradient(circle 620px at calc(15% + (var(--cursor-x, 50vw) - 50vw) * 0.06) calc(240px - var(--scroll-offset, 0px) * 0.45), rgba(59, 130, 246, 0.045) 0%, transparent 65%),
             /* Right violet ambient mesh - counter-flow fluid parallax */
-            radial-gradient(circle 580px at calc(85% - (var(--cursor-x, 50vw) - 50vw) * 0.06) calc(380px - var(--scroll-offset, 0px) * 0.55), rgba(139, 92, 246, 0.05) 0%, transparent 65%),
+            radial-gradient(circle 580px at calc(85% - (var(--cursor-x, 50vw) - 50vw) * 0.06) calc(380px - var(--scroll-offset, 0px) * 0.55), rgba(139, 92, 246, 0.038) 0%, transparent 65%),
             /* Deep bottom flow glow */
-            radial-gradient(circle 700px at 50% calc(850px - var(--scroll-offset, 0px) * 0.7), rgba(20, 184, 166, 0.035) 0%, transparent 70%);
+            radial-gradient(circle 700px at 50% calc(850px - var(--scroll-offset, 0px) * 0.7), rgba(20, 184, 166, 0.025) 0%, transparent 70%);
           animation: fluidAmbientPulse 18s ease-in-out infinite alternate;
         }
 
@@ -4409,25 +4390,25 @@ export default function JobTrackerDashboard() {
           background: #374151;
         }
         
-        .dark .topbar { background: rgba(3, 7, 18, 0.75); border-color: rgba(255, 255, 255, 0.07); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .dark .topbar { background: rgba(2, 4, 8, 0.85); border-color: rgba(255, 255, 255, 0.06); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .dark .search-container input {
-          background-color: rgba(15, 23, 42, 0.65);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-top: 1px solid rgba(255, 255, 255, 0.15);
+          background-color: rgba(10, 14, 24, 0.75);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.13);
           color: #f1f5f9;
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
-          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .dark .search-container input:hover {
-          border-color: rgba(255, 255, 255, 0.16);
-          background-color: rgba(15, 23, 42, 0.8);
+          border-color: rgba(255, 255, 255, 0.14);
+          background-color: rgba(12, 17, 30, 0.85);
         }
         .dark .search-container input:focus {
           border-color: rgba(45, 212, 191, 0.5);
-          background-color: rgba(15, 23, 42, 0.9);
-          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.14), 0 4px 14px rgba(0, 0, 0, 0.35);
+          background-color: rgba(14, 20, 34, 0.95);
+          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.14), 0 4px 14px rgba(0, 0, 0, 0.4);
         }
         .dark .search-container input::placeholder { color: #64748b; }
         .dark .outline-btn { background: var(--surface-color); border-color: var(--border-color); color: var(--text-primary); }
@@ -4437,42 +4418,42 @@ export default function JobTrackerDashboard() {
         .dark .page-subtitle { color: #cbd5e1; }
         
         .dark .stat-card { 
-          background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.72) 100%);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-top: 1px solid rgba(255, 255, 255, 0.22);
+          background: linear-gradient(135deg, rgba(16, 23, 38, 0.65) 0%, rgba(8, 12, 22, 0.85) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.2);
           backdrop-filter: blur(16px);
           -webkit-backdrop-filter: blur(16px);
-          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px -4px rgba(0, 0, 0, 0.55);
           transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
         }
         .dark .stat-card.total {
-          background: linear-gradient(135deg, rgba(20, 184, 166, 0.08) 0%, rgba(15, 23, 42, 0.72) 100%);
+          background: linear-gradient(135deg, rgba(20, 184, 166, 0.06) 0%, rgba(8, 12, 22, 0.85) 100%);
           border-top: 1px solid rgba(45, 212, 191, 0.45);
         }
         .dark .stat-card.total:hover {
-          background: linear-gradient(135deg, rgba(20, 184, 166, 0.15) 0%, rgba(15, 23, 42, 0.82) 100%);
+          background: linear-gradient(135deg, rgba(20, 184, 166, 0.12) 0%, rgba(10, 15, 28, 0.92) 100%);
           border-top-color: rgba(45, 212, 191, 0.75);
-          box-shadow: inset 0 1px 1px 0 rgba(45, 212, 191, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(45, 212, 191, 0.15);
+          box-shadow: inset 0 1px 1px 0 rgba(45, 212, 191, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 0 20px rgba(45, 212, 191, 0.15);
           transform: translateY(-2px);
         }
         .dark .stat-card.urgent {
-          background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(15, 23, 42, 0.72) 100%);
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(8, 12, 22, 0.85) 100%);
           border-top: 1px solid rgba(248, 113, 113, 0.45);
         }
         .dark .stat-card.urgent:hover {
-          background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(15, 23, 42, 0.82) 100%);
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(10, 15, 28, 0.92) 100%);
           border-top-color: rgba(248, 113, 113, 0.75);
-          box-shadow: inset 0 1px 1px 0 rgba(248, 113, 113, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.15);
+          box-shadow: inset 0 1px 1px 0 rgba(248, 113, 113, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 0 20px rgba(239, 68, 68, 0.15);
           transform: translateY(-2px);
         }
         .dark .stat-card.unmarked {
-          background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.72) 100%);
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(8, 12, 22, 0.85) 100%);
           border-top: 1px solid rgba(251, 191, 36, 0.45);
         }
         .dark .stat-card.unmarked:hover {
-          background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.82) 100%);
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(10, 15, 28, 0.92) 100%);
           border-top-color: rgba(251, 191, 36, 0.75);
-          box-shadow: inset 0 1px 1px 0 rgba(251, 191, 36, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.15);
+          box-shadow: inset 0 1px 1px 0 rgba(251, 191, 36, 0.25), 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 0 20px rgba(245, 158, 11, 0.15);
           transform: translateY(-2px);
         }
         .dark .stat-label {
@@ -4527,10 +4508,10 @@ export default function JobTrackerDashboard() {
         
         /* Dark Mode Extensions */
         .dark .app-card {
-          background: linear-gradient(135deg, rgba(30, 41, 59, 0.45) 0%, rgba(15, 23, 42, 0.72) 100%);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-top: 1px solid rgba(255, 255, 255, 0.22);
-          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+          background: linear-gradient(135deg, rgba(16, 23, 38, 0.58) 0%, rgba(8, 12, 22, 0.82) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.065);
+          border-top: 1px solid rgba(255, 255, 255, 0.18);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px -4px rgba(0, 0, 0, 0.55);
           backdrop-filter: blur(16px);
           -webkit-backdrop-filter: blur(16px);
           transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
@@ -4542,15 +4523,15 @@ export default function JobTrackerDashboard() {
         }
         
         .dark .app-card:hover {
-          background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.82) 100%);
+          background: linear-gradient(135deg, rgba(22, 32, 52, 0.7) 0%, rgba(10, 15, 28, 0.9) 100%);
           transform: translateY(-3px);
-          border-color: rgba(255, 255, 255, 0.18);
-          border-top-color: rgba(255, 255, 255, 0.38);
-          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 24px rgba(59, 130, 246, 0.12);
+          border-color: rgba(255, 255, 255, 0.15);
+          border-top-color: rgba(255, 255, 255, 0.32);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.12), 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 0 24px rgba(59, 130, 246, 0.12);
         }
         .dark .company-logo-container {
-          background: rgba(15, 23, 42, 0.8);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(8, 12, 22, 0.9);
+          border: 1px solid rgba(255, 255, 255, 0.07);
           border-radius: 10px;
         }
         .dark .company-logo-fallback {
@@ -4596,8 +4577,8 @@ export default function JobTrackerDashboard() {
         .dark .btn-danger { background: transparent; border-color: #ef4444; color: #fca5a5; }
         .dark .btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; }
         .dark .note-input {
-          background: rgba(15, 23, 42, 0.55);
-          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(8, 12, 22, 0.7);
+          border: 1px solid rgba(255, 255, 255, 0.065);
           border-radius: 9px;
           color: #f1f5f9;
           font-size: 12.5px;
@@ -4605,13 +4586,13 @@ export default function JobTrackerDashboard() {
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .dark .note-input:hover {
-          border-color: rgba(255, 255, 255, 0.14);
-          background: rgba(15, 23, 42, 0.7);
+          border-color: rgba(255, 255, 255, 0.12);
+          background: rgba(10, 15, 28, 0.82);
         }
         .dark .note-input:focus {
-          background: rgba(15, 23, 42, 0.85);
+          background: rgba(12, 17, 32, 0.95);
           border-color: rgba(45, 212, 191, 0.5);
-          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12), 0 2px 8px rgba(0, 0, 0, 0.3);
+          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12), 0 2px 8px rgba(0, 0, 0, 0.35);
         }
         
         .dark .card-actions {
@@ -4755,14 +4736,14 @@ export default function JobTrackerDashboard() {
 
         .dark .program-details {
           border-left: none;
-          background: rgba(10, 15, 28, 0.6);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          border-top: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(6, 9, 18, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.055);
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 10px;
           padding: 10px 12px;
           margin-top: 12px;
           margin-bottom: 12px;
-          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+          box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
         }
         .dark .program-detail {
           margin-bottom: 6px;

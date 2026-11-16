@@ -100,20 +100,19 @@ export default function ApplicationCard({
             })()}
           </div>
         </div>
-        <div className="card-top-actions" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flexShrink: 0 }}>
-          {!isDone && (
-            <button
-              className={`pin-btn${app.isPinned ? " is-pinned" : ""}`}
-              onClick={(e) => { e.stopPropagation(); handleTogglePin(app._id); }}
-              title={app.isPinned ? "Unpin application" : "Pin application to top"}
-              aria-label={app.isPinned ? "Unpin application" : "Pin application to top"}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 17v5"/><path d="M9 2h6l-1.5 5.5L16 11h-3.5l-.5 6-.5-6H8l2.5-3.5L9 2z"/>
-              </svg>
-            </button>
-          )}
-          <div className="status-badge-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', position: 'relative' }}>
+        {!isDone && (
+          <button
+            className={`pin-btn${app.isPinned ? " is-pinned" : ""}`}
+            onClick={(e) => { e.stopPropagation(); handleTogglePin(app._id); }}
+            title={app.isPinned ? "Unpin application" : "Pin application to top"}
+            aria-label={app.isPinned ? "Unpin application" : "Pin application to top"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 17v5"/><path d="M9 2h6l-1.5 5.5L16 11h-3.5l-.5 6-.5-6H8l2.5-3.5L9 2z"/>
+            </svg>
+          </button>
+        )}
+        <div className="status-badge-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', position: 'relative' }}>
           {/* Main Status Badge (Top) */}
           <div className={`status-quick-container ${activeStatusMenuId === `${app._id}-status` ? "open" : ""}`}>
             <span
@@ -371,7 +370,6 @@ export default function ApplicationCard({
           )}
         </div>
       </div>
-    </div>
 
       {(() => {
         const flexFields = Array.isArray(app.displayFields) && app.displayFields.length > 0
