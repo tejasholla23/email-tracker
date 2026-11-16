@@ -709,6 +709,58 @@ export default function JobTrackerDashboard() {
     };
   }, [userEmail]);
 
+  // Interactive Fluid Background Controller (cursor tracking & scroll flow parallax)
+  useEffect(() => {
+    if (!isDarkMode) return;
+
+    let targetX = typeof window !== "undefined" ? window.innerWidth / 2 : 600;
+    let targetY = typeof window !== "undefined" ? window.innerHeight * 0.35 : 300;
+    let currentX = targetX;
+    let currentY = targetY;
+    let scrollY = typeof window !== "undefined" ? window.scrollY || 0 : 0;
+    let targetScrollY = scrollY;
+    let rafId = null;
+    let running = true;
+
+    const handlePointerMove = (e) => {
+      targetX = e.clientX;
+      targetY = e.clientY;
+    };
+
+    const handleScroll = () => {
+      targetScrollY = window.scrollY || 0;
+    };
+
+    const updateLoop = () => {
+      if (!running) return;
+
+      // Viscous liquid spring interpolation for organic lag
+      currentX += (targetX - currentX) * 0.055;
+      currentY += (targetY - currentY) * 0.055;
+      scrollY += (targetScrollY - scrollY) * 0.08;
+
+      const layoutEl = document.querySelector(".layout.dark");
+      if (layoutEl) {
+        layoutEl.style.setProperty("--cursor-x", `${currentX.toFixed(1)}px`);
+        layoutEl.style.setProperty("--cursor-y", `${currentY.toFixed(1)}px`);
+        layoutEl.style.setProperty("--scroll-offset", `${(scrollY * 0.32).toFixed(1)}px`);
+      }
+
+      rafId = requestAnimationFrame(updateLoop);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    rafId = requestAnimationFrame(updateLoop);
+
+    return () => {
+      running = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [isDarkMode]);
+
   // Push Notifications Setup
   useEffect(() => {
     const initPushState = async () => {
@@ -4270,6 +4322,12 @@ export default function JobTrackerDashboard() {
           position: relative;
         }
 
+        .layout.dark {
+          --cursor-x: 50vw;
+          --cursor-y: 280px;
+          --scroll-offset: 0px;
+        }
+
         /* Aceternity Dot Matrix Canvas & Radial Spotlight */
         .layout.dark::before {
           content: "";
@@ -4277,23 +4335,47 @@ export default function JobTrackerDashboard() {
           inset: 0;
           pointer-events: none;
           z-index: 0;
-          background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1.25px, transparent 1.25px);
+          background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1.25px, transparent 1.25px);
           background-size: 24px 24px;
-          mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 35%, transparent 85%);
-          -webkit-mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 35%, transparent 85%);
+          mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 28%, transparent 80%);
+          -webkit-mask-image: radial-gradient(ellipse 95% 70% at 50% 5%, #000 28%, transparent 80%);
         }
 
+        /* Fluid Interactive Aurora & Cursor Reactive Light Field */
         .layout.dark::after {
           content: "";
           position: fixed;
           inset: 0;
           pointer-events: none;
           z-index: 0;
+          will-change: background;
           background: 
-            radial-gradient(circle 800px at 50% -80px, rgba(20, 184, 166, 0.18), transparent 70%),
-            radial-gradient(circle 650px at 10% 260px, rgba(59, 130, 246, 0.14), transparent 60%),
-            radial-gradient(circle 600px at 90% 400px, rgba(139, 92, 246, 0.12), transparent 65%),
-            radial-gradient(circle 700px at 50% 900px, rgba(20, 184, 166, 0.08), transparent 70%);
+            /* Interactive fluid cursor spotlight - softly tracks the mouse */
+            radial-gradient(circle 500px at var(--cursor-x, 50vw) var(--cursor-y, 280px), rgba(20, 184, 166, 0.075) 0%, rgba(59, 130, 246, 0.035) 45%, transparent 72%),
+            /* Top ambient placement aura - shifts fluidly with scroll & subtle cursor parallax */
+            radial-gradient(circle 750px at calc(50% + (var(--cursor-x, 50vw) - 50vw) * 0.12) calc(-70px - var(--scroll-offset, 0px) * 0.25), rgba(20, 184, 166, 0.08) 0%, transparent 68%),
+            /* Left azure ambient mesh - responds to scroll and cursor */
+            radial-gradient(circle 620px at calc(15% + (var(--cursor-x, 50vw) - 50vw) * 0.06) calc(240px - var(--scroll-offset, 0px) * 0.45), rgba(59, 130, 246, 0.06) 0%, transparent 65%),
+            /* Right violet ambient mesh - counter-flow fluid parallax */
+            radial-gradient(circle 580px at calc(85% - (var(--cursor-x, 50vw) - 50vw) * 0.06) calc(380px - var(--scroll-offset, 0px) * 0.55), rgba(139, 92, 246, 0.05) 0%, transparent 65%),
+            /* Deep bottom flow glow */
+            radial-gradient(circle 700px at 50% calc(850px - var(--scroll-offset, 0px) * 0.7), rgba(20, 184, 166, 0.035) 0%, transparent 70%);
+          animation: fluidAmbientPulse 18s ease-in-out infinite alternate;
+        }
+
+        @keyframes fluidAmbientPulse {
+          0% {
+            opacity: 0.88;
+            filter: hue-rotate(0deg);
+          }
+          50% {
+            opacity: 1;
+            filter: hue-rotate(7deg);
+          }
+          100% {
+            opacity: 0.92;
+            filter: hue-rotate(-7deg);
+          }
         }
         .dark .sidebar {
           background-color: rgba(10, 15, 28, 0.72);
