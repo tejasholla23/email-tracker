@@ -2346,14 +2346,10 @@ export default function JobTrackerDashboard() {
         .dashboard-filters-row {
           display: flex;
           width: 100%;
-          background: rgba(15, 23, 42, 0.45);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 14px;
-          padding: 5px;
-          gap: 6px;
-          margin-top: 24px;
-          margin-bottom: 14px;
-          backdrop-filter: blur(12px);
+          border-bottom: 1px solid var(--border-color);
+          margin-top: 32px;
+          margin-bottom: 24px;
+          gap: 16px;
         }
 
         .mobile-filter-wrapper {
@@ -2363,33 +2359,28 @@ export default function JobTrackerDashboard() {
         .filter-tab {
           flex: 1;
           font-family: var(--font-geist);
-          font-size: 13.5px;
+          font-size: 14.5px;
           font-weight: 500;
-          color: #94a3b8;
-          background: transparent;
-          border: 1px solid transparent;
-          border-radius: 10px;
-          padding: 9px 12px;
+          color: var(--text-secondary);
+          background: none;
+          border: none;
+          padding: 14px 0;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           outline: none;
-          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: color 0.25s ease;
           position: relative;
         }
 
         .filter-tab:hover {
-          color: #f1f5f9;
-          background: rgba(255, 255, 255, 0.04);
+          color: var(--text-primary);
         }
 
         .filter-tab.active {
-          color: #2dd4bf;
-          background: rgba(45, 212, 191, 0.09);
-          border: 1px solid rgba(45, 212, 191, 0.25);
+          color: #0f766e;
           font-weight: 600;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 12px rgba(45, 212, 191, 0.1);
         }
 
         .filter-tab-text {
@@ -2398,18 +2389,33 @@ export default function JobTrackerDashboard() {
         }
 
         .filter-tab::after {
-          display: none;
+          content: "";
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, rgba(20, 184, 166, 0) 0%, rgba(20, 184, 166, 1) 40%, rgba(20, 184, 166, 1) 60%, rgba(20, 184, 166, 0) 100%);
+          transform: scaleX(0);
+          transform-origin: bottom center;
+          opacity: 0;
+          transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease-out;
+          border-radius: 99px;
+          box-shadow: 0 1px 12px rgba(20, 184, 166, 0.4), 0 3px 20px rgba(20, 184, 166, 0.15);
+        }
+
+        .filter-tab.active::after {
+          transform: scaleX(1);
+          opacity: 1;
         }
 
         .dark .filter-tab.active {
           color: #2dd4bf;
-          background: rgba(45, 212, 191, 0.1);
-          border: 1px solid rgba(45, 212, 191, 0.3);
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 14px rgba(45, 212, 191, 0.15);
         }
 
         .dark .filter-tab::after {
-          display: none;
+          background: linear-gradient(90deg, rgba(45, 212, 191, 0) 0%, rgba(45, 212, 191, 1) 40%, rgba(45, 212, 191, 1) 60%, rgba(45, 212, 191, 0) 100%);
+          box-shadow: 0 0 16px rgba(45, 212, 191, 0.95), 0 6px 28px rgba(45, 212, 191, 0.65), 0 12px 50px rgba(45, 212, 191, 0.4), 0 20px 80px rgba(45, 212, 191, 0.2);
         }
         
         .sidebar-bottom {
@@ -2762,11 +2768,14 @@ export default function JobTrackerDashboard() {
           box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
         }
         .dark .page-header-date-badge {
-          background: rgba(15, 23, 42, 0.65);
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.72) 100%);
           border: 1px solid rgba(255, 255, 255, 0.08);
+          border-top: 1px solid rgba(255, 255, 255, 0.22);
           border-radius: 10px;
           color: #f1f5f9;
-          backdrop-filter: blur(10px);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 4px 12px rgba(0, 0, 0, 0.3);
         }
         .date-badge-icon {
           color: #14b8a6;
@@ -4253,13 +4262,21 @@ export default function JobTrackerDashboard() {
 
         body.dark,
         .layout.dark {
-          background-color: var(--bg-color); 
+          background-color: #030712;
+          background-image:
+            radial-gradient(ellipse 90% 45% at 50% -10%, rgba(20, 184, 166, 0.16), transparent 75%),
+            radial-gradient(circle 600px at 15% 25%, rgba(59, 130, 246, 0.14), transparent 60%),
+            radial-gradient(circle 500px at 85% 45%, rgba(139, 92, 246, 0.12), transparent 60%),
+            radial-gradient(circle 700px at 50% 90%, rgba(20, 184, 166, 0.1), transparent 70%);
+          background-attachment: fixed;
           color: var(--text-primary); 
           min-height: 100vh; 
         }
         .dark .sidebar {
-          background-color: rgba(17, 24, 39, 0.7);
-          border-color: #1f2937;
+          background-color: rgba(10, 15, 28, 0.72);
+          border-color: rgba(255, 255, 255, 0.07);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
         }
         .dark .logo-title-text {
           color: #2dd4bf;
@@ -4287,12 +4304,14 @@ export default function JobTrackerDashboard() {
           background: #374151;
         }
         
-        .dark .topbar { background: rgba(3, 7, 18, 0.8); border-color: var(--border-color); backdrop-filter: blur(14px); }
+        .dark .topbar { background: rgba(3, 7, 18, 0.75); border-color: rgba(255, 255, 255, 0.07); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .dark .search-container input {
           background-color: rgba(15, 23, 42, 0.65);
           border: 1px solid rgba(255, 255, 255, 0.08);
+          border-top: 1px solid rgba(255, 255, 255, 0.15);
           color: #f1f5f9;
           backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
           box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -4313,14 +4332,19 @@ export default function JobTrackerDashboard() {
         .dark .page-subtitle { color: #cbd5e1; }
         
         .dark .stat-card { 
-          background: var(--surface-color); 
-          border-color: var(--border-color); 
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.72) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-top: 1px solid rgba(255, 255, 255, 0.22);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.45);
         }
         .dark .stat-card:hover {
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.82) 100%);
           border-color: rgba(255, 255, 255, 0.16);
-          border-top-color: rgba(255, 255, 255, 0.28);
+          border-top-color: rgba(255, 255, 255, 0.35);
           transform: translateY(-2px);
-          box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15), 0 14px 30px -4px rgba(0, 0, 0, 0.55);
         }
         .dark .stat-label { color: #94a3b8; }
         .dark .stat-value { color: #f8fafc; }
@@ -4337,20 +4361,26 @@ export default function JobTrackerDashboard() {
         
         /* Dark Mode Extensions */
         .dark .app-card {
-          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          border-top: 1px solid rgba(255, 255, 255, 0.16);
-          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
-          backdrop-filter: blur(14px);
-          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.25s ease;
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.45) 0%, rgba(15, 23, 42, 0.72) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-top: 1px solid rgba(255, 255, 255, 0.22);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
         }
-        .dark .app-card.is-urgent { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15); }
+        .dark .app-card.is-urgent {
+          border-color: rgba(239, 68, 68, 0.5);
+          border-top-color: rgba(239, 68, 68, 0.75);
+          box-shadow: inset 0 1px 1px 0 rgba(239, 68, 68, 0.25), 0 8px 24px -4px rgba(239, 68, 68, 0.2);
+        }
         
         .dark .app-card:hover {
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.82) 100%);
           transform: translateY(-3px);
-          border-color: rgba(255, 255, 255, 0.16);
-          border-top-color: rgba(255, 255, 255, 0.28);
-          box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 20px rgba(59, 130, 246, 0.08);
+          border-color: rgba(255, 255, 255, 0.18);
+          border-top-color: rgba(255, 255, 255, 0.38);
+          box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15), 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 24px rgba(59, 130, 246, 0.12);
         }
         .dark .company-logo-container {
           background: rgba(15, 23, 42, 0.8);
@@ -5675,7 +5705,6 @@ export default function JobTrackerDashboard() {
                 {/* Desktop Filter Tabs */}
                 <div className="dashboard-filters-row desktop-only-filters">
                   {[
-                    { label: "All", value: "all" },
                     { label: "New Emails", value: "new" },
                     { label: "Deadline today", value: "deadlines" },
                     { label: "Applied", value: "applied" },
@@ -5688,7 +5717,7 @@ export default function JobTrackerDashboard() {
                         key={value}
                         className={`filter-tab ${isActive ? "active" : ""}`}
                         onClick={() => {
-                          if (isActive && value !== "all") {
+                          if (isActive) {
                             setActiveFilter("all");
                           } else {
                             setActiveFilter(value);
