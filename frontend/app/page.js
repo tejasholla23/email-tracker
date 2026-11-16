@@ -2346,10 +2346,14 @@ export default function JobTrackerDashboard() {
         .dashboard-filters-row {
           display: flex;
           width: 100%;
-          border-bottom: 1px solid var(--border-color);
-          margin-top: 32px;
-          margin-bottom: 24px;
-          gap: 16px;
+          background: rgba(15, 23, 42, 0.45);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 14px;
+          padding: 5px;
+          gap: 6px;
+          margin-top: 24px;
+          margin-bottom: 14px;
+          backdrop-filter: blur(12px);
         }
 
         .mobile-filter-wrapper {
@@ -2359,28 +2363,33 @@ export default function JobTrackerDashboard() {
         .filter-tab {
           flex: 1;
           font-family: var(--font-geist);
-          font-size: 14.5px;
+          font-size: 13.5px;
           font-weight: 500;
-          color: var(--text-secondary);
-          background: none;
-          border: none;
-          padding: 14px 0;
+          color: #94a3b8;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 10px;
+          padding: 9px 12px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           outline: none;
-          transition: color 0.25s ease;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           position: relative;
         }
 
         .filter-tab:hover {
-          color: var(--text-primary);
+          color: #f1f5f9;
+          background: rgba(255, 255, 255, 0.04);
         }
 
         .filter-tab.active {
-          color: #0f766e;
+          color: #2dd4bf;
+          background: rgba(45, 212, 191, 0.09);
+          border: 1px solid rgba(45, 212, 191, 0.25);
           font-weight: 600;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 12px rgba(45, 212, 191, 0.1);
         }
 
         .filter-tab-text {
@@ -2389,33 +2398,18 @@ export default function JobTrackerDashboard() {
         }
 
         .filter-tab::after {
-          content: "";
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: linear-gradient(90deg, rgba(20, 184, 166, 0) 0%, rgba(20, 184, 166, 1) 40%, rgba(20, 184, 166, 1) 60%, rgba(20, 184, 166, 0) 100%);
-          transform: scaleX(0);
-          transform-origin: bottom center;
-          opacity: 0;
-          transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease-out;
-          border-radius: 99px;
-          box-shadow: 0 1px 12px rgba(20, 184, 166, 0.4), 0 3px 20px rgba(20, 184, 166, 0.15);
-        }
-
-        .filter-tab.active::after {
-          transform: scaleX(1);
-          opacity: 1;
+          display: none;
         }
 
         .dark .filter-tab.active {
           color: #2dd4bf;
+          background: rgba(45, 212, 191, 0.1);
+          border: 1px solid rgba(45, 212, 191, 0.3);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 14px rgba(45, 212, 191, 0.15);
         }
 
         .dark .filter-tab::after {
-          background: linear-gradient(90deg, rgba(45, 212, 191, 0) 0%, rgba(45, 212, 191, 1) 40%, rgba(45, 212, 191, 1) 60%, rgba(45, 212, 191, 0) 100%);
-          box-shadow: 0 0 16px rgba(45, 212, 191, 0.95), 0 6px 28px rgba(45, 212, 191, 0.65), 0 12px 50px rgba(45, 212, 191, 0.4), 0 20px 80px rgba(45, 212, 191, 0.2);
+          display: none;
         }
         
         .sidebar-bottom {
@@ -2768,9 +2762,11 @@ export default function JobTrackerDashboard() {
           box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
         }
         .dark .page-header-date-badge {
-          background: #0d1321;
-          border-color: rgba(255, 255, 255, 0.09);
+          background: rgba(15, 23, 42, 0.65);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 10px;
           color: #f1f5f9;
+          backdrop-filter: blur(10px);
         }
         .date-badge-icon {
           color: #14b8a6;
@@ -2784,29 +2780,57 @@ export default function JobTrackerDashboard() {
         .settings-main-subtitle { color: var(--text-secondary); font-size: 15px; }
         .settings-grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
         .settings-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 28px; box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02); }
+        .dark .settings-card {
+          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.16);
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(14px);
+        }
         .settings-title { font-size: 20px; font-weight: 700; color: var(--text-heading); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
         .settings-title-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(13, 148, 136, 0.1); color: #0d9488; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
         .dark .settings-title-icon { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
         
         .settings-list { display: flex; flex-direction: column; gap: 12px; }
-        .settings-item { display: flex; align-items: center; padding: 14px 18px; border-radius: 12px; background: var(--bg-color); cursor: pointer; transition: all 0.2s ease; border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 500; font-size: 14.5px; text-align: left; width: 100%; gap: 12px; }
+        .settings-item { display: flex; align-items: center; padding: 14px 18px; border-radius: 12px; background: var(--bg-color); cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 500; font-size: 14.5px; text-align: left; width: 100%; gap: 12px; }
         .settings-item:hover { background: rgba(0, 0, 0, 0.03); color: var(--text-heading); transform: translateY(-1px); }
-        .dark .settings-item:hover { background: rgba(255, 255, 255, 0.05); }
+        .dark .settings-item {
+          background: rgba(15, 23, 42, 0.55);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .dark .settings-item:hover {
+          background: rgba(15, 23, 42, 0.85);
+          border-color: rgba(255, 255, 255, 0.15);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+        }
         .settings-item-label { flex: 1; }
         .settings-item-icon { color: var(--text-secondary); display: flex; align-items: center; font-size: 16px; width: 24px; justify-content: center; }
         .settings-item-arrow { color: var(--text-secondary); font-size: 12px; margin-left: auto; }
         
         /* Settings About Section (Clean style) */
         .settings-about-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 32px; box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -1px rgba(15, 23, 42, 0.02); }
+        .dark .settings-about-card {
+          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.16);
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(14px);
+        }
         .about-info-box { display: flex; flex-direction: column; gap: 12px; }
         .about-info-box h3 { font-size: 20px; font-weight: 700; color: var(--text-heading); margin: 0; }
         .about-version-badge { display: inline-block; font-size: 11px; font-weight: 700; color: #0d9488; background: rgba(13, 148, 136, 0.1); padding: 4px 10px; border-radius: 999px; width: fit-content; letter-spacing: 0.05em; margin-top: -4px; }
-        .dark .about-version-badge { color: #2dd4bf; background: rgba(45, 212, 191, 0.15); }
+        .dark .about-version-badge { color: #2dd4bf; background: rgba(45, 212, 191, 0.15); border: 1px solid rgba(45, 212, 191, 0.25); }
         .about-desc { font-size: 14.5px; line-height: 1.6; color: var(--text-primary); margin: 0; text-align: justify; }
         .about-tech-container { margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 16px; }
         .about-tech-label { font-weight: 600; color: var(--text-heading); font-size: 14px; display: block; margin-bottom: 8px; }
         .about-tech-tags { display: flex; gap: 8px; flex-wrap: wrap; }
         .about-tech-tag { font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--bg-color); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 6px; }
+        .dark .about-tech-tag {
+          background: rgba(15, 23, 42, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: #94a3b8;
+        }
         
         .calendar-card-panel { background: #f8fafc; border: 1px solid var(--border-color); padding: 24px; border-radius: 12px; }
         .dark .calendar-card-panel { background: rgba(255, 255, 255, 0.03); }
@@ -2829,9 +2853,11 @@ export default function JobTrackerDashboard() {
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
         .dark .cal-panel-card {
-          background: #0d1525;
-          border-color: rgba(255, 255, 255, 0.08);
-          box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5);
+          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.16);
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(14px);
         }
         .cal-status-card {
           background: #ffffff;
@@ -2847,10 +2873,12 @@ export default function JobTrackerDashboard() {
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
         .dark .cal-status-card {
-          background: #0d1525;
-          border-color: rgba(255, 255, 255, 0.08);
+          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.16);
           border-left: 4px solid #10b981;
-          box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5);
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(14px);
         }
         .cal-status-card.paused {
           border-left-color: #f59e0b;
@@ -3503,38 +3531,57 @@ export default function JobTrackerDashboard() {
 
         /* Pin Button */
         .pin-btn {
-          position: absolute;
-          top: 0px;
-          left: 50%;
-          right: auto;
-          transform: translateX(-50%) translateY(-6px) scale(0.95);
+          position: relative;
           width: 28px;
           height: 28px;
-          border-radius: 50%;
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          background: rgba(15, 23, 42, 0.85);
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          background: rgba(15, 23, 42, 0.5);
           backdrop-filter: blur(8px);
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          opacity: 0;
-          transition: opacity 180ms ease-out, transform 180ms ease-out, background 150ms ease, border-color 150ms ease;
-          z-index: 10;
+          opacity: 0.5;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           padding: 0;
           outline: none;
+          flex-shrink: 0;
         }
-        .app-header { position: relative; }
-        .app-card:hover .pin-btn { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-        .app-card:not(:hover) .pin-btn { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.95); pointer-events: none; }
-        .app-card .pin-btn.is-pinned { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); pointer-events: auto; }
-        .pin-btn:hover { background: rgba(13, 148, 136, 0.2); border-color: rgba(20, 184, 166, 0.5); }
-        .pin-btn:active { transform: translateX(-50%) scale(0.9); }
-        .pin-btn svg { width: 14px; height: 14px; color: #94a3b8; transition: color 150ms ease, transform 200ms ease; }
-        .pin-btn:hover svg { color: #14b8a6; }
-        .pin-btn.is-pinned svg { color: #14b8a6; transform: rotate(45deg); }
-        .pin-btn.is-pinned { background: rgba(13, 148, 136, 0.2); border-color: rgba(20, 184, 166, 0.45); }
-        .app-card.is-done .pin-btn { display: none; }
+        .app-card:hover .pin-btn {
+          opacity: 0.9;
+        }
+        .pin-btn:hover {
+          opacity: 1 !important;
+          background: rgba(13, 148, 136, 0.18);
+          border-color: rgba(20, 184, 166, 0.5);
+          transform: translateY(-1px);
+        }
+        .pin-btn:active {
+          transform: scale(0.92);
+        }
+        .pin-btn svg {
+          width: 13px;
+          height: 13px;
+          color: #94a3b8;
+          transition: color 150ms ease, transform 200ms ease;
+        }
+        .pin-btn:hover svg {
+          color: #14b8a6;
+        }
+        .pin-btn.is-pinned {
+          opacity: 1 !important;
+          background: rgba(13, 148, 136, 0.22);
+          border-color: rgba(20, 184, 166, 0.5);
+          box-shadow: 0 0 10px rgba(20, 184, 166, 0.25);
+        }
+        .pin-btn.is-pinned svg {
+          color: #14b8a6;
+          transform: rotate(45deg);
+        }
+        .app-card.is-done .pin-btn {
+          display: none;
+        }
 
         /* Pinned Section */
         .pinned-section {
@@ -3664,7 +3711,7 @@ export default function JobTrackerDashboard() {
           .pin-btn {
             opacity: 0.8 !important;
             pointer-events: auto !important;
-            transform: translateX(-50%) translateY(0) scale(1) !important;
+            transform: none !important;
             width: 32px !important;
             height: 32px !important;
             background: var(--surface-color) !important;
@@ -4240,10 +4287,25 @@ export default function JobTrackerDashboard() {
           background: #374151;
         }
         
-        .dark .topbar { background: rgba(3, 7, 18, 0.8); border-color: var(--border-color); }
-        .dark .search-container input { background-color: #111827; border-color: var(--border-color); color: var(--text-primary); }
-        .dark .search-container input:focus { border-color: var(--brand-primary); background-color: #111827; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
-        .dark .search-container input::placeholder { color: var(--text-secondary); }
+        .dark .topbar { background: rgba(3, 7, 18, 0.8); border-color: var(--border-color); backdrop-filter: blur(14px); }
+        .dark .search-container input {
+          background-color: rgba(15, 23, 42, 0.65);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: #f1f5f9;
+          backdrop-filter: blur(12px);
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .search-container input:hover {
+          border-color: rgba(255, 255, 255, 0.16);
+          background-color: rgba(15, 23, 42, 0.8);
+        }
+        .dark .search-container input:focus {
+          border-color: rgba(45, 212, 191, 0.5);
+          background-color: rgba(15, 23, 42, 0.9);
+          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.14), 0 4px 14px rgba(0, 0, 0, 0.35);
+        }
+        .dark .search-container input::placeholder { color: #64748b; }
         .dark .outline-btn { background: var(--surface-color); border-color: var(--border-color); color: var(--text-primary); }
         .dark .outline-btn:hover { background: #374151; border-color: #4b5563; color: #ffffff; }
         
@@ -4255,14 +4317,17 @@ export default function JobTrackerDashboard() {
           border-color: var(--border-color); 
         }
         .dark .stat-card:hover {
-          border-color: #3f3f46;
+          border-color: rgba(255, 255, 255, 0.16);
+          border-top-color: rgba(255, 255, 255, 0.28);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
         }
         .dark .stat-label { color: #94a3b8; }
         .dark .stat-value { color: #f8fafc; }
-        .dark .stat-card.total .stat-icon { background: #064e3b; color: #2dd4bf; }
-        .dark .stat-card.urgent .stat-icon { background: #450a0a; color: #fca5a5; }
-        .dark .stat-card.unmarked .stat-icon { background: #451a03; color: #fbbf24; }
-        .dark .stat-trend { background: #064e3b; color: #4ade80; }
+        .dark .stat-card.total .stat-icon { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); color: #34d399; box-shadow: 0 0 14px rgba(16, 185, 129, 0.15); border-radius: 12px; }
+        .dark .stat-card.urgent .stat-icon { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; box-shadow: 0 0 14px rgba(239, 68, 68, 0.15); border-radius: 12px; }
+        .dark .stat-card.unmarked .stat-icon { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); color: #fbbf24; box-shadow: 0 0 14px rgba(245, 158, 11, 0.15); border-radius: 12px; }
+        .dark .stat-trend { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 999px; box-shadow: 0 0 8px rgba(16, 185, 129, 0.15); }
         .dark .stat-subtext { color: #64748b; }
         
         .dark .filters { background: var(--surface-color); border-color: var(--border-color); }
@@ -4272,18 +4337,25 @@ export default function JobTrackerDashboard() {
         
         /* Dark Mode Extensions */
         .dark .app-card {
-          background: #0d1321;
-          border-color: #1f2937;
+          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.16);
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(14px);
+          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.25s ease;
         }
         .dark .app-card.is-urgent { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15); }
         
         .dark .app-card:hover {
-          border-color: #374151;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+          transform: translateY(-3px);
+          border-color: rgba(255, 255, 255, 0.16);
+          border-top-color: rgba(255, 255, 255, 0.28);
+          box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 20px rgba(59, 130, 246, 0.08);
         }
         .dark .company-logo-container {
-          background: #0d1321;
-          border-color: #1f2937;
+          background: rgba(15, 23, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 10px;
         }
         .dark .company-logo-fallback {
           color: #94a3b8;
@@ -4320,25 +4392,114 @@ export default function JobTrackerDashboard() {
         .dark .btn-cancel:hover { background: #27272a; border-color: #3f3f46; color: #fff; }
         .dark .btn-danger { background: transparent; border-color: #ef4444; color: #fca5a5; }
         .dark .btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; }
-        .dark .note-input { background: #0d1321; border-color: #1f2937; color: var(--text-primary); }
-        .dark .note-input:focus { background: #0d1321; border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .dark .note-input {
+          background: rgba(15, 23, 42, 0.55);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-radius: 9px;
+          color: #f1f5f9;
+          font-size: 12.5px;
+          padding: 8px 11px;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .note-input:hover {
+          border-color: rgba(255, 255, 255, 0.14);
+          background: rgba(15, 23, 42, 0.7);
+        }
+        .dark .note-input:focus {
+          background: rgba(15, 23, 42, 0.85);
+          border-color: rgba(45, 212, 191, 0.5);
+          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12), 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
         
-        .dark .card-actions { border-color: #1f2937; }
-        .dark .card-btn-edit { background: transparent; border-color: rgba(148, 163, 184, 0.15); color: #475569; }
-        .dark .card-btn-edit:hover:not(:disabled) { background: rgba(148, 163, 184, 0.05); border-color: #475569; color: #94A3B8; }
-        .dark .card-btn-edit:active:not(:disabled) { background: rgba(148, 163, 184, 0.12); }
-        .dark .card-btn-apply { background: transparent; border-color: rgba(20, 184, 166, 0.25); color: #0D9488; }
-        .dark .card-btn-apply:hover:not(:disabled) { background: rgba(20, 184, 166, 0.05); border-color: #0D9488; color: #14B8A6; }
-        .dark .card-btn-apply:active:not(:disabled) { background: rgba(20, 184, 166, 0.12); }
-        .dark .card-btn-done { background: transparent; border-color: rgba(34, 197, 94, 0.15); color: #15803D; }
-        .dark .card-btn-done:hover:not(:disabled) { background: rgba(34, 197, 94, 0.05); border-color: #16A34A; color: #22C55E; }
-        .dark .card-btn-done:active:not(:disabled) { background: rgba(34, 197, 94, 0.12); }
-        .dark .card-btn-done.active { background: transparent; border-color: rgba(245, 158, 11, 0.15); color: #B45309; }
-        .dark .card-btn-done.active:hover:not(:disabled) { background: rgba(245, 158, 11, 0.05); border-color: #D97706; color: #F59E0B; }
-        .dark .card-btn-done.active:active:not(:disabled) { background: rgba(245, 158, 11, 0.12); }
-        .dark .card-btn-remove { background: transparent; border-color: rgba(239, 68, 68, 0.15); color: #B91C1C; }
-        .dark .card-btn-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.05); border-color: #DC2626; color: #EF4444; }
-        .dark .card-btn-remove:active:not(:disabled) { background: rgba(239, 68, 68, 0.12); }
+        .dark .card-actions {
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
+          gap: 8px;
+        }
+        .dark .card-btn-edit {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: #94a3b8;
+          border-radius: 8px;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .card-btn-edit:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.18);
+          color: #f1f5f9;
+          transform: translateY(-1px);
+        }
+        .dark .card-btn-edit:active:not(:disabled) {
+          transform: translateY(0);
+          background: rgba(255, 255, 255, 0.12);
+        }
+        .dark .card-btn-apply {
+          background: rgba(20, 184, 166, 0.12);
+          border: 1px solid rgba(20, 184, 166, 0.32);
+          color: #2dd4bf;
+          font-weight: 600;
+          border-radius: 8px;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .card-btn-apply:hover:not(:disabled) {
+          background: rgba(20, 184, 166, 0.22);
+          border-color: rgba(45, 212, 191, 0.6);
+          color: #5eead4;
+          box-shadow: 0 0 12px rgba(20, 184, 166, 0.25);
+          transform: translateY(-1px);
+        }
+        .dark .card-btn-apply:active:not(:disabled) {
+          transform: translateY(0);
+          background: rgba(20, 184, 166, 0.3);
+        }
+        .dark .card-btn-done {
+          background: rgba(34, 197, 94, 0.08);
+          border: 1px solid rgba(34, 197, 94, 0.25);
+          color: #4ade80;
+          border-radius: 8px;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .card-btn-done:hover:not(:disabled) {
+          background: rgba(34, 197, 94, 0.16);
+          border-color: rgba(74, 222, 128, 0.5);
+          color: #86efac;
+          box-shadow: 0 0 10px rgba(34, 197, 94, 0.15);
+          transform: translateY(-1px);
+        }
+        .dark .card-btn-done:active:not(:disabled) {
+          transform: translateY(0);
+        }
+        .dark .card-btn-done.active {
+          background: rgba(245, 158, 11, 0.1);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          color: #fbbf24;
+        }
+        .dark .card-btn-done.active:hover:not(:disabled) {
+          background: rgba(245, 158, 11, 0.18);
+          border-color: rgba(251, 191, 36, 0.55);
+          color: #fde68a;
+          box-shadow: 0 0 10px rgba(245, 158, 11, 0.18);
+          transform: translateY(-1px);
+        }
+        .dark .card-btn-done.active:active:not(:disabled) {
+          transform: translateY(0);
+        }
+        .dark .card-btn-remove {
+          background: rgba(239, 68, 68, 0.06);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          color: #f87171;
+          border-radius: 8px;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .card-btn-remove:hover:not(:disabled) {
+          background: rgba(239, 68, 68, 0.15);
+          border-color: rgba(248, 113, 113, 0.5);
+          color: #fca5a5;
+          box-shadow: 0 0 10px rgba(239, 68, 68, 0.18);
+          transform: translateY(-1px);
+        }
+        .dark .card-btn-remove:active:not(:disabled) {
+          transform: translateY(0);
+        }
         .dark .app-card.is-done .role-title { color: #94a3b8; }
         .dark .app-card.is-done { opacity: 0.35; filter: blur(1.5px) grayscale(0.4); }
         .dark .app-card.is-done:hover { opacity: 0.6; filter: blur(0.5px); }
@@ -4360,10 +4521,12 @@ export default function JobTrackerDashboard() {
         /* Company Info Styles */
 
         .program-details {
-          margin-top: 14px;
-          border-left: 2px solid #0d9488;
-          padding-left: 14px;
-          color: #475569;
+          margin-top: 12px;
+          margin-bottom: 12px;
+          padding: 10px 12px 6px 12px;
+          border-radius: 10px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
           font-size: 12.5px;
           line-height: 1.5;
         }
@@ -4371,28 +4534,51 @@ export default function JobTrackerDashboard() {
           margin-bottom: 6px;
           display: flex;
           align-items: baseline;
+          justify-content: space-between;
           gap: 12px;
         }
         .program-detail-label {
-          font-weight: 600;
+          font-weight: 500;
           color: #64748b;
-          width: 95px;
+          font-size: 12px;
           flex-shrink: 0;
         }
         .program-detail-value {
           color: #1e293b;
           font-weight: 500;
+          text-align: right;
+          word-break: break-word;
         }
 
         .dark .program-details {
-          border-left-color: #0d9488;
-          color: #94a3b8;
+          border-left: none;
+          background: rgba(15, 23, 42, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 10px;
+          padding: 10px 12px 6px 12px;
+          margin-top: 12px;
+          margin-bottom: 12px;
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .dark .program-detail {
+          margin-bottom: 6px;
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
         }
         .dark .program-detail-label {
-          color: #94a3b8;
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 500;
+          flex-shrink: 0;
+          letter-spacing: 0.01em;
         }
         .dark .program-detail-value {
           color: #f1f5f9;
+          font-weight: 500;
+          text-align: right;
+          word-break: break-word;
         }
 
         /* Event / Hackathon type badge */
@@ -4485,7 +4671,7 @@ export default function JobTrackerDashboard() {
           opacity: 0.7;
         }
         .dark .card-attachment-indicator {
-          background: rgba(15, 23, 42, 0.6);
+          background: rgba(15, 23, 42, 0.7);
           border: 1px solid rgba(255, 255, 255, 0.08);
         }
         .dark .card-attachment-indicator:hover {
@@ -5489,6 +5675,7 @@ export default function JobTrackerDashboard() {
                 {/* Desktop Filter Tabs */}
                 <div className="dashboard-filters-row desktop-only-filters">
                   {[
+                    { label: "All", value: "all" },
                     { label: "New Emails", value: "new" },
                     { label: "Deadline today", value: "deadlines" },
                     { label: "Applied", value: "applied" },
@@ -5501,7 +5688,7 @@ export default function JobTrackerDashboard() {
                         key={value}
                         className={`filter-tab ${isActive ? "active" : ""}`}
                         onClick={() => {
-                          if (isActive) {
+                          if (isActive && value !== "all") {
                             setActiveFilter("all");
                           } else {
                             setActiveFilter(value);
@@ -5576,14 +5763,15 @@ export default function JobTrackerDashboard() {
                             ? (isDarkMode
                               ? `${opt.dotColor}18`
                               : `${opt.dotColor}12`)
-                            : 'transparent',
+                            : (isDarkMode ? 'rgba(15, 23, 42, 0.35)' : 'transparent'),
+                          boxShadow: isActive && isDarkMode ? `0 0 12px ${opt.dotColor}28` : 'none',
                           color: isActive
                             ? (isDarkMode ? '#f1f5f9' : '#0f172a')
                             : (isDarkMode ? '#94a3b8' : '#64748b'),
                           fontSize: '12px',
                           fontWeight: isActive ? '600' : '500',
                           cursor: 'pointer',
-                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                           letterSpacing: '0.01em'
                         }}
                       >

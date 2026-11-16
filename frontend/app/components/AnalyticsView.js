@@ -1324,31 +1324,37 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         :global(.dark) .kpi-card {
-          background: #070e1e;
-          box-shadow: none;
+          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
+          border-top: 1px solid rgba(255, 255, 255, 0.16) !important;
+          box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(12px);
+          border-radius: 14px;
+          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
         }
 
         :global(.dark) .kpi-card:hover {
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px -4px rgba(0, 0, 0, 0.55);
+          border-top-color: rgba(255, 255, 255, 0.28) !important;
         }
 
         :global(.dark) .kpi-card.kpi-drives {
-          border-color: rgba(37, 99, 235, 0.45);
+          border: 1px solid rgba(59, 130, 246, 0.35);
         }
         :global(.dark) .kpi-card.kpi-applied {
-          border-color: rgba(8, 145, 178, 0.45);
+          border: 1px solid rgba(6, 182, 212, 0.35);
         }
         :global(.dark) .kpi-card.kpi-oa {
-          border-color: rgba(99, 102, 241, 0.45);
+          border: 1px solid rgba(139, 92, 246, 0.35);
         }
         :global(.dark) .kpi-card.kpi-interviews {
-          border-color: rgba(217, 119, 6, 0.45);
+          border: 1px solid rgba(245, 158, 11, 0.35);
         }
         :global(.dark) .kpi-card.kpi-offers {
-          border-color: rgba(5, 150, 105, 0.45);
+          border: 1px solid rgba(16, 185, 129, 0.35);
         }
         :global(.dark) .kpi-card.kpi-no-response {
-          border-color: rgba(190, 18, 60, 0.45);
+          border: 1px solid rgba(244, 63, 94, 0.35);
         }
 
         :global(.dark) .kpi-label {
@@ -1364,9 +1370,12 @@ export default function AnalyticsView({ applications = [] }) {
         }
 
         :global(.dark) .analytics-chart-card {
-          background: #070e1e;
-          border-color: #172338;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+          background: linear-gradient(180deg, rgba(20, 27, 44, 0.7) 0%, rgba(13, 19, 33, 0.88) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.16);
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(14px);
+          border-radius: 16px;
         }
 
         :global(.dark) .chart-card-header h3 {
